@@ -1,0 +1,1324 @@
+Year,Destination_Country,Region,Column_Name,Value,Data_Type,Source_Name,Source_URL,Notes
+2000,USA,North America,Total_Indian_Migrants,"1,005,000",real,UN DESA International Migrant Stock,https://www.un.org/development/desa/pd/content/international-migrant-stock,Approx 1M Indian-born in USA ca. 2000 (Gibson & Jung 2006 / MPI)
+2000,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,USA,North America,Remittance_USD_Billion,12.88,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2000,USA,North America,Unemployment_India,7.62,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2000,USA,North America,GDP_India,$468.40B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2000,Canada,North America,Total_Indian_Migrants,"217,000",real,UN DESA International Migrant Stock,https://www.un.org/development/desa/pd/content/international-migrant-stock,Estimated Indian-born migrant stock in Canada
+2000,Canada,North America,Permanent_Migrants,"26,122",real,IRCC Facts & Figures / StatCan,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2000,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Canada,North America,Remittance_USD_Billion,12.88,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2000,Canada,North America,Unemployment_India,7.62,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2000,Canada,North America,GDP_India,$468.40B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2000,UK,Europe,Total_Indian_Migrants,"570,000",real,UN DESA International Migrant Stock,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in UK
+2000,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,UK,Europe,Remittance_USD_Billion,12.88,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2000,UK,Europe,Unemployment_India,7.62,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2000,UK,Europe,GDP_India,$468.40B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2000,Australia,Oceania,Total_Indian_Migrants,"173,000",real,UN DESA International Migrant Stock,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in Australia
+2000,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Australia,Oceania,Remittance_USD_Billion,12.88,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2000,Australia,Oceania,Unemployment_India,7.62,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2000,Australia,Oceania,GDP_India,$468.40B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2000,UAE,Middle East,Total_Indian_Migrants,"950,000",real,UN DESA International Migrant Stock,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in UAE
+2000,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,UAE,Middle East,Remittance_USD_Billion,12.88,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2000,UAE,Middle East,Unemployment_India,7.62,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2000,UAE,Middle East,GDP_India,$468.40B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2000,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Germany,Europe,Remittance_USD_Billion,12.88,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2000,Germany,Europe,Unemployment_India,7.62,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2000,Germany,Europe,GDP_India,$468.40B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2000,Singapore,Asia,Total_Indian_Migrants,"85,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2000,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2000,Singapore,Asia,Remittance_USD_Billion,12.88,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2000,Singapore,Asia,Unemployment_India,7.62,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2000,Singapore,Asia,GDP_India,$468.40B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2001,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,USA,North America,Remittance_USD_Billion,14.27,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2001,USA,North America,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2001,USA,North America,GDP_India,$485.44B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2001,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Canada,North America,Remittance_USD_Billion,14.27,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2001,Canada,North America,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2001,Canada,North America,GDP_India,$485.44B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2001,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UK,Europe,Remittance_USD_Billion,14.27,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2001,UK,Europe,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2001,UK,Europe,GDP_India,$485.44B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2001,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Australia,Oceania,Remittance_USD_Billion,14.27,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2001,Australia,Oceania,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2001,Australia,Oceania,GDP_India,$485.44B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2001,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,UAE,Middle East,Remittance_USD_Billion,14.27,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2001,UAE,Middle East,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2001,UAE,Middle East,GDP_India,$485.44B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2001,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Germany,Europe,Remittance_USD_Billion,14.27,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2001,Germany,Europe,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2001,Germany,Europe,GDP_India,$485.44B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2001,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2001,Singapore,Asia,Remittance_USD_Billion,14.27,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2001,Singapore,Asia,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2001,Singapore,Asia,GDP_India,$485.44B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2002,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,USA,North America,Remittance_USD_Billion,15.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2002,USA,North America,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2002,USA,North America,GDP_India,$514.94B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2002,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Canada,North America,Remittance_USD_Billion,15.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2002,Canada,North America,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2002,Canada,North America,GDP_India,$514.94B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2002,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UK,Europe,Remittance_USD_Billion,15.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2002,UK,Europe,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2002,UK,Europe,GDP_India,$514.94B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2002,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Australia,Oceania,Remittance_USD_Billion,15.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2002,Australia,Oceania,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2002,Australia,Oceania,GDP_India,$514.94B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2002,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,UAE,Middle East,Remittance_USD_Billion,15.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2002,UAE,Middle East,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2002,UAE,Middle East,GDP_India,$514.94B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2002,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Germany,Europe,Remittance_USD_Billion,15.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2002,Germany,Europe,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2002,Germany,Europe,GDP_India,$514.94B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2002,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2002,Singapore,Asia,Remittance_USD_Billion,15.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2002,Singapore,Asia,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2002,Singapore,Asia,GDP_India,$514.94B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2003,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,USA,North America,Remittance_USD_Billion,21.00,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2003,USA,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2003,USA,North America,GDP_India,$607.70B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2003,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Canada,North America,Remittance_USD_Billion,21.00,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2003,Canada,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2003,Canada,North America,GDP_India,$607.70B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2003,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UK,Europe,Remittance_USD_Billion,21.00,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2003,UK,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2003,UK,Europe,GDP_India,$607.70B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2003,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Australia,Oceania,Remittance_USD_Billion,21.00,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2003,Australia,Oceania,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2003,Australia,Oceania,GDP_India,$607.70B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2003,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,UAE,Middle East,Remittance_USD_Billion,21.00,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2003,UAE,Middle East,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2003,UAE,Middle East,GDP_India,$607.70B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2003,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Germany,Europe,Remittance_USD_Billion,21.00,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2003,Germany,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2003,Germany,Europe,GDP_India,$607.70B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2003,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2003,Singapore,Asia,Remittance_USD_Billion,21.00,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2003,Singapore,Asia,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2003,Singapore,Asia,GDP_India,$607.70B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2004,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,USA,North America,Remittance_USD_Billion,18.75,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2004,USA,North America,Unemployment_India,7.60,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2004,USA,North America,GDP_India,$709.15B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2004,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Canada,North America,Remittance_USD_Billion,18.75,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2004,Canada,North America,Unemployment_India,7.60,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2004,Canada,North America,GDP_India,$709.15B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2004,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UK,Europe,Remittance_USD_Billion,18.75,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2004,UK,Europe,Unemployment_India,7.60,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2004,UK,Europe,GDP_India,$709.15B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2004,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Australia,Oceania,Remittance_USD_Billion,18.75,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2004,Australia,Oceania,Unemployment_India,7.60,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2004,Australia,Oceania,GDP_India,$709.15B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2004,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,UAE,Middle East,Remittance_USD_Billion,18.75,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2004,UAE,Middle East,Unemployment_India,7.60,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2004,UAE,Middle East,GDP_India,$709.15B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2004,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Germany,Europe,Remittance_USD_Billion,18.75,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2004,Germany,Europe,Unemployment_India,7.60,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2004,Germany,Europe,GDP_India,$709.15B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2004,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2004,Singapore,Asia,Remittance_USD_Billion,18.75,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2004,Singapore,Asia,Unemployment_India,7.60,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2004,Singapore,Asia,GDP_India,$709.15B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2005,USA,North America,Total_Indian_Migrants,"1,390,000",real,UN DESA / ACS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian foreign-born; MPI synthesis of ACS + UN data
+2005,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,USA,North America,Remittance_USD_Billion,22.13,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2005,USA,North America,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2005,USA,North America,GDP_India,$820.38B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2005,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Canada,North America,Remittance_USD_Billion,22.13,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2005,Canada,North America,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2005,Canada,North America,GDP_India,$820.38B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2005,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UK,Europe,Remittance_USD_Billion,22.13,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2005,UK,Europe,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2005,UK,Europe,GDP_India,$820.38B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2005,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Australia,Oceania,Remittance_USD_Billion,22.13,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2005,Australia,Oceania,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2005,Australia,Oceania,GDP_India,$820.38B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2005,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,UAE,Middle East,Remittance_USD_Billion,22.13,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2005,UAE,Middle East,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2005,UAE,Middle East,GDP_India,$820.38B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2005,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Germany,Europe,Remittance_USD_Billion,22.13,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2005,Germany,Europe,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2005,Germany,Europe,GDP_India,$820.38B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2005,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2005,Singapore,Asia,Remittance_USD_Billion,22.13,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2005,Singapore,Asia,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2005,Singapore,Asia,GDP_India,$820.38B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2006,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,USA,North America,Remittance_USD_Billion,28.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2006,USA,North America,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2006,USA,North America,GDP_India,$940.26B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2006,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Canada,North America,Remittance_USD_Billion,28.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2006,Canada,North America,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2006,Canada,North America,GDP_India,$940.26B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2006,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UK,Europe,Remittance_USD_Billion,28.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2006,UK,Europe,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2006,UK,Europe,GDP_India,$940.26B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2006,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Australia,Oceania,Remittance_USD_Billion,28.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2006,Australia,Oceania,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2006,Australia,Oceania,GDP_India,$940.26B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2006,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,UAE,Middle East,Remittance_USD_Billion,28.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2006,UAE,Middle East,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2006,UAE,Middle East,GDP_India,$940.26B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2006,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Germany,Europe,Remittance_USD_Billion,28.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2006,Germany,Europe,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2006,Germany,Europe,GDP_India,$940.26B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2006,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2006,Singapore,Asia,Remittance_USD_Billion,28.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2006,Singapore,Asia,Unemployment_India,7.55,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2006,Singapore,Asia,GDP_India,$940.26B,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2007,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,USA,North America,Remittance_USD_Billion,37.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2007,USA,North America,Unemployment_India,7.56,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2007,USA,North America,GDP_India,$1.217T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2007,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Canada,North America,Remittance_USD_Billion,37.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2007,Canada,North America,Unemployment_India,7.56,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2007,Canada,North America,GDP_India,$1.217T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2007,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UK,Europe,Remittance_USD_Billion,37.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2007,UK,Europe,Unemployment_India,7.56,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2007,UK,Europe,GDP_India,$1.217T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2007,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Australia,Oceania,Remittance_USD_Billion,37.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2007,Australia,Oceania,Unemployment_India,7.56,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2007,Australia,Oceania,GDP_India,$1.217T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2007,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,UAE,Middle East,Remittance_USD_Billion,37.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2007,UAE,Middle East,Unemployment_India,7.56,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2007,UAE,Middle East,GDP_India,$1.217T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2007,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Germany,Europe,Remittance_USD_Billion,37.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2007,Germany,Europe,Unemployment_India,7.56,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2007,Germany,Europe,GDP_India,$1.217T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2007,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2007,Singapore,Asia,Remittance_USD_Billion,37.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2007,Singapore,Asia,Unemployment_India,7.56,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2007,Singapore,Asia,GDP_India,$1.217T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2008,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,USA,North America,Remittance_USD_Billion,49.98,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2008,USA,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2008,USA,North America,GDP_India,$1.199T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2008,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Canada,North America,Remittance_USD_Billion,49.98,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2008,Canada,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2008,Canada,North America,GDP_India,$1.199T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2008,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UK,Europe,Remittance_USD_Billion,49.98,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2008,UK,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2008,UK,Europe,GDP_India,$1.199T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2008,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Australia,Oceania,Remittance_USD_Billion,49.98,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2008,Australia,Oceania,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2008,Australia,Oceania,GDP_India,$1.199T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2008,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,UAE,Middle East,Remittance_USD_Billion,49.98,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2008,UAE,Middle East,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2008,UAE,Middle East,GDP_India,$1.199T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2008,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Germany,Europe,Remittance_USD_Billion,49.98,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2008,Germany,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2008,Germany,Europe,GDP_India,$1.199T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2008,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2008,Singapore,Asia,Remittance_USD_Billion,49.98,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2008,Singapore,Asia,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2008,Singapore,Asia,GDP_India,$1.199T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2009,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,USA,North America,Remittance_USD_Billion,49.20,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2009,USA,North America,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2009,USA,North America,GDP_India,$1.342T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2009,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Canada,North America,Remittance_USD_Billion,49.20,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2009,Canada,North America,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2009,Canada,North America,GDP_India,$1.342T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2009,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UK,Europe,Remittance_USD_Billion,49.20,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2009,UK,Europe,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2009,UK,Europe,GDP_India,$1.342T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2009,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Australia,Oceania,Remittance_USD_Billion,49.20,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2009,Australia,Oceania,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2009,Australia,Oceania,GDP_India,$1.342T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2009,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,UAE,Middle East,Remittance_USD_Billion,49.20,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2009,UAE,Middle East,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2009,UAE,Middle East,GDP_India,$1.342T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2009,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Germany,Europe,Remittance_USD_Billion,49.20,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2009,Germany,Europe,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2009,Germany,Europe,GDP_India,$1.342T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2009,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2009,Singapore,Asia,Remittance_USD_Billion,49.20,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2009,Singapore,Asia,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2009,Singapore,Asia,GDP_India,$1.342T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2010,USA,North America,Total_Indian_Migrants,"2,060,000",real,UN DESA / US Census Bureau ACS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian foreign-born; MPI tabulation of 2010 ACS
+2010,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,USA,North America,Remittance_USD_Billion,53.48,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2010,USA,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2010,USA,North America,GDP_India,$1.676T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2010,Canada,North America,Total_Indian_Migrants,"540,000",real,UN DESA / Statistics Canada,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in Canada
+2010,Canada,North America,Permanent_Migrants,"30,311",real,IRCC Facts & Figures,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2010,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Canada,North America,Remittance_USD_Billion,53.48,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2010,Canada,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2010,Canada,North America,GDP_India,$1.676T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2010,UK,Europe,Total_Indian_Migrants,"710,000",real,UN DESA / ONS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in UK
+2010,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,UK,Europe,Remittance_USD_Billion,53.48,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2010,UK,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2010,UK,Europe,GDP_India,$1.676T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2010,Australia,Oceania,Total_Indian_Migrants,"330,000",real,UN DESA / ABS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2010,Australia,Oceania,Permanent_Migrants,"17,000",real,Dept of Home Affairs Migration Program report,https://www.homeaffairs.gov.au/research-and-statistics/statistics/visa-statistics/live/migration-program,Approximate; detailed citizenship-level breakdown avail. from 2011-12 onward
+2010,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Australia,Oceania,Remittance_USD_Billion,53.48,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2010,Australia,Oceania,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2010,Australia,Oceania,GDP_India,$1.676T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2010,UAE,Middle East,Total_Indian_Migrants,"2,250,000",real,UN DESA / UAE census,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2010,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,UAE,Middle East,Remittance_USD_Billion,53.48,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2010,UAE,Middle East,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2010,UAE,Middle East,GDP_India,$1.676T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2010,Germany,Europe,Total_Indian_Migrants,"60,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2010,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Germany,Europe,Remittance_USD_Billion,53.48,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2010,Germany,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2010,Germany,Europe,GDP_India,$1.676T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2010,Singapore,Asia,Total_Indian_Migrants,"210,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2010,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2010,Singapore,Asia,Remittance_USD_Billion,53.48,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2010,Singapore,Asia,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2010,Singapore,Asia,GDP_India,$1.676T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2011,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,USA,North America,Remittance_USD_Billion,62.50,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2011,USA,North America,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2011,USA,North America,GDP_India,$1.823T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2011,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Canada,North America,Remittance_USD_Billion,62.50,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2011,Canada,North America,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2011,Canada,North America,GDP_India,$1.823T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2011,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UK,Europe,Remittance_USD_Billion,62.50,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2011,UK,Europe,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2011,UK,Europe,GDP_India,$1.823T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2011,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Australia,Oceania,Remittance_USD_Billion,62.50,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2011,Australia,Oceania,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2011,Australia,Oceania,GDP_India,$1.823T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2011,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,UAE,Middle East,Remittance_USD_Billion,62.50,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2011,UAE,Middle East,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2011,UAE,Middle East,GDP_India,$1.823T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2011,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Germany,Europe,Remittance_USD_Billion,62.50,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2011,Germany,Europe,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2011,Germany,Europe,GDP_India,$1.823T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2011,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2011,Singapore,Asia,Remittance_USD_Billion,62.50,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2011,Singapore,Asia,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2011,Singapore,Asia,GDP_India,$1.823T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2012,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,USA,North America,Remittance_USD_Billion,68.82,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2012,USA,North America,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2012,USA,North America,GDP_India,$1.828T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2012,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Canada,North America,Remittance_USD_Billion,68.82,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2012,Canada,North America,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2012,Canada,North America,GDP_India,$1.828T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2012,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UK,Europe,Remittance_USD_Billion,68.82,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2012,UK,Europe,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2012,UK,Europe,GDP_India,$1.828T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2012,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Australia,Oceania,Remittance_USD_Billion,68.82,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2012,Australia,Oceania,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2012,Australia,Oceania,GDP_India,$1.828T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2012,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,UAE,Middle East,Remittance_USD_Billion,68.82,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2012,UAE,Middle East,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2012,UAE,Middle East,GDP_India,$1.828T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2012,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Germany,Europe,Remittance_USD_Billion,68.82,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2012,Germany,Europe,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2012,Germany,Europe,GDP_India,$1.828T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2012,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2012,Singapore,Asia,Remittance_USD_Billion,68.82,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2012,Singapore,Asia,Unemployment_India,7.64,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2012,Singapore,Asia,GDP_India,$1.828T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2013,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,USA,North America,Remittance_USD_Billion,69.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2013,USA,North America,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2013,USA,North America,GDP_India,$1.857T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2013,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Canada,North America,Remittance_USD_Billion,69.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2013,Canada,North America,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2013,Canada,North America,GDP_India,$1.857T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2013,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UK,Europe,Remittance_USD_Billion,69.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2013,UK,Europe,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2013,UK,Europe,GDP_India,$1.857T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2013,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Australia,Oceania,Remittance_USD_Billion,69.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2013,Australia,Oceania,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2013,Australia,Oceania,GDP_India,$1.857T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2013,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,UAE,Middle East,Remittance_USD_Billion,69.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2013,UAE,Middle East,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2013,UAE,Middle East,GDP_India,$1.857T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2013,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Germany,Europe,Remittance_USD_Billion,69.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2013,Germany,Europe,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2013,Germany,Europe,GDP_India,$1.857T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2013,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2013,Singapore,Asia,Remittance_USD_Billion,69.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2013,Singapore,Asia,Unemployment_India,7.68,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2013,Singapore,Asia,GDP_India,$1.857T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2014,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,USA,North America,Remittance_USD_Billion,70.39,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2014,USA,North America,Unemployment_India,7.66,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2014,USA,North America,GDP_India,$2.039T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2014,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Canada,North America,Remittance_USD_Billion,70.39,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2014,Canada,North America,Unemployment_India,7.66,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2014,Canada,North America,GDP_India,$2.039T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2014,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UK,Europe,Remittance_USD_Billion,70.39,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2014,UK,Europe,Unemployment_India,7.66,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2014,UK,Europe,GDP_India,$2.039T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2014,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Australia,Oceania,Remittance_USD_Billion,70.39,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2014,Australia,Oceania,Unemployment_India,7.66,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2014,Australia,Oceania,GDP_India,$2.039T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2014,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,UAE,Middle East,Remittance_USD_Billion,70.39,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2014,UAE,Middle East,Unemployment_India,7.66,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2014,UAE,Middle East,GDP_India,$2.039T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2014,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Germany,Europe,Remittance_USD_Billion,70.39,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2014,Germany,Europe,Unemployment_India,7.66,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2014,Germany,Europe,GDP_India,$2.039T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2014,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2014,Singapore,Asia,Remittance_USD_Billion,70.39,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2014,Singapore,Asia,Unemployment_India,7.66,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2014,Singapore,Asia,GDP_India,$2.039T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2015,USA,North America,Total_Indian_Migrants,"2,400,000",real,UN DESA / US Census Bureau ACS,https://www.un.org/development/desa/pd/content/international-migrant-stock,MPI article 'Indian Immigrants in the United States' (2017)
+2015,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,USA,North America,Students,"165,918",real,Open Doors 2016 Report,https://opendoorsdata.org/data/international-students/,
+2015,USA,North America,Remittance_USD_Billion,68.91,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2015,USA,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2015,USA,North America,GDP_India,$2.104T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2015,Canada,North America,Total_Indian_Migrants,"710,000",real,UN DESA / StatCan,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in Canada
+2015,Canada,North America,Permanent_Migrants,"39,340",real,IRCC Annual Report,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2015,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Canada,North America,Students,"172,600",real,ApplyBoard / IRCC cited in Pravasi Setu article,https://psfresearch.com/growth-of-indian-diaspora-in-the-21st-century-trends-patterns-key-determinants/,
+2015,Canada,North America,Remittance_USD_Billion,68.91,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2015,Canada,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2015,Canada,North America,GDP_India,$2.104T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2015,UK,Europe,Total_Indian_Migrants,"800,000",real,UN DESA / ONS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in UK
+2015,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,UK,Europe,Remittance_USD_Billion,68.91,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2015,UK,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2015,UK,Europe,GDP_India,$2.104T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2015,Australia,Oceania,Total_Indian_Migrants,"448,000",real,UN DESA / ABS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2015,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Australia,Oceania,Remittance_USD_Billion,68.91,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2015,Australia,Oceania,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2015,Australia,Oceania,GDP_India,$2.104T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2015,UAE,Middle East,Total_Indian_Migrants,"2,800,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2015,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,UAE,Middle East,Remittance_USD_Billion,68.91,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2015,UAE,Middle East,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2015,UAE,Middle East,GDP_India,$2.104T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2015,Germany,Europe,Total_Indian_Migrants,"98,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2015,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Germany,Europe,Remittance_USD_Billion,68.91,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2015,Germany,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2015,Germany,Europe,GDP_India,$2.104T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2015,Singapore,Asia,Total_Indian_Migrants,"310,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2015,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2015,Singapore,Asia,Remittance_USD_Billion,68.91,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2015,Singapore,Asia,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2015,Singapore,Asia,GDP_India,$2.104T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2016,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,USA,North America,Students,"186,267",real,Open Doors 2017 Report,https://opendoorsdata.org/data/international-students/,
+2016,USA,North America,Remittance_USD_Billion,62.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2016,USA,North America,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2016,USA,North America,GDP_India,$2.295T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2016,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Canada,North America,Remittance_USD_Billion,62.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2016,Canada,North America,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2016,Canada,North America,GDP_India,$2.295T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2016,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UK,Europe,Remittance_USD_Billion,62.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2016,UK,Europe,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2016,UK,Europe,GDP_India,$2.295T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2016,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Australia,Oceania,Remittance_USD_Billion,62.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2016,Australia,Oceania,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2016,Australia,Oceania,GDP_India,$2.295T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2016,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,UAE,Middle East,Remittance_USD_Billion,62.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2016,UAE,Middle East,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2016,UAE,Middle East,GDP_India,$2.295T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2016,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Germany,Europe,Remittance_USD_Billion,62.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2016,Germany,Europe,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2016,Germany,Europe,GDP_India,$2.295T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2016,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2016,Singapore,Asia,Remittance_USD_Billion,62.74,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2016,Singapore,Asia,Unemployment_India,7.61,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2016,Singapore,Asia,GDP_India,$2.295T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2017,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,USA,North America,Students,"196,271",real,Open Doors 2018 Report,https://opendoorsdata.org/data/international-students/,
+2017,USA,North America,Remittance_USD_Billion,68.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2017,USA,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2017,USA,North America,GDP_India,$2.651T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2017,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Canada,North America,Remittance_USD_Billion,68.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2017,Canada,North America,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2017,Canada,North America,GDP_India,$2.651T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2017,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UK,Europe,Remittance_USD_Billion,68.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2017,UK,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2017,UK,Europe,GDP_India,$2.651T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2017,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Australia,Oceania,Permanent_Migrants,"33,310",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2017,Australia,Oceania,Temporary_Workers,"16,124",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2017,Australia,Oceania,Students,"49,469",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2017,Australia,Oceania,Remittance_USD_Billion,68.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2017,Australia,Oceania,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2017,Australia,Oceania,GDP_India,$2.651T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2017,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,UAE,Middle East,Remittance_USD_Billion,68.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2017,UAE,Middle East,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2017,UAE,Middle East,GDP_India,$2.651T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2017,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Germany,Europe,Remittance_USD_Billion,68.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2017,Germany,Europe,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2017,Germany,Europe,GDP_India,$2.651T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2017,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2017,Singapore,Asia,Remittance_USD_Billion,68.97,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2017,Singapore,Asia,Unemployment_India,7.63,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2017,Singapore,Asia,GDP_India,$2.651T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2018,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,USA,North America,Students,"202,014",real,Open Doors 2019 Report,https://opendoorsdata.org/data/international-students/,
+2018,USA,North America,Remittance_USD_Billion,78.79,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2018,USA,North America,Unemployment_India,7.65,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2018,USA,North America,GDP_India,$2.703T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2018,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Canada,North America,Permanent_Migrants,"69,985",real,IRCC Annual Report,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2018,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Canada,North America,Remittance_USD_Billion,78.79,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2018,Canada,North America,Unemployment_India,7.65,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2018,Canada,North America,GDP_India,$2.703T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2018,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UK,Europe,Remittance_USD_Billion,78.79,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2018,UK,Europe,Unemployment_India,7.65,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2018,UK,Europe,GDP_India,$2.703T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2018,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Australia,Oceania,Permanent_Migrants,"33,611",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2018,Australia,Oceania,Temporary_Workers,"22,357",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2018,Australia,Oceania,Students,"66,449",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2018,Australia,Oceania,Remittance_USD_Billion,78.79,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2018,Australia,Oceania,Unemployment_India,7.65,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2018,Australia,Oceania,GDP_India,$2.703T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2018,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,UAE,Middle East,Remittance_USD_Billion,78.79,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2018,UAE,Middle East,Unemployment_India,7.65,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2018,UAE,Middle East,GDP_India,$2.703T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2018,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Germany,Europe,Remittance_USD_Billion,78.79,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2018,Germany,Europe,Unemployment_India,7.65,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2018,Germany,Europe,GDP_India,$2.703T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2018,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2018,Singapore,Asia,Remittance_USD_Billion,78.79,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2018,Singapore,Asia,Unemployment_India,7.65,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2018,Singapore,Asia,GDP_India,$2.703T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2019,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,USA,North America,Students,"193,124",real,Open Doors 2020 Report,https://opendoorsdata.org/data/international-students/,
+2019,USA,North America,Remittance_USD_Billion,83.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2019,USA,North America,Unemployment_India,6.51,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2019,USA,North America,GDP_India,$2.836T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2019,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Canada,North America,Permanent_Migrants,"85,590",real,IRCC Annual Report,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2019,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Canada,North America,Remittance_USD_Billion,83.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2019,Canada,North America,Unemployment_India,6.51,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2019,Canada,North America,GDP_India,$2.836T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2019,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,UK,Europe,Temporary_Workers,"57,087",real,"UK Home Office Immigration Statistics (Skilled work, main applicants)",https://www.gov.uk/government/statistics/immigration-statistics-year-ending-december-2021,
+2019,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,UK,Europe,Remittance_USD_Billion,83.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2019,UK,Europe,Unemployment_India,6.51,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2019,UK,Europe,GDP_India,$2.836T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2019,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Australia,Oceania,Permanent_Migrants,"25,698",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2019,Australia,Oceania,Temporary_Workers,"13,434",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2019,Australia,Oceania,Students,"55,560",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2019,Australia,Oceania,Remittance_USD_Billion,83.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2019,Australia,Oceania,Unemployment_India,6.51,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2019,Australia,Oceania,GDP_India,$2.836T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2019,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,UAE,Middle East,Remittance_USD_Billion,83.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2019,UAE,Middle East,Unemployment_India,6.51,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2019,UAE,Middle East,GDP_India,$2.836T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2019,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Germany,Europe,Remittance_USD_Billion,83.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2019,Germany,Europe,Unemployment_India,6.51,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2019,Germany,Europe,GDP_India,$2.836T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2019,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2019,Singapore,Asia,Remittance_USD_Billion,83.33,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2019,Singapore,Asia,Unemployment_India,6.51,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2019,Singapore,Asia,GDP_India,$2.836T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2020,USA,North America,Total_Indian_Migrants,"2,700,000",real,UN International Migration 2020 Highlights,https://www.un.org/en/desa/international-migration-2020-highlights,2.7M Indian-born in USA; also cited by MPI 2024 article
+2020,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,USA,North America,Students,"167,582",real,Open Doors 2021 Report,https://opendoorsdata.org/data/international-students/,
+2020,USA,North America,Remittance_USD_Billion,83.15,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2020,USA,North America,Unemployment_India,7.86,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2020,USA,North America,GDP_India,$2.675T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2020,Canada,North America,Total_Indian_Migrants,"1,020,000",real,UN DESA International Migrant Stock,https://www.un.org/development/desa/pd/content/international-migrant-stock,1.02M Indian-born; MEA Jan 2025: 3.61M total overseas Indians
+2020,Canada,North America,Permanent_Migrants,"42,875",real,IRCC Annual Report,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2020,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,Canada,North America,Remittance_USD_Billion,83.15,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2020,Canada,North America,Unemployment_India,7.86,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2020,Canada,North America,GDP_India,$2.675T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2020,UK,Europe,Total_Indian_Migrants,"890,000",real,UN DESA / ONS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born in UK; MEA Jan 2025: 1.34M total overseas Indians
+2020,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,UK,Europe,Temporary_Workers,"31,238",real,"UK Home Office (Skilled work, main applicants)",https://www.gov.uk/government/statistics/immigration-statistics-year-ending-december-2021,
+2020,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,UK,Europe,Remittance_USD_Billion,83.15,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2020,UK,Europe,Unemployment_India,7.86,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2020,UK,Europe,GDP_India,$2.675T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2020,Australia,Oceania,Total_Indian_Migrants,"721,000",real,UN DESA / ABS (cited by Home Affairs country profile),https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,"721,050 Indian-born at June 2020"
+2020,Australia,Oceania,Permanent_Migrants,"21,791",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2020,Australia,Oceania,Temporary_Workers,"10,071",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2020,Australia,Oceania,Students,"47,031",real,Home Affairs country profile - India,https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2020,Australia,Oceania,Remittance_USD_Billion,83.15,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2020,Australia,Oceania,Unemployment_India,7.86,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2020,Australia,Oceania,GDP_India,$2.675T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2020,UAE,Middle East,Total_Indian_Migrants,"3,500,000",real,UN International Migration 2020 Highlights,https://www.un.org/en/desa/international-migration-2020-highlights,3.5M; India-UAE is 5th largest corridor globally
+2020,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,UAE,Middle East,Remittance_USD_Billion,83.15,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2020,UAE,Middle East,Unemployment_India,7.86,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2020,UAE,Middle East,GDP_India,$2.675T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2020,Germany,Europe,Total_Indian_Migrants,"210,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2020,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,Germany,Europe,Students,"28,905",real,upGrad TEN Report 2024-25,https://psfresearch.com/growth-of-indian-diaspora-in-the-21st-century-trends-patterns-key-determinants/,
+2020,Germany,Europe,Remittance_USD_Billion,83.15,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2020,Germany,Europe,Unemployment_India,7.86,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2020,Germany,Europe,GDP_India,$2.675T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2020,Singapore,Asia,Total_Indian_Migrants,"370,000",real,UN DESA,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born
+2020,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2020,Singapore,Asia,Remittance_USD_Billion,83.15,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2020,Singapore,Asia,Unemployment_India,7.86,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2020,Singapore,Asia,GDP_India,$2.675T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2021,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,USA,North America,Students,"199,182",real,Open Doors 2022 Report,https://opendoorsdata.org/data/international-students/,
+2021,USA,North America,Remittance_USD_Billion,89.38,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2021,USA,North America,Unemployment_India,6.38,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2021,USA,North America,GDP_India,$3.167T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2021,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Canada,North America,Permanent_Migrants,"127,945",real,IRCC Annual Report,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2021,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Canada,North America,Remittance_USD_Billion,89.38,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2021,Canada,North America,Unemployment_India,6.38,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2021,Canada,North America,GDP_India,$3.167T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2021,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,UK,Europe,Temporary_Workers,"64,839",real,"UK Home Office (Skilled work, main applicants)",https://www.gov.uk/government/statistics/immigration-statistics-year-ending-december-2021,
+2021,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,UK,Europe,Remittance_USD_Billion,89.38,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2021,UK,Europe,Unemployment_India,6.38,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2021,UK,Europe,GDP_India,$3.167T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2021,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Australia,Oceania,Permanent_Migrants,"24,324",real,Home Affairs Migration Trends 2021-22,https://www.homeaffairs.gov.au/research-and-stats/files/migration-trends-2021-22.pdf,
+2021,Australia,Oceania,Temporary_Workers,"18,717",real,Home Affairs Migration Trends 2021-22,https://www.homeaffairs.gov.au/research-and-stats/files/migration-trends-2021-22.pdf,
+2021,Australia,Oceania,Students,"200,325",real,Home Affairs country profile - India (2024-25),https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2021,Australia,Oceania,Remittance_USD_Billion,89.38,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2021,Australia,Oceania,Unemployment_India,6.38,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2021,Australia,Oceania,GDP_India,$3.167T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2021,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,UAE,Middle East,Remittance_USD_Billion,89.38,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2021,UAE,Middle East,Unemployment_India,6.38,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2021,UAE,Middle East,GDP_India,$3.167T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2021,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Germany,Europe,Remittance_USD_Billion,89.38,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2021,Germany,Europe,Unemployment_India,6.38,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2021,Germany,Europe,GDP_India,$3.167T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2021,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2021,Singapore,Asia,Remittance_USD_Billion,89.38,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2021,Singapore,Asia,Unemployment_India,6.38,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2021,Singapore,Asia,GDP_India,$3.167T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2022,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,USA,North America,Students,"268,923",real,Open Doors 2023 Report,https://opendoorsdata.org/data/international-students/,
+2022,USA,North America,Remittance_USD_Billion,111.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2022,USA,North America,Unemployment_India,4.82,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2022,USA,North America,GDP_India,$3.346T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2022,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Canada,North America,Permanent_Migrants,"118,250",real,IRCC Annual Report,https://open.canada.ca/data/en/dataset/2fbb56bd-eae7-4582-af7d-a197d185fc93,
+2022,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Canada,North America,Remittance_USD_Billion,111.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2022,Canada,North America,Unemployment_India,4.82,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2022,Canada,North America,GDP_India,$3.346T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2022,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,UK,Europe,Temporary_Workers,"59,944",real,"UK Home Office (Worker category, main applicants)",https://www.gov.uk/government/statistics/immigration-system-statistics-year-ending-december-2022,Worker category incl. Skilled Worker + Health & Care
+2022,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,UK,Europe,Remittance_USD_Billion,111.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2022,UK,Europe,Unemployment_India,4.82,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2022,UK,Europe,GDP_India,$3.346T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2022,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Australia,Oceania,Permanent_Migrants,"41,145",real,Home Affairs Migration Trends 2022-23,https://www.homeaffairs.gov.au/research-and-stats/files/migration-trends-2022-23.pdf,
+2022,Australia,Oceania,Temporary_Workers,"27,402",real,Home Affairs Migration Trends 2022-23,https://www.homeaffairs.gov.au/research-and-stats/files/migration-trends-2022-23.pdf,
+2022,Australia,Oceania,Students,"357,038",real,Home Affairs country profile - India (2024-25),https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2022,Australia,Oceania,Remittance_USD_Billion,111.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2022,Australia,Oceania,Unemployment_India,4.82,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2022,Australia,Oceania,GDP_India,$3.346T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2022,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,UAE,Middle East,Remittance_USD_Billion,111.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2022,UAE,Middle East,Unemployment_India,4.82,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2022,UAE,Middle East,GDP_India,$3.346T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2022,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Germany,Europe,Remittance_USD_Billion,111.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2022,Germany,Europe,Unemployment_India,4.82,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2022,Germany,Europe,GDP_India,$3.346T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2022,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2022,Singapore,Asia,Remittance_USD_Billion,111.22,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2022,Singapore,Asia,Unemployment_India,4.82,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2022,Singapore,Asia,GDP_India,$3.346T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2023,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,USA,North America,Students,"331,602",real,Open Doors 2024 Report,https://opendoorsdata.org/data/international-students/,India surpassed China as #1 sending country
+2023,USA,North America,Remittance_USD_Billion,119.53,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2023,USA,North America,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2023,USA,North America,GDP_India,$3.638T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2023,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Canada,North America,Permanent_Migrants,"139,790",real,IRCC Monthly Updates,https://open.canada.ca/data/en/dataset/f7e5498e-0ad8-4417-85c9-9b8aff9b9eda,
+2023,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Canada,North America,Students,"427,000",real,ICEF Monitor / IRCC cited in Pravasi Setu article,https://psfresearch.com/growth-of-indian-diaspora-in-the-21st-century-trends-patterns-key-determinants/,Peak; 41% decline in 2024 after cap imposed
+2023,Canada,North America,Remittance_USD_Billion,119.53,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2023,Canada,North America,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2023,Canada,North America,GDP_India,$3.638T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2023,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,UK,Europe,Temporary_Workers,"162,655",real,UK Home Office (all work visas incl. dependants),https://economictimes.indiatimes.com/nri/latest-updates/indian-nationals-received-highest-share-of-uk-work-visas-in-2024-second-in-study-visas/articleshow/121130345.cms,Total work visas including dependants; main applicants = ~76K
+2023,UK,Europe,Students,"159,371",real,UK Home Office immigration statistics,https://economictimes.indiatimes.com/nri/latest-updates/indian-nationals-received-highest-share-of-uk-work-visas-in-2024-second-in-study-visas/articleshow/121130345.cms,
+2023,UK,Europe,Remittance_USD_Billion,119.53,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2023,UK,Europe,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2023,UK,Europe,GDP_India,$3.638T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2023,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Australia,Oceania,Students,"287,259",real,Home Affairs country profile - India (2024-25),https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2023,Australia,Oceania,Remittance_USD_Billion,119.53,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2023,Australia,Oceania,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2023,Australia,Oceania,GDP_India,$3.638T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2023,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,UAE,Middle East,Remittance_USD_Billion,119.53,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2023,UAE,Middle East,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2023,UAE,Middle East,GDP_India,$3.638T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2023,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Germany,Europe,Remittance_USD_Billion,119.53,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2023,Germany,Europe,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2023,Germany,Europe,GDP_India,$3.638T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2023,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2023,Singapore,Asia,Remittance_USD_Billion,119.53,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2023,Singapore,Asia,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2023,Singapore,Asia,GDP_India,$3.638T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2024,USA,North America,Total_Indian_Migrants,"3,170,000",real,IOM World Migration Report 2026,https://worldmigrationreport.iom.int/,3.17M Indian-born in USA (IOM); MEA 2025 reports 5.69M total overseas Indians (incl. PIOs)
+2024,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,USA,North America,Remittance_USD_Billion,137.67,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2024,USA,North America,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2024,USA,North America,GDP_India,$3.910T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2024,Canada,North America,Total_Indian_Migrants,"1,280,000",real,UN DESA 2024 / IRCC,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born; MEA Jan 2025: 3.61M total overseas Indians
+2024,Canada,North America,Permanent_Migrants,"127,375",real,IRCC / Halani Immigration compiled data,https://halaniimmigration.com/data/permanent-residents,
+2024,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Canada,North America,Remittance_USD_Billion,137.67,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2024,Canada,North America,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2024,Canada,North America,GDP_India,$3.910T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2024,UK,Europe,Total_Indian_Migrants,"970,000",real,UN DESA 2024 / ONS,https://www.un.org/development/desa/pd/content/international-migrant-stock,Indian-born; MEA Jan 2025: 1.34M total overseas Indians
+2024,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,UK,Europe,Temporary_Workers,"81,463",real,UK Home Office (all work visas incl. dependants),https://economictimes.indiatimes.com/nri/latest-updates/indian-nationals-received-highest-share-of-uk-work-visas-in-2024-second-in-study-visas/articleshow/121130345.cms,"50% decline from 2023 due to policy changes; main applicants 34,954"
+2024,UK,Europe,Students,"92,355",real,UK Home Office immigration statistics,https://economictimes.indiatimes.com/nri/latest-updates/indian-nationals-received-highest-share-of-uk-work-visas-in-2024-second-in-study-visas/articleshow/121130345.cms,42% decline from 2023; China surpassed India as #1
+2024,UK,Europe,Remittance_USD_Billion,137.67,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2024,UK,Europe,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2024,UK,Europe,GDP_India,$3.910T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2024,Australia,Oceania,Total_Indian_Migrants,"916,000",real,ABS / DFAT statistical snapshot,https://www.dfat.gov.au/sites/default/files/understanding-australia-indian-communities-statistical-snapshot.pdf,"916,330 Indian-born as of June 2024"
+2024,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Australia,Oceania,Students,"302,758",real,Home Affairs country profile - India (2024-25),https://www.homeaffairs.gov.au/research-and-statistics/statistics/country-profiles/profiles/india,
+2024,Australia,Oceania,Remittance_USD_Billion,137.67,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2024,Australia,Oceania,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2024,Australia,Oceania,GDP_India,$3.910T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2024,UAE,Middle East,Total_Indian_Migrants,"3,250,000",real,IOM World Migration Report 2026,https://worldmigrationreport.iom.int/,3.25M Indian-born (IOM 2026); MEA 2025: 3.90M total overseas Indians
+2024,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,UAE,Middle East,Remittance_USD_Billion,137.67,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2024,UAE,Middle East,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2024,UAE,Middle East,GDP_India,$3.910T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2024,Germany,Europe,Total_Indian_Migrants,"285,000",real,UN DESA 2024 / MEA compilations,https://www.un.org/development/desa/pd/content/international-migrant-stock,"Indian-born; MEA Jan 2025: 450,390 total overseas Indians"
+2024,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Germany,Europe,Remittance_USD_Billion,137.67,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2024,Germany,Europe,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2024,Germany,Europe,GDP_India,$3.910T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2024,Singapore,Asia,Total_Indian_Migrants,"395,000",real,UN DESA 2024,https://www.un.org/development/desa/pd/content/international-migrant-stock,"Indian-born; MEA Jan 2025: 457,180 total overseas Indians"
+2024,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2024,Singapore,Asia,Remittance_USD_Billion,137.67,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?locations=IN,"Total India inflows, NOT disaggregated by source country"
+2024,Singapore,Asia,Unemployment_India,4.17,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2024,Singapore,Asia,GDP_India,$3.910T,real,World Bank World Development Indicators,https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=IN,India GDP (current USD)
+2025,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,USA,North America,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,USA,North America,Unemployment_India,4.22,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2025,USA,North America,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Canada,North America,Permanent_Migrants,"98,825",real,IRCC / Halani Immigration compiled data,https://halaniimmigration.com/data/permanent-residents,
+2025,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Canada,North America,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Canada,North America,Unemployment_India,4.22,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2025,Canada,North America,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UK,Europe,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UK,Europe,Unemployment_India,4.22,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2025,UK,Europe,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Australia,Oceania,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Australia,Oceania,Unemployment_India,4.22,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2025,Australia,Oceania,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UAE,Middle East,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,UAE,Middle East,Unemployment_India,4.22,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2025,UAE,Middle East,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Germany,Europe,Students,"60,000",real,upGrad TEN Report 2024-25,https://psfresearch.com/growth-of-indian-diaspora-in-the-21st-century-trends-patterns-key-determinants/,More than double 2020 levels
+2025,Germany,Europe,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Germany,Europe,Unemployment_India,4.22,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2025,Germany,Europe,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Singapore,Asia,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2025,Singapore,Asia,Unemployment_India,4.22,real,World Bank / ILOSTAT (modeled ILO estimate),https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS?locations=IN,India national unemployment rate
+2025,Singapore,Asia,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,USA,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,USA,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,USA,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,USA,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,USA,North America,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,USA,North America,Unemployment_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,USA,North America,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Canada,North America,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Canada,North America,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Canada,North America,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Canada,North America,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Canada,North America,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Canada,North America,Unemployment_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Canada,North America,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UK,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UK,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UK,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UK,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UK,Europe,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UK,Europe,Unemployment_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UK,Europe,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Australia,Oceania,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Australia,Oceania,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Australia,Oceania,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Australia,Oceania,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Australia,Oceania,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Australia,Oceania,Unemployment_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Australia,Oceania,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UAE,Middle East,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UAE,Middle East,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UAE,Middle East,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UAE,Middle East,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UAE,Middle East,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UAE,Middle East,Unemployment_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,UAE,Middle East,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Germany,Europe,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Germany,Europe,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Germany,Europe,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Germany,Europe,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Germany,Europe,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Germany,Europe,Unemployment_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Germany,Europe,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Singapore,Asia,Total_Indian_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Singapore,Asia,Permanent_Migrants,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Singapore,Asia,Temporary_Workers,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Singapore,Asia,Students,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Singapore,Asia,Remittance_USD_Billion,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Singapore,Asia,Unemployment_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell
+2026,Singapore,Asia,GDP_India,NOT AVAILABLE,real,,,No publicly sourced figure found for this cell

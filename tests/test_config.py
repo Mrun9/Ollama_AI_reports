@@ -7,6 +7,8 @@ def test_safe_defaults(app: Flask) -> None:
     assert app.config["DEBUG"] is False
     assert app.config["HOST"] == "127.0.0.1"
     assert app.config["OLLAMA_HOST"] == "http://127.0.0.1:11434"
+    assert app.config["OLLAMA_MODEL"] == "llama3.2:latest"
+    assert app.config["OLLAMA_TIMEOUT_SECONDS"] == 120
     assert app.config["MAX_UPLOAD_BYTES"] == 10 * 1024 * 1024
     assert app.config["MAX_CONTENT_LENGTH"] == 11 * 1024 * 1024
     assert app.config["MAX_CSV_ROWS"] == 5_000

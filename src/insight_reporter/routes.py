@@ -12,6 +12,11 @@ from insight_reporter.business_config import (
     save_business_configuration,
     validate_business_configuration,
 )
+from insight_reporter.configuration_suggestions import (
+    ConfigurationSuggestion,
+    ConfigurationSuggestionError,
+    generate_configuration_suggestions,
+)
 from insight_reporter.csv_ingestion import CSVValidationError, ingest_csv
 from insight_reporter.dataset_profile import DatasetProfile, DatasetProfileError, profile_csv
 
@@ -100,6 +105,88 @@ def upload_csv():  # type: ignore[no-untyped-def]
     return _render_profile(dataset_id, profile)
 
 
+@core.post("/suggest/<dataset_id>")
+def suggest_configurations(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Generate advisory configurations from profile metadata using local Ollama."""
+
+    profile = _load_profile(dataset_id)
+    if not profile.kpi_candidates:
+        return _render_profile(
+            dataset_id,
+            profile,
+            suggestion_error="No measurable KPI candidates are available for suggestions.",
+            status_code=400,
+        )
+
+    try:
+        batch = generate_configuration_suggestions(
+            profile,
+            dataset_id=dataset_id,
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+        )
+    except ConfigurationSuggestionError as error:
+        current_app.logger.warning(
+            "Local configuration suggestions unavailable: id=%s model=%s reason=%s",
+            dataset_id,
+            current_app.config["OLLAMA_MODEL"],
+            error,
+        )
+        return _render_profile(
+            dataset_id,
+            profile,
+            suggestion_error=str(error),
+            status_code=503,
+        )
+
+    current_app.logger.info(
+        "Local configuration suggestions generated: id=%s accepted=%d rejected=%d model=%s",
+        dataset_id,
+        len(batch.suggestions),
+        batch.rejected_count,
+        current_app.config["OLLAMA_MODEL"],
+    )
+    return _render_profile(
+        dataset_id,
+        profile,
+        suggestions=batch.suggestions,
+        rejected_suggestion_count=batch.rejected_count,
+    )
+
+
+@core.post("/review-suggestion/<dataset_id>")
+def review_suggestion(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Revalidate an untrusted posted suggestion and prefill the manual form."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        validate_business_configuration(
+            profile,
+            dataset_id=dataset_id,
+            primary_kpi=request.form.get("primary_kpi", ""),
+            kpi_direction=request.form.get("kpi_direction", ""),
+            date_column=request.form.get("date_column", ""),
+            category_columns=request.form.getlist("category_columns"),
+            target_or_benchmark=request.form.get("target_or_benchmark", ""),
+            business_objective=request.form.get("business_objective", ""),
+        )
+    except BusinessConfigurationError as error:
+        return _render_profile(
+            dataset_id,
+            profile,
+            configuration_error=str(error),
+            status_code=400,
+        )
+
+    return _render_profile(
+        dataset_id,
+        profile,
+        form_data=request.form,
+        review_notice="AI suggestion loaded. Review or edit every field before confirming.",
+    )
+
+
 @core.post("/configure/<dataset_id>")
 def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
     """Validate and retain user-confirmed business selections."""
@@ -183,6 +270,10 @@ def _render_profile(
     *,
     configuration_error: str | None = None,
     form_data: object | None = None,
+    suggestions: tuple[ConfigurationSuggestion, ...] = (),
+    suggestion_error: str | None = None,
+    rejected_suggestion_count: int = 0,
+    review_notice: str | None = None,
     status_code: int = 200,
 ):  # type: ignore[no-untyped-def]
     return (
@@ -192,6 +283,11 @@ def _render_profile(
             profile=profile,
             configuration_error=configuration_error,
             form_data=form_data,
+            suggestions=suggestions,
+            suggestion_error=suggestion_error,
+            rejected_suggestion_count=rejected_suggestion_count,
+            review_notice=review_notice,
+            suggestion_model=current_app.config["OLLAMA_MODEL"],
         ),
         status_code,
     )

@@ -21,6 +21,11 @@ def _log_level() -> str:
     return candidate if candidate in allowed else "INFO"
 
 
+def _ollama_model() -> str:
+    candidate = os.getenv("APP_OLLAMA_MODEL", "llama3.2:latest").strip()
+    return candidate if candidate and len(candidate) <= 128 else "llama3.2:latest"
+
+
 class DefaultConfig:
     """Local-only defaults shared by application instances."""
 
@@ -30,6 +35,8 @@ class DefaultConfig:
     HOST = "127.0.0.1"
     PORT = 5000
     OLLAMA_HOST = "http://127.0.0.1:11434"
+    OLLAMA_MODEL = _ollama_model()
+    OLLAMA_TIMEOUT_SECONDS = _positive_int("APP_OLLAMA_TIMEOUT_SECONDS", 120)
     TRUSTED_HOSTS = ["127.0.0.1", "localhost"]
 
     MAX_UPLOAD_BYTES = _positive_int("APP_MAX_UPLOAD_BYTES", 10 * 1024 * 1024)

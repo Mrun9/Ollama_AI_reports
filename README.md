@@ -2,11 +2,13 @@
 
 AI Insight Reporter is a local-first proof of concept for turning raw business data into
 evidence-grounded reports. Python will perform deterministic calculations, and a local Ollama
-model will later generate narrative text from verified evidence.
+model provides optional configuration suggestions before later generating narrative text from
+verified evidence.
 
-The project currently implements **Milestone 2: Dataset Profiling and Business Configuration**.
-It profiles one securely ingested CSV and records validated user selections, but deliberately does
-not call Ollama or generate narrative reports yet.
+The project currently implements **Milestone 2.5: AI-Assisted Configuration**. It profiles one
+securely ingested CSV, optionally asks local Ollama for structured configuration suggestions, and
+records only a Python-validated, user-confirmed selection. It does not generate insights or reports
+yet.
 
 ## Current capabilities
 
@@ -26,12 +28,17 @@ not call Ollama or generate narrative reports yet.
 - Earliest and latest date/time values
 - Constant and empty-column flags
 - Candidate KPI, date, and category columns
+- Optional one-to-three configuration suggestions from local Ollama
+- JSON-schema-constrained model responses at temperature zero
+- Python rejection of hallucinated columns, extra fields, duplicate suggestions, and invented targets
+- Model confidence and evidence-based rationale displayed as advisory information
+- Select-and-edit flow that prefills the existing manual configuration form
+- Graceful manual fallback when Ollama or the configured model is unavailable
 - User confirmation of KPI direction, dimensions, target, and business objective
 - Validated JSON configuration under `instance/configurations/`
 - Localhost-only and debug-off defaults
 
-Milestone 2 does not require Ollama. The root `app.py` remains available as a separate local
-Ollama connectivity starter for later milestones.
+Ollama is optional: CSV upload, profiling, and manual configuration continue to work without it.
 
 ## Setup with the existing Conda environment
 
@@ -43,14 +50,37 @@ python -m pip install -r requirements-dev.txt
 
 Using Conda is supported; a separate `.venv` is not required.
 
+## Prepare local Ollama suggestions
+
+No API key is required. Install and start the local Ollama application or service, then download
+the configured model:
+
+```bash
+ollama serve
+ollama pull llama3.2:latest
+```
+
+If the desktop application already runs Ollama in the background, do not start a second server.
+The Flask application connects only to `http://127.0.0.1:11434`.
+
 ## Run the CSV upload service
 
 ```bash
 python -m flask --app insight_reporter:create_app run --host 127.0.0.1 --port 5000
 ```
 
-Open `http://127.0.0.1:5000/` to upload a CSV, review its deterministic profile, and confirm the
-business configuration. The health endpoint is available at `http://127.0.0.1:5000/health`.
+Open `http://127.0.0.1:5000/` to upload a CSV and review its deterministic profile. Click
+**Generate AI suggestions** only when suggestions are wanted. Select **Use this suggestion** to
+prefill the manual form, review or edit every field, and then confirm the final configuration.
+
+The health endpoint is available at `http://127.0.0.1:5000/health`.
+
+```text
+CSV -> Python validation/profile -> optional Ollama suggestions
+                                  -> Python validation
+                                  -> user review/edit
+                                  -> final BusinessConfiguration
+```
 
 Confirm the expected routes with:
 
@@ -64,6 +94,8 @@ Expected application routes:
 GET   /
 GET   /health
 POST  /upload
+POST  /suggest/<dataset_id>
+POST  /review-suggestion/<dataset_id>
 POST  /configure/<dataset_id>
 ```
 
@@ -86,6 +118,8 @@ The application reads these optional process environment variables:
 | `APP_MAX_CSV_ROWS` | `5000` | Maximum data rows, excluding the header |
 | `APP_MAX_CSV_COLUMNS` | `200` | Maximum columns |
 | `APP_CSV_PREVIEW_ROWS` | `5` | Rows displayed after validation |
+| `APP_OLLAMA_MODEL` | `llama3.2:latest` | Local model used only for suggestions |
+| `APP_OLLAMA_TIMEOUT_SECONDS` | `120` | Local suggestion request timeout |
 
 The application does not automatically load `.env`. Never commit real secrets or sensitive input
 data.
@@ -99,6 +133,13 @@ data.
 - Preview values are HTML-escaped by Jinja.
 - Configuration selections are checked against inferred candidates and actual column names.
 - Configuration filenames are derived only from server-generated dataset IDs.
+- Ollama receives column metadata, descriptive statistics, and candidate lists—not raw preview rows.
+- Column names are treated as untrusted data in the prompt and model output is treated as untrusted.
+- Structured output is validated again in Python before suggestions are displayed.
+- The model-facing JSON grammar stays simple for `llama3.2` while restricting KPI,
+  date, and category selections to profiler candidates; Python enforces the remaining constraints.
+- Ollama suggestions cannot set a target or benchmark; only the user can enter one.
+- AI suggestions are never generated automatically during upload and never become final automatically.
 - The application does not execute uploaded content or use `eval`, `exec`, pickle, or shell commands.
 - Flask and Ollama must remain bound to loopback unless company IT approves another design.
 - Use only dummy data until company data handling and retention are approved.
@@ -111,7 +152,7 @@ After Ollama is installed, running, and has an approved model downloaded:
 python app.py
 ```
 
-This standalone check is not part of the Milestone 1 acceptance gate.
+This standalone check is optional and separate from the Flask workflow.
 
 ## Current limitations
 
@@ -119,6 +160,8 @@ This standalone check is not part of the Milestone 1 acceptance gate.
 - Type inference is heuristic and must be confirmed by the user.
 - Empty strings and the markers `NA`, `N/A`, `null`, `none`, and `NaN` count as missing.
 - Numeric profiling is descriptive only; no business insights or trend calculations are generated.
-- No Ollama narration in the Flask workflow
+- AI confidence is advisory and not a calibrated probability.
+- Suggestions depend on the semantic ability of the selected local model.
+- No Ollama report narration in the Flask workflow
 - No report generation
 - No persistent history, authentication, or multi-user isolation

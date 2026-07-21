@@ -3,12 +3,11 @@ import os
 from ollama import Client
 
 HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 PROMPT = os.getenv(
     "PROMPT",
     (
-        "Hello! Which open-source models available through Ollama are best for generating "
-        "reports from raw CSV or JSON data?"
+        "Hello! Name 10 random things that are not related to each other. "
     ),
 )
 
