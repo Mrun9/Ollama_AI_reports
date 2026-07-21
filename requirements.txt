@@ -1,0 +1,4 @@
+-e .
+
+# Retained for the standalone local Ollama starter and later narrative milestone.
+ollama>=0.4.0

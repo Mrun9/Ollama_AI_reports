@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Upload CSV | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>AI Insight Reporter</h1>
+      <h2>Upload one CSV</h2>
+
+      {% if error %}
+        <p role="alert"><strong>Upload rejected:</strong> {{ error }}</p>
+      {% endif %}
+
+      <p>
+        UTF-8 CSV only. Maximum {{ max_bytes }} bytes, {{ max_rows }} data rows,
+        and {{ max_columns }} columns.
+      </p>
+
+      <form method="post" action="{{ url_for('core.upload_csv') }}" enctype="multipart/form-data">
+        <label for="file">CSV file</label>
+        <input id="file" name="file" type="file" accept=".csv,text/csv" required>
+        <button type="submit">Upload and preview</button>
+      </form>
+    </main>
+  </body>
+</html>

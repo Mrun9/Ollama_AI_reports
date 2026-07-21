@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Configuration Saved | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>Business configuration saved</h1>
+      <p>The selections were validated against dataset {{ configuration.dataset_id }}.</p>
+      <dl>
+        <dt>Primary KPI</dt>
+        <dd>{{ configuration.primary_kpi }}</dd>
+        <dt>Direction</dt>
+        <dd>{{ configuration.kpi_direction }}</dd>
+        <dt>Date column</dt>
+        <dd>{{ configuration.date_column or "None" }}</dd>
+        <dt>Categories</dt>
+        <dd>{{ configuration.category_columns|join(", ") or "None" }}</dd>
+        <dt>Target or benchmark</dt>
+        <dd>
+          {{ configuration.target_or_benchmark if configuration.target_or_benchmark is not none else "None" }}
+        </dd>
+        <dt>Business objective</dt>
+        <dd>{{ configuration.business_objective }}</dd>
+      </dl>
+
+      <h2>Configuration object</h2>
+      <pre>{{ configuration_json }}</pre>
+      <p><a href="{{ url_for('core.upload_form') }}">Profile another CSV</a></p>
+    </main>
+  </body>
+</html>

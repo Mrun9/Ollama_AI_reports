@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dataset Profile | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>CSV accepted</h1>
+      <dl>
+        <dt>Dataset ID</dt>
+        <dd>{{ dataset_id }}.csv</dd>
+        <dt>SHA-256</dt>
+        <dd>{{ profile.source_sha256 }}</dd>
+        <dt>Size</dt>
+        <dd>{{ profile.size_bytes }} bytes</dd>
+        <dt>Data rows</dt>
+        <dd>{{ profile.row_count }}</dd>
+        <dt>Columns</dt>
+        <dd>{{ profile.column_count }}</dd>
+      </dl>
+
+      <h2>Preview</h2>
+      <table>
+        <thead>
+          <tr>
+            {% for column in profile.columns %}
+              <th scope="col">{{ column.name }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in profile.preview_rows %}
+            <tr>
+              {% for cell in row %}
+                <td>{{ cell }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h2>Dataset profile</h2>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Column</th>
+            <th scope="col">Inferred type</th>
+            <th scope="col">Missing</th>
+            <th scope="col">Unique</th>
+            <th scope="col">Flags</th>
+            <th scope="col">Statistics or range</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for column in profile.columns %}
+            <tr>
+              <th scope="row">{{ column.name }}</th>
+              <td>{{ column.inferred_type.value }}</td>
+              <td>{{ column.missing_count }} ({{ "%.2f"|format(column.missing_percentage) }}%)</td>
+              <td>{{ column.unique_count }}</td>
+              <td>
+                {% if column.is_empty %}empty{% elif column.is_constant %}constant{% else %}—{% endif %}
+              </td>
+              <td>
+                {% if column.numeric_statistics %}
+                  min={{ column.numeric_statistics.minimum }},
+                  max={{ column.numeric_statistics.maximum }},
+                  mean={{ "%.6g"|format(column.numeric_statistics.mean) }},
+                  median={{ column.numeric_statistics.median }},
+                  total={{ column.numeric_statistics.total }},
+                  stddev={{ "%.6g"|format(column.numeric_statistics.standard_deviation) }}
+                {% elif column.date_range %}
+                  {{ column.date_range.earliest }} to {{ column.date_range.latest }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h2>Confirm business configuration</h2>
+      {% if configuration_error %}
+        <p role="alert"><strong>Configuration rejected:</strong> {{ configuration_error }}</p>
+      {% endif %}
+
+      {% if profile.kpi_candidates %}
+        <form method="post" action="{{ url_for('core.configure_dataset', dataset_id=dataset_id) }}">
+          <p>
+            <label for="primary_kpi">Primary KPI</label>
+            <select id="primary_kpi" name="primary_kpi" required>
+              <option value="">Select a KPI</option>
+              {% for column in profile.kpi_candidates %}
+                <option value="{{ column }}"
+                  {% if form_data and form_data.get('primary_kpi') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          <fieldset>
+            <legend>KPI direction</legend>
+            <label>
+              <input type="radio" name="kpi_direction" value="higher" required
+                {% if not form_data or form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>
+              Higher is better
+            </label>
+            <label>
+              <input type="radio" name="kpi_direction" value="lower"
+                {% if form_data and form_data.get('kpi_direction') == 'lower' %}checked{% endif %}>
+              Lower is better
+            </label>
+          </fieldset>
+
+          <p>
+            <label for="date_column">Date column</label>
+            <select id="date_column" name="date_column">
+              <option value="">No date column</option>
+              {% for column in profile.date_candidates %}
+                <option value="{{ column }}"
+                  {% if form_data and form_data.get('date_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          <fieldset>
+            <legend>Category or segment columns</legend>
+            {% if profile.category_candidates %}
+              {% for column in profile.category_candidates %}
+                <label>
+                  <input type="checkbox" name="category_columns" value="{{ column }}"
+                    {% if form_data and column in form_data.getlist('category_columns') %}checked{% endif %}>
+                  {{ column }}
+                </label>
+              {% endfor %}
+            {% else %}
+              <p>No category candidates were detected.</p>
+            {% endif %}
+          </fieldset>
+
+          <p>
+            <label for="target_or_benchmark">Optional target or benchmark</label>
+            <input id="target_or_benchmark" name="target_or_benchmark" type="number" step="any"
+              value="{{ form_data.get('target_or_benchmark', '') if form_data else '' }}">
+          </p>
+
+          <p>
+            <label for="business_objective">Business objective</label>
+            <textarea id="business_objective" name="business_objective" maxlength="2000"
+              required>{{ form_data.get('business_objective', '') if form_data else '' }}</textarea>
+          </p>
+
+          <button type="submit">Confirm configuration</button>
+        </form>
+      {% else %}
+        <p>No measurable KPI candidates were detected. Upload a dataset with a nonconstant numeric measure.</p>
+      {% endif %}
+
+      <p><a href="{{ url_for('core.upload_form') }}">Upload another CSV</a></p>
+    </main>
+  </body>
+</html>

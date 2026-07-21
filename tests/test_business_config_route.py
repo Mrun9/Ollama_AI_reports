@@ -1,0 +1,115 @@
+"""End-to-end Flask workflow tests for profiling and confirmation."""
+
+import io
+import json
+import re
+from pathlib import Path
+
+from flask import Flask
+from flask.testing import FlaskClient
+
+
+def _upload_business_csv(client: FlaskClient):  # type: ignore[no-untyped-def]
+    content = (
+        b"customer_id,date,region,revenue\n"
+        b"C-1,2026-01-01,North,100\n"
+        b"C-2,2026-01-02,South,120\n"
+        b"C-3,2026-01-03,North,140\n"
+    )
+    return client.post(
+        "/upload",
+        data={"file": (io.BytesIO(content), "business.csv", "text/csv")},
+        content_type="multipart/form-data",
+    )
+
+
+def _dataset_id(response_data: bytes) -> str:
+    match = re.search(rb"<dd>([0-9a-f]{32})\.csv</dd>", response_data)
+    assert match is not None
+    return match.group(1).decode("ascii")
+
+
+def test_upload_displays_profile_and_candidate_form(client: FlaskClient) -> None:
+    response = _upload_business_csv(client)
+
+    assert response.status_code == 200
+    assert b"Dataset profile" in response.data
+    assert b"date/time" in response.data
+    assert b"identifier" in response.data
+    assert b"numeric" in response.data
+    assert b"Confirm business configuration" in response.data
+    assert b'value="revenue"' in response.data
+    assert b'value="date"' in response.data
+    assert b'value="region"' in response.data
+
+
+def test_confirmed_configuration_is_validated_and_persisted(
+    app: Flask, client: FlaskClient
+) -> None:
+    upload_response = _upload_business_csv(client)
+    dataset_id = _dataset_id(upload_response.data)
+
+    response = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "target_or_benchmark": "150",
+            "business_objective": "Increase regional revenue.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Business configuration saved" in response.data
+    configuration_path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
+    configuration = json.loads(configuration_path.read_text(encoding="utf-8"))
+    assert configuration["dataset_id"] == dataset_id
+    assert configuration["primary_kpi"] == "revenue"
+    assert configuration["date_column"] == "date"
+    assert configuration["category_columns"] == ["region"]
+    assert configuration["target_or_benchmark"] == 150
+
+
+def test_tampered_selection_is_rejected_without_configuration_file(
+    app: Flask, client: FlaskClient
+) -> None:
+    upload_response = _upload_business_csv(client)
+    dataset_id = _dataset_id(upload_response.data)
+
+    response = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "customer_id",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "business_objective": "Invalid attempt.",
+        },
+    )
+
+    assert response.status_code == 400
+    assert b"Configuration rejected" in response.data
+    assert b"measurable KPI" in response.data
+    assert not (Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json").exists()
+
+
+def test_business_objective_is_escaped(client: FlaskClient) -> None:
+    upload_response = _upload_business_csv(client)
+    dataset_id = _dataset_id(upload_response.data)
+
+    response = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "business_objective": "<script>alert(1)</script>",
+        },
+    )
+    page = response.data.decode("utf-8")
+
+    assert response.status_code == 200
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
+    assert "<script>alert(1)</script>" not in page
