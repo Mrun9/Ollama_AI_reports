@@ -20,7 +20,7 @@ def test_root_displays_csv_upload_form(client: FlaskClient) -> None:
     response = client.get("/")
 
     assert response.status_code == 200
-    assert b"Upload one CSV" in response.data
+    assert b"Upload one dataset" in response.data
     assert b'method="post"' in response.data
 
 

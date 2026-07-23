@@ -43,9 +43,8 @@ def _dataset_id(response_data: bytes) -> str:
 def _formula_form() -> dict[str, object]:
     return {
         "name": "Profit",
-        "operation": "subtract",
-        "left_column": "revenue",
-        "right_column": "cost",
+        "formula": "[revenue] - [cost]",
+        "calculation_level": "row",
         "aggregation": "sum",
         "display_format": "currency",
         "kpi_direction": "higher",
@@ -126,9 +125,8 @@ def test_on_demand_suggestion_review_confirmation_and_insights_workflow(
     assert b"Python calculation preview" in review.data
     assert b"Valid results" in review.data
     assert b'id="derived-name"' in review.data
-    assert b'id="derived-operation"' in review.data
-    assert b'id="derived-left-column"' in review.data
-    assert b'id="derived-right-column"' in review.data
+    assert b'id="derived-formula"' in review.data
+    assert b'id="calculation-level"' in review.data
     assert b"Recalculate Python preview" in review.data
     assert b'id="derived-aggregation"' in review.data
     assert b'value="sum"' in review.data
@@ -151,20 +149,20 @@ def test_on_demand_suggestion_review_confirmation_and_insights_workflow(
     )
     assert configured.status_code == 200
     assert b"Business configuration saved" in configured.data
-    assert b"Derived formula" in configured.data
+    assert b"Formula" in configured.data
     configuration_path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
     payload = json.loads(configuration_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 2
-    assert payload["metric_type"] == "derived"
-    assert payload["primary_kpi"] == "Profit"
-    assert payload["derived_metric"]["operation"] == "subtract"
+    assert payload["schema_version"] == 4
+    assert payload["metrics"][0]["metric_type"] == "derived"
+    assert payload["metrics"][0]["name"] == "Profit"
+    assert payload["metrics"][0]["derived_metric"]["schema_version"] == 2
 
     insights = client.post(f"/insights/{dataset_id}", follow_redirects=True)
     assert insights.status_code == 200
     insight_path = Path(app.config["INSIGHT_DIR"]) / f"{dataset_id}.json"
     evidence = json.loads(insight_path.read_text(encoding="utf-8"))
     assert evidence["metric_definition"]["metric_type"] == "derived"
-    assert evidence["metric_definition"]["formula"] == "revenue - cost"
+    assert evidence["metric_definition"]["formula"] == "[revenue] - [cost]"
     assert evidence["insights"]
 
 
@@ -172,7 +170,7 @@ def test_tampered_derived_formula_is_rejected(client: FlaskClient) -> None:
     upload_response = _upload(client)
     dataset_id = _dataset_id(upload_response.data)
     tampered = _formula_form()
-    tampered["operation"] = "__import__('os').system('id')"
+    tampered["formula"] = "__import__('os').system('id')"
 
     response = client.post(
         f"/review-derived/{dataset_id}", data=tampered, follow_redirects=True
@@ -180,7 +178,7 @@ def test_tampered_derived_formula_is_rejected(client: FlaskClient) -> None:
 
     assert response.status_code == 400
     assert b"Changes rejected" in response.data
-    assert b"operation is not supported" in response.data
+    assert b"Unsupported formula character" in response.data
     assert b"Recalculate Python preview" in response.data
 
 
@@ -191,10 +189,9 @@ def test_user_can_change_formula_fields_and_recalculate_preview(
     dataset_id = _dataset_id(upload_response.data)
     edited_formula = {
         "name": "Revenue per cost",
-        "operation": "ratio",
-        "left_column": "revenue",
-        "right_column": "cost",
-        "aggregation": "ratio_of_sums",
+        "formula": "SUM([revenue]) / SUM([cost])",
+        "calculation_level": "aggregate",
+        "aggregation": "formula",
         "display_format": "number",
         "kpi_direction": "higher",
         "date_column": "date",
@@ -209,10 +206,9 @@ def test_user_can_change_formula_fields_and_recalculate_preview(
     )
 
     assert response.status_code == 200
-    assert b"revenue / cost" in response.data
-    assert b'id="derived-left-column"' in response.data
-    assert b'id="derived-operation"' in response.data
-    assert b'value="ratio"' in response.data
+    assert b"SUM([revenue]) / SUM([cost])" in response.data
+    assert b'id="derived-formula"' in response.data
+    assert b'id="calculation-level"' in response.data
     assert b"Confirm derived KPI configuration" in response.data
 
 
@@ -253,3 +249,52 @@ def test_derived_suggestion_text_is_html_escaped(
 
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
     assert "<script>alert(1)</script>" not in page
+
+
+def test_multiple_source_kpis_can_be_edited_and_reordered(
+    app: Flask, client: FlaskClient
+) -> None:
+    upload_response = _upload(client)
+    dataset_id = _dataset_id(upload_response.data)
+    configured = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "secondary_kpis": ["cost"],
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "target_or_benchmark": "",
+            "business_objective": "Compare revenue and cost.",
+        },
+        follow_redirects=True,
+    )
+    assert configured.status_code == 200
+    path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    cost = next(metric for metric in payload["metrics"] if metric["name"] == "cost")
+
+    edited = client.post(
+        f"/configuration/{dataset_id}/metric",
+        data={
+            "metric_id": cost["metric_id"],
+            "kpi_direction": "lower",
+            "target_or_benchmark": "100",
+        },
+        follow_redirects=True,
+    )
+    selected = client.post(
+        f"/configuration/{dataset_id}/primary",
+        data={"metric_id": cost["metric_id"]},
+        follow_redirects=True,
+    )
+
+    assert edited.status_code == 200
+    assert selected.status_code == 200
+    updated = json.loads(path.read_text(encoding="utf-8"))
+    assert updated["primary_metric_id"] == cost["metric_id"]
+    saved_cost = next(
+        metric for metric in updated["metrics"] if metric["name"] == "cost"
+    )
+    assert saved_cost["kpi_direction"] == "lower"
+    assert saved_cost["target_or_benchmark"] == 100

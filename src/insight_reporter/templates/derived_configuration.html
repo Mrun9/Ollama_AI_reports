@@ -9,8 +9,8 @@
     <main>
       <h1>Build and review derived KPI</h1>
       <p>
-        Every formula field is editable. Python validates the selected operation and columns and
-        calculates the preview; formula text is never executed.
+        The formula may use one or many numeric columns. Python parses it into a restricted
+        expression tree and calculates the preview; formula text is never executed.
       </p>
 
       {% if configuration_error %}
@@ -64,39 +64,36 @@
         </p>
 
         <p>
-          <label for="derived-left-column">Left source column</label>
-          <select id="derived-left-column" name="left_column" required>
-            {% for column in numeric_columns %}
-              <option value="{{ column }}"
-                {% if form_data.get('left_column') == column %}selected{% endif %}>
-                {{ column }}
-              </option>
-            {% endfor %}
-          </select>
+          <label for="derived-formula">Formula</label>
+          <textarea id="derived-formula" name="formula" maxlength="1000"
+            required>{{ form_data.get('formula', metric.formula_label if metric else '') }}</textarea>
+        </p>
+        <p>
+          Use exact column tokens such as
+          {% for column in numeric_columns %}
+            <code>[{{ column }}]</code>{% if not loop.last %}, {% endif %}
+          {% endfor %}.
+          Supported operators are <code>+</code>, <code>-</code>, <code>*</code>,
+          <code>/</code>, parentheses, and <code>ABS(...)</code>.
         </p>
 
         <p>
-          <label for="derived-operation">Operation</label>
-          <select id="derived-operation" name="operation" required>
-            {% for value, label in operation_options %}
-              <option value="{{ value }}"
-                {% if form_data.get('operation') == value %}selected{% endif %}>
-                {{ label }}
-              </option>
-            {% endfor %}
+          <label for="calculation-level">Calculation level</label>
+          <select id="calculation-level" name="calculation_level" required>
+            <option value="row"
+              {% if form_data.get('calculation_level', 'row') == 'row' %}selected{% endif %}>
+              Row formula, then aggregate the results
+            </option>
+            <option value="aggregate"
+              {% if form_data.get('calculation_level') == 'aggregate' %}selected{% endif %}>
+              Aggregate formula (for example SUM([profit]) / SUM([revenue]))
+            </option>
           </select>
         </p>
-
         <p>
-          <label for="derived-right-column">Right source column</label>
-          <select id="derived-right-column" name="right_column" required>
-            {% for column in numeric_columns %}
-              <option value="{{ column }}"
-                {% if form_data.get('right_column') == column %}selected{% endif %}>
-                {{ column }}
-              </option>
-            {% endfor %}
-          </select>
+          Aggregate formulas must wrap every column in
+          <code>SUM</code>, <code>MEAN</code>, <code>MEDIAN</code>,
+          <code>MIN</code>, <code>MAX</code>, or <code>COUNT</code>.
         </p>
 
         <p>
@@ -105,7 +102,7 @@
             {% for aggregation in aggregation_options %}
               <option value="{{ aggregation }}"
                 {% if form_data.get('aggregation') == aggregation %}selected{% endif %}>
-                {{ aggregation }}
+                {{ "formula (for aggregate formulas)" if aggregation == "formula" else aggregation }}
               </option>
             {% endfor %}
           </select>
@@ -124,6 +121,19 @@
         </p>
 
         <h2>Editable business configuration</h2>
+        <fieldset>
+          <legend>KPI role</legend>
+          <label>
+            <input type="radio" name="metric_role" value="primary" required
+              {% if form_data.get('metric_role', 'primary') == 'primary' %}checked{% endif %}>
+            Make this the primary KPI
+          </label>
+          <label>
+            <input type="radio" name="metric_role" value="secondary"
+              {% if form_data.get('metric_role') == 'secondary' %}checked{% endif %}>
+            Add this as an additional KPI
+          </label>
+        </fieldset>
         <fieldset>
           <legend>KPI direction</legend>
           <label>

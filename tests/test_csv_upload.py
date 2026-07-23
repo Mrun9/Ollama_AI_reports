@@ -42,7 +42,7 @@ def test_valid_csv_succeeds_and_is_stored_under_random_name(
     )
 
     assert response.status_code == 200
-    assert b"CSV accepted" in response.data
+    assert b"Dataset accepted" in response.data
     assert b"Alice" in response.data
     assert b"2" in response.data
     stored = _stored_files(app)
@@ -71,7 +71,7 @@ def test_non_utf8_text_is_rejected(app: Flask, client: FlaskClient) -> None:
     response = _upload(client, b"name,note\nAlice,invalid-\xff\n")
 
     assert response.status_code == 400
-    assert b"UTF-8 CSV text" in response.data
+    assert b"non-UTF-8 content" in response.data
     assert _stored_files(app) == []
 
 
@@ -235,5 +235,5 @@ def test_exactly_one_file_is_required(app: Flask, client: FlaskClient) -> None:
     )
 
     assert response.status_code == 400
-    assert b"exactly one CSV file" in response.data
+    assert b"exactly one CSV, JSON, or XLSX file" in response.data
     assert _stored_files(app) == []

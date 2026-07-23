@@ -5,15 +5,21 @@ evidence-grounded reports. Python will perform deterministic calculations, and a
 model provides optional configuration suggestions before later generating narrative text from
 verified evidence.
 
-The project currently implements **Milestone 3.5: Optional Derived KPIs**. It profiles one securely
-ingested CSV, keeps existing numeric columns available as the default KPI choices, optionally asks
-local Ollama for configuration or derived-KPI suggestions, and performs all calculations in Python.
+The project currently implements **Milestone 3.7: Multi-format Dataset Ingestion**. It profiles one
+securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
+or derived KPIs; optionally asks local Ollama for advisory suggestions; and performs every KPI
+calculation and insight in Python.
 
 ## Current capabilities
 
 - Flask application factory and `/health` endpoint
 - One-file upload form at `/`
 - Strict UTF-8 and UTF-8-BOM CSV decoding
+- Flat JSON arrays of record objects with sparse-key normalization
+- XLSX content validation with explicit visible-worksheet selection
+- Typed Excel numbers, booleans, and dates normalized without model involvement
+- Rejection of nested JSON, duplicate JSON keys, Excel formulas, macros, external links,
+  encrypted archives, unsafe XML declarations, and archive bombs
 - Configurable 10 MiB, 5,000-data-row, and 200-column limits
 - Randomized internal filenames under the non-public `instance/uploads/` directory
 - Empty, binary, malformed, inconsistent, and duplicate-column rejection
@@ -37,12 +43,18 @@ local Ollama for configuration or derived-KPI suggestions, and performs all calc
 - On-demand generation of at most two derived-KPI options that never runs automatically
 - Suggested date, category, KPI direction, dataset-mean benchmark, and business objective for each
   derived KPI
-- Restricted two-column derived formulas using approved arithmetic and ratio operations
+- Source-aware `DatasetView`, `SourceManifest`, and `ColumnReference` contracts
+- Restricted multi-variable formulas using bracketed numeric columns and approved functions
 - Python preview of valid, missing, zero-division, and non-finite derived results
-- Manual derived-KPI builder with editable name, source columns, operation, aggregation, display
-  format, dimensions, benchmark, direction, and objective
+- Row formulas plus aggregate formulas such as `SUM([profit]) / SUM([revenue])`
+- Manual derived-KPI builder with editable formula, calculation level, aggregation, display format,
+  dimensions, benchmark, direction, role, and objective
 - User confirmation before a derived KPI becomes active
-- Version-2 JSON configuration with backward-compatible version-1 loading
+- One-to-five KPI registry with one primary KPI and optional additional KPIs
+- Per-KPI direction and optional target or benchmark
+- Ability to change the primary KPI or remove a non-primary KPI
+- Version-4 source-table-aware configuration with backward-compatible version-1 through version-3
+  loading
 - Validated JSON configuration under `instance/configurations/`
 - Python-only missing-data warnings and explicit analysis-skip warnings
 - Deterministic period-over-period KPI change and linear trend observations
@@ -54,7 +66,7 @@ local Ollama for configuration or derived-KPI suggestions, and performs all calc
 - Reproducible evidence JSON under `instance/insights/`
 - Localhost-only and debug-off defaults
 
-Ollama is optional: CSV upload, profiling, manual configuration, and deterministic insight
+Ollama is optional: dataset upload, profiling, manual configuration, and deterministic insight
 generation continue to work without it.
 
 ## Setup with the existing Conda environment
@@ -80,34 +92,37 @@ ollama pull llama3.2:latest
 If the desktop application already runs Ollama in the background, do not start a second server.
 The Flask application connects only to `http://127.0.0.1:11434`.
 
-## Run the CSV upload service
+## Run the dataset upload service
 
 ```bash
 python -m flask --app insight_reporter:create_app run --host 127.0.0.1 --port 5000
 ```
 
-Open `http://127.0.0.1:5000/` to upload a CSV and review its deterministic profile. Click
+Open `http://127.0.0.1:5000/` to upload a CSV, JSON, or XLSX source and review its deterministic
+profile. For a workbook with multiple visible worksheets, choose one worksheet before profiling.
+Click
 **Generate AI suggestions** only when suggestions are wanted. Select **Use this suggestion** to
 prefill the manual form, review or edit every field, and then confirm the final configuration.
 Existing numeric columns always remain selectable. Click **Suggest two derived KPIs** for two
 formula-plus-configuration options, or **Build a derived KPI manually** to start without Ollama.
-Edit any structured formula or configuration field and recalculate the Python preview before
-confirming it.
+Edit the formula or configuration fields and recalculate the Python preview before confirming it.
+The saved configuration page can change the primary KPI and each KPI's direction or benchmark.
 From the saved-configuration page, select **Generate deterministic insights** to run the Python-only
 engine and review its evidence JSON.
 
 All form actions use POST/Redirect/GET. Dataset profiles, suggestion results, formula previews,
 saved configurations, validation messages, and insight reports therefore finish on stable GET URLs,
 so browser Back, Forward, and Reload do not repeat a form submission. Small UI-only state is stored
-outside the static directory for 24 hours; raw CSV rows are never placed in state URLs.
+outside the static directory for 24 hours; raw dataset rows are never placed in state URLs.
 
 The health endpoint is available at `http://127.0.0.1:5000/health`.
 
 ```text
-CSV -> Python validation/profile -> optional Ollama suggestions
-                                  -> Python validation
-                                  -> user review/edit
-                                  -> source KPI configuration
+CSV / flat JSON / selected XLSX worksheet
+                                  -> Python validation/profile
+                                  -> optional Ollama suggestions
+                                  -> Python validation and user review/edit
+                                  -> source-aware KPI configuration
               optional derived KPI suggestion -> restricted Python validation/preview
                                               -> user confirmation
                                               -> derived KPI configuration
@@ -126,17 +141,22 @@ Expected application routes:
 ```text
 GET   /
 GET   /dataset/<dataset_id>
+GET   /dataset/<dataset_id>/sheet
 GET   /derived/<dataset_id>
 GET   /configuration/<dataset_id>
 GET   /insights/<dataset_id>
 GET   /health
 POST  /upload
+POST  /dataset/<dataset_id>/sheet
 POST  /suggest/<dataset_id>
 POST  /review-suggestion/<dataset_id>
 POST  /suggest-derived/<dataset_id>
 POST  /review-derived/<dataset_id>
 POST  /configure/<dataset_id>
 POST  /configure-derived/<dataset_id>
+POST  /configuration/<dataset_id>/primary
+POST  /configuration/<dataset_id>/metric
+POST  /configuration/<dataset_id>/remove
 POST  /insights/<dataset_id>
 ```
 
@@ -145,22 +165,25 @@ POST  /insights/<dataset_id>
 - Derived KPI suggestions are optional; the model is never forced to derive a KPI.
 - Ollama returns at most two derived options. Each can include an applicable date, categories,
   direction, dataset-mean benchmark strategy, and business objective.
-- At least two numeric columns are required before Ollama can suggest a formula.
-- Ollama receives compact numeric metadata only, not CSV rows or preview values. The prompt is
+- At least two numeric columns are required before Ollama can suggest a formula. The manual builder
+  needs only one numeric column.
+- Ollama receives compact numeric metadata only, not raw rows or preview values. The prompt is
   limited to the first 40 non-constant, non-identifier numeric columns so it fits the local model's
   context window without losing its JSON instructions.
-- A formula contains exactly two real numeric columns and one approved operation: addition,
-  subtraction, multiplication, ratio, percentage ratio, percentage difference, or margin percent.
+- Ollama's current suggestions are deliberately simple two-column starting points. During review,
+  they are migrated to the same flexible formula format used by the manual builder.
 - Python creates a literal name from the selected columns and operation; the user can rename it
   during review. The model cannot insert an unsupported or misleading KPI name.
-- Users can replace either source column, change the approved operation, aggregation, and display
-  format, or build a formula manually. Python revalidates and recalculates the preview after edits.
+- A row formula may reference up to 20 numeric columns using `+`, `-`, `*`, `/`, parentheses, and
+  `ABS(...)`. Column names use exact bracket tokens such as `[gross revenue]`.
+- An aggregate formula wraps every column in `SUM`, `MEAN`, `MEDIAN`, `MIN`, `MAX`, or `COUNT`.
+  This supports mathematically correct ratios of aggregates.
+- Formula text is parsed into a bounded expression tree. It is never passed to `eval`, `exec`, a
+  shell, or the language model for calculation.
 - Numeric benchmark values are never invented by Ollama. When suggested, Python pre-fills the
   derived KPI's reproducible dataset mean, and the user may edit or remove it.
-- Formula text is generated by Python from structured fields; free-form expressions are not
-  accepted or executed.
-- Supported aggregations are sum, mean, and ratio of sums. Ratio of sums is restricted to ratio and
-  percentage operations.
+- Row-formula results support sum, mean, median, minimum, or maximum aggregation. Aggregate
+  formulas evaluate their explicit aggregate functions directly.
 - Missing inputs, division by zero, and non-finite results become `null` and are counted in the
   preview; they are never guessed or replaced by the model.
 - Percentage calculations and every downstream insight are calculated by Python.
@@ -172,7 +195,8 @@ POST  /insights/<dataset_id>
 ## Deterministic calculation rules
 
 - Existing source-column KPIs use sum aggregation for period and segment calculations. Confirmed
-  derived KPIs use their validated sum, mean, or ratio-of-sums aggregation.
+  derived KPIs use their validated row-result aggregation or explicit aggregate formula.
+- Every configured KPI is analyzed independently and every insight includes its stable metric ID.
 - Calendar months are used when data spans multiple months; otherwise calendar days are used.
 - Period change requires two comparison periods with at least two valid KPI records each.
 - Trend requires at least three eligible periods and is descriptive, not causal.
@@ -202,12 +226,15 @@ The application reads these optional process environment variables:
 |---|---:|---|
 | `APP_LOG_LEVEL` | `INFO` | Application logging level |
 | `APP_SECRET_KEY` | generated per process | Local Flask signing key |
-| `APP_MAX_UPLOAD_BYTES` | `10485760` | Maximum CSV file size |
-| `APP_MAX_CSV_ROWS` | `5000` | Maximum data rows, excluding the header |
-| `APP_MAX_CSV_COLUMNS` | `200` | Maximum columns |
+| `APP_MAX_UPLOAD_BYTES` | `10485760` | Maximum CSV, JSON, or XLSX file size |
+| `APP_MAX_CSV_ROWS` | `5000` | Maximum data rows for every supported format |
+| `APP_MAX_CSV_COLUMNS` | `200` | Maximum columns for every supported format |
 | `APP_CSV_PREVIEW_ROWS` | `5` | Rows displayed after validation |
 | `APP_OLLAMA_MODEL` | `llama3.2:latest` | Local model used only for suggestions |
 | `APP_OLLAMA_TIMEOUT_SECONDS` | `120` | Local suggestion request timeout |
+
+The `APP_MAX_CSV_ROWS`, `APP_MAX_CSV_COLUMNS`, and `APP_CSV_PREVIEW_ROWS` names are retained for
+backward compatibility, but their limits now apply equally to CSV, JSON, and XLSX inputs.
 
 The application does not automatically load `.env`. Never commit real secrets or sensitive input
 data.
@@ -215,15 +242,21 @@ data.
 ## Security notes
 
 - Client filenames and MIME types are not trusted for validation or storage naming.
-- Uploaded content must decode strictly as UTF-8 CSV and may not contain binary control bytes.
+- CSV and JSON content must decode strictly as UTF-8 and may not contain unsafe control bytes.
+- File format is detected from content; client filenames and MIME types do not select the parser.
+- JSON must be a top-level array of flat objects. Nested values and duplicate keys are rejected.
+- XLSX files are inspected as bounded ZIP containers. Macros, external workbook links, encrypted
+  members, formulas, unsafe XML declarations, and suspicious compression ratios are rejected.
 - Rejected and incomplete uploads are deleted.
 - Uploaded files are stored outside Flask's public static directory.
 - Preview values are HTML-escaped by Jinja.
 - Configuration selections are checked against inferred candidates and actual column names.
 - Configuration filenames are derived only from server-generated dataset IDs.
 - Saved configurations are revalidated against the retained dataset and SHA-256 hash before use.
-- Version-1 source configurations remain loadable; new source and derived configurations use
-  version 2.
+- Version-1 through version-3 configurations remain loadable and are migrated in memory; new
+  configurations use version 4.
+- Persisted formulas include a source-qualified expression tree and are reparsed and compared when
+  loaded, so tampering is rejected.
 - Insight calculations never call Ollama and never delegate arithmetic to a language model.
 - Insight files are stored outside the static directory and contain source-column traceability.
 - Ollama receives column metadata, descriptive statistics, and candidate lists—not raw preview rows.
@@ -251,11 +284,16 @@ This standalone check is optional and separate from the Flask workflow.
 
 ## Current limitations
 
-- No JSON upload
+- One source is accepted per upload. Supporting several files and explicit joins remains a later
+  milestone; joins are never guessed.
+- JSON is limited to a top-level array of flat objects.
+- Excel support is limited to `.xlsx`; legacy `.xls`, macro-enabled workbooks, formulas, hidden-only
+  workbooks, and password-protected files are rejected.
+- Exactly one visible worksheet is analyzed from an Excel workbook.
 - Type inference is heuristic and must be confirmed by the user.
 - Empty strings and the markers `NA`, `N/A`, `null`, `none`, and `NaN` count as missing.
-- Derived formulas currently support exactly two numeric source columns; nested formulas, joins,
-  rolling windows, forecasting, and custom code are not supported.
+- Derived formulas do not yet support joins, rolling windows, forecasting, conditionals, or custom
+  code.
 - AI confidence is advisory and not a calibrated probability.
 - Suggestions depend on the semantic ability of the selected local model and require human review.
 - No Ollama report narration in the Flask workflow

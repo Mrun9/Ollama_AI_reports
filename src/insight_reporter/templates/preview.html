@@ -7,10 +7,16 @@
   </head>
   <body>
     <main>
-      <h1>CSV accepted</h1>
+      <h1>Dataset accepted</h1>
       <dl>
         <dt>Dataset ID</dt>
-        <dd>{{ dataset_id }}.csv</dd>
+        <dd>{{ profile.source_internal_filename or dataset_id ~ "." ~ profile.source_format }}</dd>
+        <dt>Source format</dt>
+        <dd>{{ profile.source_format|upper }}</dd>
+        {% if profile.source_table_name %}
+          <dt>Worksheet</dt>
+          <dd>{{ profile.source_table_name }}</dd>
+        {% endif %}
         <dt>SHA-256</dt>
         <dd>{{ profile.source_sha256 }}</dd>
         <dt>Size</dt>
@@ -162,13 +168,14 @@
           action="{{ url_for('core.suggest_derived_kpis', dataset_id=dataset_id) }}">
           <button type="submit">Suggest two derived KPIs</button>
         </form>
+      {% endif %}
+      {% if derived_numeric_columns %}
         <form method="post"
           action="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
           <input type="hidden" name="name"
-            value="Derived {{ derived_numeric_columns[0] }} and {{ derived_numeric_columns[1] }}">
-          <input type="hidden" name="operation" value="subtract">
-          <input type="hidden" name="left_column" value="{{ derived_numeric_columns[0] }}">
-          <input type="hidden" name="right_column" value="{{ derived_numeric_columns[1] }}">
+            value="Derived {{ derived_numeric_columns[0] }}">
+          <input type="hidden" name="formula" value="[{{ derived_numeric_columns[0] }}]">
+          <input type="hidden" name="calculation_level" value="row">
           <input type="hidden" name="aggregation" value="sum">
           <input type="hidden" name="display_format" value="number">
           <input type="hidden" name="kpi_direction" value="higher">
@@ -179,7 +186,7 @@
           <button type="submit">Build a derived KPI manually</button>
         </form>
       {% else %}
-        <p>At least two numeric columns are required to suggest a derived KPI.</p>
+        <p>At least one numeric column is required to build a derived KPI.</p>
       {% endif %}
 
       {% if derived_suggestion_error %}
@@ -284,6 +291,21 @@
           </p>
 
           <fieldset>
+            <legend>Optional additional KPIs (up to five KPIs total)</legend>
+            <p>
+              These are analyzed independently alongside the primary KPI. Do not select the
+              primary KPI again.
+            </p>
+            {% for column in profile.kpi_candidates %}
+              <label>
+                <input type="checkbox" name="secondary_kpis" value="{{ column }}"
+                  {% if form_data and column in form_data.getlist('secondary_kpis') %}checked{% endif %}>
+                {{ column }}
+              </label>
+            {% endfor %}
+          </fieldset>
+
+          <fieldset>
             <legend>KPI direction</legend>
             <label>
               <input type="radio" name="kpi_direction" value="higher" required
@@ -343,7 +365,7 @@
         <p>No measurable KPI candidates were detected. Upload a dataset with a nonconstant numeric measure.</p>
       {% endif %}
 
-      <p><a href="{{ url_for('core.upload_form') }}">Upload another CSV</a></p>
+      <p><a href="{{ url_for('core.upload_form') }}">Upload another dataset</a></p>
     </main>
   </body>
 </html>

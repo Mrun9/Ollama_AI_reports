@@ -1,4 +1,4 @@
-"""Local health and secure CSV upload routes."""
+"""Local health and secure multi-format dataset routes."""
 
 import json
 import re
@@ -19,9 +19,13 @@ from werkzeug.datastructures import MultiDict
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from insight_reporter.business_config import (
+    BusinessConfiguration,
     BusinessConfigurationError,
     load_business_configuration,
+    remove_metric,
     save_business_configuration,
+    set_primary_metric,
+    update_metric_settings,
     validate_business_configuration,
     validate_derived_business_configuration,
 )
@@ -30,8 +34,25 @@ from insight_reporter.configuration_suggestions import (
     ConfigurationSuggestionError,
     generate_configuration_suggestions,
 )
-from insight_reporter.csv_ingestion import CSVValidationError, ingest_csv
-from insight_reporter.dataset_profile import DatasetProfile, DatasetProfileError, profile_csv
+from insight_reporter.dataset_ingestion import (
+    DatasetValidationError,
+    find_dataset_path,
+    ingest_dataset,
+    load_xlsx_selection,
+    save_xlsx_selection,
+)
+from insight_reporter.dataset_profile import (
+    DatasetProfile,
+    DatasetProfileError,
+    profile_dataset,
+)
+from insight_reporter.dataset_view import (
+    DatasetView,
+    DatasetViewError,
+    discover_xlsx_tables,
+    load_dataset_view,
+    source_id_from_hash,
+)
 from insight_reporter.derived_kpi_suggestions import (
     DerivedKpiSuggestion,
     DerivedKpiSuggestionError,
@@ -40,8 +61,10 @@ from insight_reporter.derived_kpi_suggestions import (
 from insight_reporter.derived_metrics import (
     DerivedMetric,
     DerivedMetricError,
+    convert_legacy_metric_to_formula,
     preview_derived_metric,
     validate_derived_metric,
+    validate_formula_metric,
 )
 from insight_reporter.insight_engine import (
     InsightEngineError,
@@ -67,7 +90,7 @@ def _upload_limits() -> dict[str, int]:
 
 @core.get("/")
 def upload_form():  # type: ignore[no-untyped-def]
-    """Display the one-file CSV upload form."""
+    """Display the one-file dataset upload form."""
 
     state = _load_view_state("upload")
     return (
@@ -81,8 +104,8 @@ def upload_form():  # type: ignore[no-untyped-def]
 
 
 @core.post("/upload")
-def upload_csv():  # type: ignore[no-untyped-def]
-    """Validate, retain, and preview exactly one CSV file."""
+def upload_dataset():  # type: ignore[no-untyped-def]
+    """Validate, retain, and preview exactly one supported dataset file."""
 
     uploaded_files = [
         item
@@ -94,43 +117,58 @@ def upload_csv():  # type: ignore[no-untyped-def]
             "core.upload_form",
             {
                 "view": "upload",
-                "error": "Select exactly one CSV file.",
+                "error": "Select exactly one CSV, JSON, or XLSX file.",
                 "status_code": 400,
             },
         )
 
     try:
-        result = ingest_csv(
+        result = ingest_dataset(
             uploaded_files[0],
             upload_dir=Path(current_app.config["UPLOAD_DIR"]),
             max_bytes=int(current_app.config["MAX_UPLOAD_BYTES"]),
             max_rows=int(current_app.config["MAX_CSV_ROWS"]),
             max_columns=int(current_app.config["MAX_CSV_COLUMNS"]),
-            preview_rows=int(current_app.config["CSV_PREVIEW_ROWS"]),
         )
-    except CSVValidationError as error:
-        current_app.logger.warning("CSV upload rejected: %s", error)
+    except DatasetValidationError as error:
+        current_app.logger.warning("Dataset upload rejected: %s", error)
         return _redirect_with_state(
             "core.upload_form",
             {"view": "upload", "error": str(error), "status_code": error.status_code},
         )
 
     current_app.logger.info(
-        "CSV upload accepted: id=%s bytes=%d rows=%d columns=%d sha256=%s",
+        "Dataset upload accepted: id=%s format=%s bytes=%d rows=%s columns=%s sha256=%s",
         result.internal_filename,
+        result.source_format,
         result.size_bytes,
         result.row_count,
         result.column_count,
         result.sha256,
     )
     dataset_id = Path(result.internal_filename).stem
+    if result.source_format == "xlsx":
+        if result.requires_table_selection:
+            return redirect(
+                url_for("core.excel_sheet_selection", dataset_id=dataset_id),
+                code=303,
+            )
+        save_xlsx_selection(
+            Path(current_app.config["UPLOAD_DIR"]),
+            dataset_id,
+            result.table_names[0],
+        )
     try:
-        profile_csv(
-            Path(current_app.config["UPLOAD_DIR"]) / result.internal_filename,
+        view = _load_dataset_view_for_id(dataset_id)
+        profile_dataset(
+            view,
+            size_bytes=result.size_bytes,
             preview_rows=int(current_app.config["CSV_PREVIEW_ROWS"]),
         )
-    except DatasetProfileError as error:
-        current_app.logger.error("Accepted CSV could not be profiled: id=%s", dataset_id)
+    except (DatasetProfileError, DatasetValidationError, DatasetViewError) as error:
+        current_app.logger.error(
+            "Accepted dataset could not be profiled: id=%s", dataset_id
+        )
         return _redirect_with_state(
             "core.upload_form",
             {"view": "upload", "error": str(error), "status_code": 422},
@@ -143,6 +181,13 @@ def upload_csv():  # type: ignore[no-untyped-def]
 def dataset_profile(dataset_id: str):  # type: ignore[no-untyped-def]
     """Display a stable GET page for an uploaded dataset and transient UI results."""
 
+    dataset_path = _dataset_path(dataset_id)
+    if dataset_path.suffix == ".xlsx" and load_xlsx_selection(
+        Path(current_app.config["UPLOAD_DIR"]), dataset_id
+    ) is None:
+        return redirect(
+            url_for("core.excel_sheet_selection", dataset_id=dataset_id), code=303
+        )
     profile = _load_profile(dataset_id)
     state = _load_view_state("profile", dataset_id=dataset_id)
     return _render_profile(
@@ -161,6 +206,69 @@ def dataset_profile(dataset_id: str):  # type: ignore[no-untyped-def]
         review_notice=_state_text(state, "review_notice"),
         status_code=_state_status(state),
     )
+
+
+@core.get("/dataset/<dataset_id>/sheet")
+def excel_sheet_selection(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Display explicit worksheet selection for a retained XLSX workbook."""
+
+    path = _dataset_path(dataset_id)
+    if path.suffix != ".xlsx":
+        abort(404)
+    try:
+        table_names = discover_xlsx_tables(path)
+    except DatasetViewError as error:
+        abort(422, description=str(error))
+    state = _load_view_state("sheet", dataset_id=dataset_id)
+    return (
+        render_template(
+            "sheet_selection.html",
+            dataset_id=dataset_id,
+            table_names=table_names,
+            error=_state_text(state, "error"),
+        ),
+        _state_status(state),
+    )
+
+
+@core.post("/dataset/<dataset_id>/sheet")
+def select_excel_sheet(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Validate and retain one user-selected Excel worksheet."""
+
+    path = _dataset_path(dataset_id)
+    if path.suffix != ".xlsx":
+        abort(404)
+    table_name = request.form.get("table_name", "")
+    try:
+        available = discover_xlsx_tables(path)
+        if table_name not in available:
+            raise DatasetValidationError("Select an available Excel worksheet.")
+        view = load_dataset_view(
+            path,
+            table_name=table_name,
+            max_rows=int(current_app.config["MAX_CSV_ROWS"]),
+            max_columns=int(current_app.config["MAX_CSV_COLUMNS"]),
+        )
+        profile_dataset(
+            view,
+            size_bytes=path.stat().st_size,
+            preview_rows=int(current_app.config["CSV_PREVIEW_ROWS"]),
+        )
+        save_xlsx_selection(
+            Path(current_app.config["UPLOAD_DIR"]), dataset_id, table_name
+        )
+    except (DatasetValidationError, DatasetViewError, DatasetProfileError) as error:
+        return _redirect_with_state(
+            "core.excel_sheet_selection",
+            {
+                "view": "sheet",
+                "dataset_id": dataset_id,
+                "error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+        )
+    return redirect(url_for("core.dataset_profile", dataset_id=dataset_id), code=303)
 
 
 @core.post("/suggest/<dataset_id>")
@@ -300,8 +408,12 @@ def derived_kpi_editor(dataset_id: str):  # type: ignore[no-untyped-def]
     configuration_error = _state_text(state, "configuration_error")
     try:
         metric = _derived_metric_from_values(profile, form_data)
+        _populate_formula_fields(form_data, metric)
+        existing = _load_existing_configuration(dataset_id, profile)
+        if existing is not None:
+            _populate_existing_business_fields(form_data, existing)
         preview = preview_derived_metric(
-            Path(current_app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv",
+            _load_dataset_view_for_id(dataset_id),
             metric,
         )
     except DerivedMetricError as error:
@@ -350,6 +462,8 @@ def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
             category_columns=request.form.getlist("category_columns"),
             target_or_benchmark=request.form.get("target_or_benchmark", ""),
             business_objective=request.form.get("business_objective", ""),
+            secondary_kpis=request.form.getlist("secondary_kpis"),
+            existing_configuration=_load_existing_configuration(dataset_id, profile),
         )
     except BusinessConfigurationError as error:
         return _redirect_profile_state(
@@ -382,7 +496,7 @@ def configure_derived_kpi(dataset_id: str):  # type: ignore[no-untyped-def]
     try:
         metric = _derived_metric_from_values(profile, form_data)
         preview_derived_metric(
-            Path(current_app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv",
+            _load_dataset_view_for_id(dataset_id),
             metric,
         )
     except DerivedMetricError as error:
@@ -408,6 +522,8 @@ def configure_derived_kpi(dataset_id: str):  # type: ignore[no-untyped-def]
             category_columns=request.form.getlist("category_columns"),
             target_or_benchmark=request.form.get("target_or_benchmark", ""),
             business_objective=request.form.get("business_objective", ""),
+            existing_configuration=_load_existing_configuration(dataset_id, profile),
+            metric_role=request.form.get("metric_role", "primary"),
         )
     except BusinessConfigurationError as error:
         return _redirect_with_state(
@@ -451,7 +567,78 @@ def saved_configuration(dataset_id: str):  # type: ignore[no-untyped-def]
         configuration = load_business_configuration(configuration_path, profile=profile)
     except BusinessConfigurationError as error:
         abort(422, description=str(error))
-    return _render_saved_configuration(configuration)
+    state = _load_view_state("configuration", dataset_id=dataset_id)
+    return _render_saved_configuration(
+        configuration,
+        configuration_error=_state_text(state, "configuration_error"),
+        status_code=_state_status(state),
+    )
+
+
+@core.post("/configuration/<dataset_id>/primary")
+def choose_primary_metric(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Select one existing KPI as primary without rebuilding the registry."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        configuration = set_primary_metric(
+            configuration, request.form.get("metric_id", "")
+        )
+        save_business_configuration(
+            configuration,
+            configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
+        )
+    except BusinessConfigurationError as error:
+        return _redirect_configuration_error(dataset_id, str(error))
+    return redirect(
+        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
+    )
+
+
+@core.post("/configuration/<dataset_id>/metric")
+def edit_metric_settings(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Edit the direction and optional benchmark of one configured KPI."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        configuration = update_metric_settings(
+            configuration,
+            request.form.get("metric_id", ""),
+            kpi_direction=request.form.get("kpi_direction", ""),
+            target_or_benchmark=request.form.get("target_or_benchmark", ""),
+        )
+        save_business_configuration(
+            configuration,
+            configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
+        )
+    except BusinessConfigurationError as error:
+        return _redirect_configuration_error(dataset_id, str(error))
+    return redirect(
+        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
+    )
+
+
+@core.post("/configuration/<dataset_id>/remove")
+def remove_configured_metric(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Remove a non-primary KPI from the registry."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        configuration = remove_metric(
+            configuration, request.form.get("metric_id", "")
+        )
+        save_business_configuration(
+            configuration,
+            configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
+        )
+    except BusinessConfigurationError as error:
+        return _redirect_configuration_error(dataset_id, str(error))
+    return redirect(
+        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
+    )
 
 
 @core.post("/insights/<dataset_id>")
@@ -468,7 +655,7 @@ def deterministic_insights(dataset_id: str):  # type: ignore[no-untyped-def]
     try:
         configuration = load_business_configuration(configuration_path, profile=profile)
         report = generate_insights(
-            Path(current_app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv",
+            _load_dataset_view_for_id(dataset_id),
             profile=profile,
             configuration=configuration,
         )
@@ -523,7 +710,7 @@ def request_too_large(_error: RequestEntityTooLarge):  # type: ignore[no-untyped
         {
             "view": "upload",
             "error": (
-                "Upload request is too large. CSV files are limited to "
+                "Upload request is too large. Dataset files are limited to "
                 f"{_upload_limits()['max_bytes']} bytes."
             ),
             "status_code": 413,
@@ -531,22 +718,55 @@ def request_too_large(_error: RequestEntityTooLarge):  # type: ignore[no-untyped
     )
 
 
-def _load_profile(dataset_id: str) -> DatasetProfile:
+def _dataset_path(dataset_id: str) -> Path:
     if re.fullmatch(r"[0-9a-f]{32}", dataset_id) is None:
         abort(404)
-
-    dataset_path = Path(current_app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv"
-    if not dataset_path.is_file():
-        abort(404)
-
     try:
-        return profile_csv(
-            dataset_path,
+        path = find_dataset_path(
+            Path(current_app.config["UPLOAD_DIR"]),
+            dataset_id,
+        )
+    except DatasetValidationError as error:
+        abort(422, description=str(error))
+    if path is None:
+        abort(404)
+    return path
+
+
+def _load_dataset_view_for_id(dataset_id: str) -> DatasetView:
+    path = _dataset_path(dataset_id)
+    table_name = (
+        load_xlsx_selection(
+            Path(current_app.config["UPLOAD_DIR"]),
+            dataset_id,
+        )
+        if path.suffix == ".xlsx"
+        else None
+    )
+    return load_dataset_view(
+        path,
+        table_name=table_name,
+        max_rows=int(current_app.config["MAX_CSV_ROWS"]),
+        max_columns=int(current_app.config["MAX_CSV_COLUMNS"]),
+    )
+
+
+def _load_profile(dataset_id: str) -> DatasetProfile:
+    try:
+        dataset_path = _dataset_path(dataset_id)
+        view = _load_dataset_view_for_id(dataset_id)
+        return profile_dataset(
+            view,
+            size_bytes=dataset_path.stat().st_size,
             preview_rows=int(current_app.config["CSV_PREVIEW_ROWS"]),
         )
-    except DatasetProfileError:
-        current_app.logger.error("Retained CSV could not be profiled: id=%s", dataset_id)
-        abort(422)
+    except (DatasetProfileError, DatasetValidationError, DatasetViewError, OSError) as error:
+        current_app.logger.error(
+            "Retained dataset could not be profiled: id=%s reason=%s",
+            dataset_id,
+            error,
+        )
+        abort(422, description=str(error))
 
 
 def _render_profile(
@@ -592,7 +812,22 @@ def _render_profile(
 def _derived_metric_from_values(
     profile: DatasetProfile, values: MultiDict[str, str]
 ) -> DerivedMetric:
-    return validate_derived_metric(
+    formula = values.get("formula", "").strip()
+    source_id = source_id_from_hash(
+        profile.source_sha256,
+        profile.source_table_name,
+    )
+    if formula:
+        return validate_formula_metric(
+            profile,
+            name=values.get("name", ""),
+            formula=formula,
+            calculation_level=values.get("calculation_level", ""),
+            aggregation=values.get("aggregation", ""),
+            display_format=values.get("display_format", ""),
+            source_id=source_id,
+        )
+    legacy = validate_derived_metric(
         profile,
         name=values.get("name", ""),
         operation=values.get("operation", ""),
@@ -600,6 +835,11 @@ def _derived_metric_from_values(
         right_column=values.get("right_column", ""),
         aggregation=values.get("aggregation", ""),
         display_format=values.get("display_format", ""),
+    )
+    return convert_legacy_metric_to_formula(
+        profile,
+        legacy,
+        source_id=source_id,
     )
 
 
@@ -625,22 +865,7 @@ def _render_derived_editor(
                 for column in profile.columns
                 if column.inferred_type.value == "numeric"
             ),
-            operation_options=(
-                ("add", "Add: left + right"),
-                ("subtract", "Subtract: left - right"),
-                ("multiply", "Multiply: left × right"),
-                ("ratio", "Ratio: left / right"),
-                ("percentage_ratio", "Percentage ratio: (left / right) × 100"),
-                (
-                    "percentage_difference",
-                    "Percentage difference: ((left - right) / right) × 100",
-                ),
-                (
-                    "margin_percentage",
-                    "Margin percentage: ((left - right) / left) × 100",
-                ),
-            ),
-            aggregation_options=("sum", "mean", "ratio_of_sums"),
+            aggregation_options=("sum", "mean", "median", "min", "max", "formula"),
             display_format_options=("number", "percentage", "currency"),
             configuration_error=configuration_error,
             form_data=form_data,
@@ -649,12 +874,79 @@ def _render_derived_editor(
     )
 
 
-def _render_saved_configuration(configuration):  # type: ignore[no-untyped-def]
-    return render_template(
-        "configuration.html",
-        configuration=configuration,
-        configuration_json=json.dumps(configuration.to_dict(), indent=2, sort_keys=True),
+def _render_saved_configuration(
+    configuration: BusinessConfiguration,
+    *,
+    configuration_error: str | None = None,
+    status_code: int = 200,
+):  # type: ignore[no-untyped-def]
+    return (
+        render_template(
+            "configuration.html",
+            configuration=configuration,
+            configuration_error=configuration_error,
+            configuration_json=json.dumps(
+                configuration.to_dict(), indent=2, sort_keys=True
+            ),
+        ),
+        status_code,
     )
+
+
+def _configuration_path(dataset_id: str) -> Path:
+    return Path(current_app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
+
+
+def _load_existing_configuration(
+    dataset_id: str, profile: DatasetProfile
+) -> BusinessConfiguration | None:
+    path = _configuration_path(dataset_id)
+    if not path.is_file():
+        return None
+    return load_business_configuration(path, profile=profile)
+
+
+def _require_configuration(
+    dataset_id: str, profile: DatasetProfile
+) -> BusinessConfiguration:
+    configuration = _load_existing_configuration(dataset_id, profile)
+    if configuration is None:
+        raise BusinessConfigurationError("No saved business configuration exists.")
+    return configuration
+
+
+def _redirect_configuration_error(dataset_id: str, message: str):  # type: ignore[no-untyped-def]
+    return _redirect_with_state(
+        "core.saved_configuration",
+        {
+            "view": "configuration",
+            "dataset_id": dataset_id,
+            "configuration_error": message,
+            "status_code": 400,
+        },
+        dataset_id=dataset_id,
+    )
+
+
+def _populate_formula_fields(
+    form_data: MultiDict[str, str], metric: DerivedMetric
+) -> None:
+    form_data["formula"] = metric.formula_label
+    form_data["calculation_level"] = metric.calculation_level
+    form_data["aggregation"] = metric.aggregation
+
+
+def _populate_existing_business_fields(
+    form_data: MultiDict[str, str], configuration: BusinessConfiguration
+) -> None:
+    if not form_data.get("date_column", "") and configuration.date_column:
+        form_data["date_column"] = configuration.date_column
+    if not form_data.getlist("category_columns"):
+        form_data.setlist("category_columns", list(configuration.category_columns))
+    if not form_data.get("business_objective", ""):
+        form_data["business_objective"] = configuration.business_objective
+    if not form_data.get("metric_role", ""):
+        form_data["metric_role"] = "secondary"
 
 
 def _navigation_state_dir() -> Path:

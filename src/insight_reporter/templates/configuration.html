@@ -9,32 +9,85 @@
     <main>
       <h1>Business configuration saved</h1>
       <p>The selections were validated against dataset {{ configuration.dataset_id }}.</p>
+      {% if configuration_error %}
+        <p role="alert"><strong>Configuration change rejected:</strong> {{ configuration_error }}</p>
+      {% endif %}
       <dl>
         <dt>Primary KPI</dt>
         <dd>{{ configuration.primary_kpi }}</dd>
-        <dt>Metric type</dt>
-        <dd>{{ configuration.metric_type }}</dd>
-        {% if configuration.derived_metric %}
-          <dt>Derived formula</dt>
-          <dd>{{ configuration.derived_metric.formula_label }}</dd>
-          <dt>Aggregation</dt>
-          <dd>{{ configuration.derived_metric.aggregation }}</dd>
-          <dt>Source columns</dt>
-          <dd>{{ configuration.derived_metric.source_columns|join(", ") }}</dd>
-        {% endif %}
-        <dt>Direction</dt>
-        <dd>{{ configuration.kpi_direction }}</dd>
         <dt>Date column</dt>
         <dd>{{ configuration.date_column or "None" }}</dd>
         <dt>Categories</dt>
         <dd>{{ configuration.category_columns|join(", ") or "None" }}</dd>
-        <dt>Target or benchmark</dt>
-        <dd>
-          {{ configuration.target_or_benchmark if configuration.target_or_benchmark is not none else "None" }}
-        </dd>
         <dt>Business objective</dt>
         <dd>{{ configuration.business_objective }}</dd>
       </dl>
+
+      <h2>Configured KPIs ({{ configuration.metrics|length }} of 5)</h2>
+      <p>Each KPI is analyzed independently. One KPI is enough; additional KPIs are optional.</p>
+      {% for metric in configuration.metrics %}
+        <section>
+          <h3>
+            {{ metric.name }}
+            {% if metric.metric_id == configuration.primary_metric_id %}(primary){% endif %}
+          </h3>
+          <dl>
+            <dt>Type</dt>
+            <dd>{{ metric.metric_type }}</dd>
+            {% if metric.derived_metric %}
+              <dt>Formula</dt>
+              <dd>{{ metric.derived_metric.formula_label }}</dd>
+              <dt>Calculation level</dt>
+              <dd>{{ metric.derived_metric.calculation_level }}</dd>
+              <dt>Aggregation</dt>
+              <dd>{{ metric.derived_metric.aggregation }}</dd>
+              <dt>Source columns</dt>
+              <dd>{{ metric.derived_metric.source_columns|join(", ") }}</dd>
+            {% endif %}
+          </dl>
+
+          <form method="post"
+            action="{{ url_for('core.edit_metric_settings', dataset_id=configuration.dataset_id) }}">
+            <input type="hidden" name="metric_id" value="{{ metric.metric_id }}">
+            <label>
+              Direction
+              <select name="kpi_direction">
+                <option value="higher" {% if metric.kpi_direction == "higher" %}selected{% endif %}>
+                  Higher is better
+                </option>
+                <option value="lower" {% if metric.kpi_direction == "lower" %}selected{% endif %}>
+                  Lower is better
+                </option>
+              </select>
+            </label>
+            <label>
+              Optional target or benchmark
+              <input name="target_or_benchmark" type="number" step="any"
+                value="{{ metric.target_or_benchmark if metric.target_or_benchmark is not none else '' }}">
+            </label>
+            <button type="submit">Save KPI settings</button>
+          </form>
+
+          {% if metric.metric_id != configuration.primary_metric_id %}
+            <form method="post"
+              action="{{ url_for('core.choose_primary_metric', dataset_id=configuration.dataset_id) }}">
+              <input type="hidden" name="metric_id" value="{{ metric.metric_id }}">
+              <button type="submit">Make primary</button>
+            </form>
+            <form method="post"
+              action="{{ url_for('core.remove_configured_metric', dataset_id=configuration.dataset_id) }}">
+              <input type="hidden" name="metric_id" value="{{ metric.metric_id }}">
+              <button type="submit">Remove KPI</button>
+            </form>
+          {% endif %}
+        </section>
+      {% endfor %}
+
+      <p>
+        <a href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">
+          Add source or derived KPIs
+        </a>
+      </p>
 
       <h2>Configuration object</h2>
       <pre>{{ configuration_json }}</pre>
@@ -49,7 +102,7 @@
           Return to dataset profile
         </a>
       </p>
-      <p><a href="{{ url_for('core.upload_form') }}">Profile another CSV</a></p>
+      <p><a href="{{ url_for('core.upload_form') }}">Profile another dataset</a></p>
     </main>
   </body>
 </html>

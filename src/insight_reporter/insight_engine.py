@@ -13,7 +13,16 @@ from pathlib import Path
 
 from insight_reporter.business_config import BusinessConfiguration
 from insight_reporter.dataset_profile import ColumnType, DatasetProfile
-from insight_reporter.derived_metrics import evaluate_derived_metric
+from insight_reporter.dataset_view import (
+    CsvDatasetView,
+    DatasetView,
+    DatasetViewError,
+    SourceManifest,
+)
+from insight_reporter.derived_metrics import (
+    aggregate_derived_metric,
+    evaluate_derived_metric,
+)
 
 _MISSING_MARKERS = frozenset({"", "na", "n/a", "null", "none", "nan"})
 _MIN_GENERAL_RECORDS = 5
@@ -34,6 +43,7 @@ class Insight:
     """One traceable factual observation generated without a language model."""
 
     id: str
+    metric_id: str
     type: str
     metric: str
     observation: dict[str, object]
@@ -46,6 +56,7 @@ class Insight:
     def to_dict(self) -> dict[str, object]:
         return {
             "id": self.id,
+            "metric_id": self.metric_id,
             "type": self.type,
             "metric": self.metric,
             "observation": self.observation,
@@ -64,16 +75,31 @@ class InsightReport:
     schema_version: int
     dataset_id: str
     source_sha256: str
+    sources: tuple[dict[str, object], ...]
     configuration_schema_version: int
-    metric_definition: dict[str, object]
+    primary_metric_id: str
+    metric_definitions: tuple[dict[str, object], ...]
     insights: tuple[Insight, ...]
+
+    @property
+    def metric_definition(self) -> dict[str, object]:
+        """Return the primary definition for v2 callers."""
+
+        for definition in self.metric_definitions:
+            if definition.get("metric_id") == self.primary_metric_id:
+                return definition
+        return self.metric_definitions[0]
 
     def to_dict(self) -> dict[str, object]:
         return {
             "schema_version": self.schema_version,
             "dataset_id": self.dataset_id,
             "source_sha256": self.source_sha256,
+            "sources": list(self.sources),
             "configuration_schema_version": self.configuration_schema_version,
+            "primary_metric_id": self.primary_metric_id,
+            "metric_definitions": list(self.metric_definitions),
+            # Retained for readers that still expect one KPI definition.
             "metric_definition": self.metric_definition,
             "insights": [insight.to_dict() for insight in self.insights],
         }
@@ -94,6 +120,7 @@ class _TemporalContext:
 class _Collector:
     def __init__(self) -> None:
         self.insights: list[Insight] = []
+        self.metric_id = "DATASET"
 
     def add(
         self,
@@ -110,6 +137,7 @@ class _Collector:
         self.insights.append(
             Insight(
                 id=f"INS-{len(self.insights) + 1:03d}",
+                metric_id=self.metric_id,
                 type=insight_type,
                 metric=metric,
                 observation=observation,
@@ -123,77 +151,105 @@ class _Collector:
 
 
 def generate_insights(
-    csv_path: Path,
+    source: Path | DatasetView,
     *,
     profile: DatasetProfile,
     configuration: BusinessConfiguration,
 ) -> InsightReport:
-    """Generate deterministic evidence from one validated CSV and configuration."""
+    """Generate deterministic evidence for every configured KPI."""
 
-    rows, headers, source_sha256 = _load_rows(csv_path)
+    if isinstance(source, Path):
+        try:
+            view = CsvDatasetView.from_path(source)
+        except DatasetViewError as error:
+            raise InsightEngineError(str(error)) from error
+    else:
+        view = source
+    if len(view.sources) != 1:
+        raise InsightEngineError(
+            "Multi-source joins require an explicit relationship plan."
+        )
+    dataset_rows = view.iter_rows()
+    rows = tuple(_Row(row.number, dict(row.values)) for row in dataset_rows)
+    headers = view.headers
+    source_sha256 = view.sources[0].sha256
     _validate_inputs(
         headers=headers,
-        source_sha256=source_sha256,
+        source=view.sources[0],
         profile=profile,
         configuration=configuration,
     )
 
     collector = _Collector()
     _add_missing_data_insights(collector, profile)
-    if len(rows) < _MIN_GENERAL_RECORDS:
-        collector.add(
-            insight_type="insufficient_data_warning",
-            metric=configuration.primary_kpi,
-            observation={
-                "reason": "small_dataset",
-                "available_records": len(rows),
-                "recommended_minimum": _MIN_GENERAL_RECORDS,
-            },
-            source_columns=_metric_source_columns(configuration),
-            record_count=len(rows),
-            confidence="high",
-            limitations=("Dataset-level conclusions may be unstable with fewer than 5 rows.",),
-        )
-
-    temporal = _prepare_temporal_context(
-        collector,
-        rows=rows,
-        configuration=configuration,
-    )
-    if temporal is not None:
-        _add_period_change(collector, temporal, configuration)
-        _add_trend(collector, temporal, configuration)
-
-    for category_column in configuration.category_columns:
-        _add_segment_ranking(
-            collector,
-            rows=rows,
-            category_column=category_column,
-            configuration=configuration,
-        )
-        if temporal is not None:
-            _add_segment_contribution(
-                collector,
-                temporal=temporal,
-                category_column=category_column,
-                configuration=configuration,
+    for metric in configuration.metrics:
+        metric_configuration = configuration.for_metric(metric.metric_id)
+        collector.metric_id = metric.metric_id
+        if len(rows) < _MIN_GENERAL_RECORDS:
+            collector.add(
+                insight_type="insufficient_data_warning",
+                metric=metric_configuration.primary_kpi,
+                observation={
+                    "reason": "small_dataset",
+                    "available_records": len(rows),
+                    "recommended_minimum": _MIN_GENERAL_RECORDS,
+                },
+                source_columns=_metric_source_columns(metric_configuration),
+                record_count=len(rows),
+                confidence="high",
+                limitations=(
+                    "Dataset-level conclusions may be unstable with fewer than 5 rows.",
+                ),
             )
 
-    _add_anomalies(collector, rows=rows, configuration=configuration)
-    _add_correlations(
-        collector,
-        rows=rows,
-        profile=profile,
-        configuration=configuration,
-    )
-    _add_benchmark_breaches(collector, rows=rows, configuration=configuration)
+        temporal = _prepare_temporal_context(
+            collector,
+            rows=rows,
+            configuration=metric_configuration,
+        )
+        if temporal is not None:
+            _add_period_change(collector, temporal, metric_configuration)
+            _add_trend(collector, temporal, metric_configuration)
+
+        for category_column in metric_configuration.category_columns:
+            _add_segment_ranking(
+                collector,
+                rows=rows,
+                category_column=category_column,
+                configuration=metric_configuration,
+            )
+            if temporal is not None:
+                _add_segment_contribution(
+                    collector,
+                    temporal=temporal,
+                    category_column=category_column,
+                    configuration=metric_configuration,
+                )
+
+        _add_anomalies(
+            collector, rows=rows, configuration=metric_configuration
+        )
+        _add_correlations(
+            collector,
+            rows=rows,
+            profile=profile,
+            configuration=metric_configuration,
+        )
+        _add_benchmark_breaches(
+            collector, rows=rows, configuration=metric_configuration
+        )
 
     return InsightReport(
-        schema_version=2,
+        schema_version=4,
         dataset_id=configuration.dataset_id,
         source_sha256=source_sha256,
+        sources=tuple(source.to_dict() for source in configuration.sources),
         configuration_schema_version=configuration.schema_version,
-        metric_definition=_metric_definition(configuration),
+        primary_metric_id=configuration.primary_metric_id,
+        metric_definitions=tuple(
+            _metric_definition(configuration.for_metric(metric.metric_id))
+            for metric in configuration.metrics
+        ),
         insights=tuple(collector.insights),
     )
 
@@ -253,30 +309,50 @@ def _load_rows(path: Path) -> tuple[tuple[_Row, ...], tuple[str, ...], str]:
 def _validate_inputs(
     *,
     headers: tuple[str, ...],
-    source_sha256: str,
+    source: SourceManifest,
     profile: DatasetProfile,
     configuration: BusinessConfiguration,
 ) -> None:
-    if source_sha256 != profile.source_sha256 or source_sha256 != configuration.source_sha256:
+    configured_source = configuration.sources[0]
+    if (
+        source.sha256 != profile.source_sha256
+        or source.sha256 != configuration.source_sha256
+    ):
         raise InsightEngineError("Dataset hash does not match the profile and configuration.")
-    if configuration.metric_type == "source":
-        if configuration.primary_kpi not in profile.kpi_candidates:
-            raise InsightEngineError("Configured KPI is not a measurable profile candidate.")
-        if configuration.derived_metric is not None:
-            raise InsightEngineError("Source KPI configuration contains a derived formula.")
-    elif configuration.metric_type == "derived":
-        if configuration.derived_metric is None:
-            raise InsightEngineError("Derived KPI configuration has no formula.")
-        for column_name in configuration.derived_metric.source_columns:
-            column = profile.column(column_name)
-            if column is None or column.inferred_type is not ColumnType.NUMERIC:
-                raise InsightEngineError("Derived KPI source columns are not numeric.")
-    else:
-        raise InsightEngineError("Configured KPI type is unsupported.")
-    selected_columns = {
-        *_metric_source_columns(configuration),
-        *configuration.category_columns,
-    }
+    if (
+        source.source_id != configured_source.source_id
+        or source.format != configured_source.format
+        or source.table_name != configured_source.table_name
+        or source.row_count != configured_source.row_count
+        or source.column_count != configured_source.column_count
+    ):
+        raise InsightEngineError(
+            "Selected source table does not match the saved configuration."
+        )
+    selected_columns = set(configuration.category_columns)
+    for metric in configuration.metrics:
+        metric_configuration = configuration.for_metric(metric.metric_id)
+        if metric_configuration.metric_type == "source":
+            if metric_configuration.primary_kpi not in profile.kpi_candidates:
+                raise InsightEngineError(
+                    "Configured KPI is not a measurable profile candidate."
+                )
+            if metric_configuration.derived_metric is not None:
+                raise InsightEngineError(
+                    "Source KPI configuration contains a derived formula."
+                )
+        elif metric_configuration.metric_type == "derived":
+            if metric_configuration.derived_metric is None:
+                raise InsightEngineError("Derived KPI configuration has no formula.")
+            for column_name in metric_configuration.derived_metric.source_columns:
+                column = profile.column(column_name)
+                if column is None or column.inferred_type is not ColumnType.NUMERIC:
+                    raise InsightEngineError(
+                        "Derived KPI source columns are not numeric."
+                    )
+        else:
+            raise InsightEngineError("Configured KPI type is unsupported.")
+        selected_columns.update(_metric_source_columns(metric_configuration))
     if configuration.date_column is not None:
         selected_columns.add(configuration.date_column)
     if not selected_columns.issubset(headers):
@@ -946,13 +1022,15 @@ def _metric_group_value(row: _Row, configuration: BusinessConfiguration) -> floa
     metric = configuration.derived_metric
     if configuration.metric_type != "derived" or metric is None:
         return _metric_value(row, configuration)
-    if metric.aggregation != "ratio_of_sums":
+    if metric.calculation_level == "row":
         return _metric_value(row, configuration)
-    left = _number(row.values[metric.left_column])
-    right = _number(row.values[metric.right_column])
-    # Ratio-of-sums uses rows with both numeric inputs even when an individual
-    # row denominator is zero. The aggregate denominator is checked later.
-    return 0.0 if left is not None and right is not None else None
+    # Aggregate formulas use rows only when all referenced inputs are numeric.
+    # The actual formula and division checks run once over each analysis group.
+    return (
+        0.0
+        if all(_number(row.values[column]) is not None for column in metric.source_columns)
+        else None
+    )
 
 
 def _aggregate_metric(
@@ -962,24 +1040,15 @@ def _aggregate_metric(
         return None
     metric = configuration.derived_metric
     aggregation = _metric_aggregation(configuration)
+    if metric is not None:
+        return aggregate_derived_metric(
+            metric,
+            tuple(row.values for row, _ in entries),
+        ).value
     if aggregation == "sum":
         return _clean(math.fsum(value for _, value in entries))
     if aggregation == "mean":
         return _clean(math.fsum(value for _, value in entries) / len(entries))
-    if aggregation == "ratio_of_sums" and metric is not None:
-        left_values = [_number(row.values[metric.left_column]) for row, _ in entries]
-        right_values = [_number(row.values[metric.right_column]) for row, _ in entries]
-        if any(value is None for value in (*left_values, *right_values)):
-            return None
-        aggregate_inputs = {
-            metric.left_column: math.fsum(
-                value for value in left_values if value is not None
-            ),
-            metric.right_column: math.fsum(
-                value for value in right_values if value is not None
-            ),
-        }
-        return evaluate_derived_metric(metric, aggregate_inputs).value
     return None
 
 
@@ -992,6 +1061,8 @@ def _aggregation_limitation(configuration: BusinessConfiguration, scope: str) ->
     aggregation = _metric_aggregation(configuration)
     if aggregation == "ratio_of_sums":
         return f"The derived KPI is calculated as a ratio of source-column sums per {scope}."
+    if aggregation == "formula":
+        return f"The aggregate formula is evaluated from source-column aggregates per {scope}."
     return f"Valid KPI values use {aggregation} aggregation per {scope}."
 
 
@@ -999,6 +1070,7 @@ def _metric_definition(configuration: BusinessConfiguration) -> dict[str, object
     metric = configuration.derived_metric
     if configuration.metric_type == "derived" and metric is not None:
         return {
+            "metric_id": configuration.primary_metric_id,
             "metric_type": "derived",
             "name": metric.name,
             "formula": metric.formula_label,
@@ -1010,6 +1082,7 @@ def _metric_definition(configuration: BusinessConfiguration) -> dict[str, object
             "missing_input": "return_null",
         }
     return {
+        "metric_id": configuration.primary_metric_id,
         "metric_type": "source",
         "name": configuration.primary_kpi,
         "source_columns": [configuration.primary_kpi],

@@ -69,10 +69,11 @@ def test_confirmed_configuration_is_validated_and_persisted(
     configuration_path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
     configuration = json.loads(configuration_path.read_text(encoding="utf-8"))
     assert configuration["dataset_id"] == dataset_id
-    assert configuration["primary_kpi"] == "revenue"
-    assert configuration["date_column"] == "date"
-    assert configuration["category_columns"] == ["region"]
-    assert configuration["target_or_benchmark"] == 150
+    assert configuration["schema_version"] == 4
+    assert configuration["metrics"][0]["name"] == "revenue"
+    assert configuration["metrics"][0]["target_or_benchmark"] == 150
+    assert configuration["date_column"]["column"] == "date"
+    assert configuration["category_columns"][0]["column"] == "region"
 
 
 def test_deterministic_insights_are_generated_and_saved_without_ollama(

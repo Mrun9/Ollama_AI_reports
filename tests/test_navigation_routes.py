@@ -140,5 +140,5 @@ def test_upload_error_redirect_is_reloadable(client: FlaskClient) -> None:
     second = client.get(response.headers["Location"])
     assert first.status_code == 400
     assert second.status_code == 400
-    assert b"CSV is empty" in first.data
-    assert b"CSV is empty" in second.data
+    assert b"Dataset is empty" in first.data
+    assert b"Dataset is empty" in second.data

@@ -331,6 +331,7 @@ def test_every_insight_has_valid_shape_and_existing_source_columns(tmp_path: Pat
     for insight in report.insights:
         assert set(insight.to_dict()) == {
             "id",
+            "metric_id",
             "type",
             "metric",
             "observation",
@@ -421,10 +422,12 @@ def test_ratio_of_sums_uses_aggregate_inputs_not_average_row_ratios(
     assert period.observation["previous_value"] == 50
     assert period.observation["current_value"] == 60
     assert period.observation["percentage_change"] == 20
-    assert period.observation["aggregation"] == "ratio_of_sums"
+    assert period.observation["aggregation"] == "formula"
     assert len(contribution_skips) == 1
     assert report.metric_definition["metric_type"] == "derived"
-    assert report.metric_definition["formula"] == "((revenue - cost) / revenue) × 100"
+    assert report.metric_definition["formula"] == (
+        "(SUM([revenue]) - SUM([cost])) / SUM([revenue]) * 100"
+    )
     assert report.metric_definition["source_columns"] == ["revenue", "cost"]
     assert all(
         "Profit margin percent" not in insight.source_columns
@@ -452,3 +455,42 @@ def test_additive_derived_profit_supports_reconciled_contributions(
     assert contribution.observation["overall_change"] == 100
     assert contribution.observation["reconciled_percentage_total"] == 100
     assert set(contribution.source_columns) == {"date", "segment", "revenue", "cost"}
+
+
+def test_each_configured_kpi_receives_independent_insights(tmp_path: Path) -> None:
+    path = tmp_path / "multi-kpi.csv"
+    path.write_text(
+        "date,segment,revenue,cost\n"
+        "2026-01-01,A,100,60\n"
+        "2026-01-02,B,200,120\n"
+        "2026-02-01,A,150,80\n"
+        "2026-02-02,B,250,140\n"
+        "2026-03-01,A,180,90\n"
+        "2026-03-02,B,300,160\n",
+        encoding="utf-8",
+    )
+    profile = profile_csv(path)
+    configuration = validate_business_configuration(
+        profile,
+        dataset_id="f" * 32,
+        primary_kpi="revenue",
+        secondary_kpis=["cost"],
+        kpi_direction="higher",
+        date_column="date",
+        category_columns=["segment"],
+        target_or_benchmark="",
+        business_objective="Compare revenue and cost.",
+    )
+
+    report = generate_insights(path, profile=profile, configuration=configuration)
+
+    assert len(report.metric_definitions) == 2
+    assert {definition["name"] for definition in report.metric_definitions} == {
+        "revenue",
+        "cost",
+    }
+    period_changes = [
+        insight for insight in report.insights if insight.type == "period_change"
+    ]
+    assert {insight.metric for insight in period_changes} == {"revenue", "cost"}
+    assert len({insight.metric_id for insight in period_changes}) == 2

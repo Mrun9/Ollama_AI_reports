@@ -1,8 +1,5 @@
-"""Deterministic CSV profiling with no model or network dependency."""
+"""Deterministic format-independent profiling with no model dependency."""
 
-import csv
-import hashlib
-import io
 import math
 import re
 import statistics
@@ -10,6 +7,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+
+from insight_reporter.dataset_view import (
+    CsvDatasetView,
+    DatasetView,
+    DatasetViewError,
+)
 
 _MISSING_MARKERS = frozenset({"", "na", "n/a", "null", "none", "nan"})
 _BOOLEAN_VALUES = frozenset({"true", "false", "yes", "no", "y", "n"})
@@ -74,6 +77,9 @@ class DatasetProfile:
     kpi_candidates: tuple[str, ...]
     date_candidates: tuple[str, ...]
     category_candidates: tuple[str, ...]
+    source_format: str = "csv"
+    source_internal_filename: str = ""
+    source_table_name: str | None = None
 
     def column(self, name: str) -> ColumnProfile | None:
         """Return one named column profile without raising on user input."""
@@ -82,41 +88,37 @@ class DatasetProfile:
 
 
 def profile_csv(path: Path, *, preview_rows: int = 5) -> DatasetProfile:
-    """Profile a previously validated CSV with deterministic Python logic."""
+    """Backward-compatible profiling entry point for a validated CSV."""
 
-    raw_bytes = path.read_bytes()
     try:
-        text = raw_bytes.decode("utf-8-sig", errors="strict")
-    except UnicodeDecodeError as error:
-        raise DatasetProfileError("Retained CSV is no longer valid UTF-8 text.") from error
+        view = CsvDatasetView.from_path(path)
+        size_bytes = path.stat().st_size
+    except (DatasetViewError, OSError) as error:
+        raise DatasetProfileError(str(error)) from error
+    return profile_dataset(view, size_bytes=size_bytes, preview_rows=preview_rows)
 
-    reader = csv.reader(io.StringIO(text, newline=""), strict=True)
-    try:
-        raw_headers = next(reader)
-    except (StopIteration, csv.Error) as error:
-        raise DatasetProfileError("Retained CSV has no readable header.") from error
 
-    headers = tuple(header.strip() for header in raw_headers)
-    if not headers:
-        raise DatasetProfileError("Retained CSV has no columns.")
+def profile_dataset(
+    view: DatasetView,
+    *,
+    size_bytes: int,
+    preview_rows: int = 5,
+) -> DatasetProfile:
+    """Profile a validated DatasetView using one deterministic type system."""
 
-    rows: list[tuple[str, ...]] = []
-    try:
-        for row in reader:
-            if not row:
-                continue
-            if len(row) != len(headers):
-                raise DatasetProfileError(
-                    f"Retained CSV row near line {reader.line_num} has changed width."
-                )
-            rows.append(tuple(row))
-    except csv.Error as error:
+    if len(view.sources) != 1:
         raise DatasetProfileError(
-            f"Retained CSV is malformed near line {reader.line_num}."
-        ) from error
-
+            "Profiling multiple joined sources requires an explicit relationship plan."
+        )
+    source = view.sources[0]
+    headers = view.headers
+    dataset_rows = view.iter_rows()
+    rows = [
+        tuple(row.values.get(header, "") for header in headers)
+        for row in dataset_rows
+    ]
     if not rows:
-        raise DatasetProfileError("Retained CSV has no data rows.")
+        raise DatasetProfileError("Retained dataset has no data rows.")
 
     row_count = len(rows)
     columns: list[ColumnProfile] = []
@@ -152,12 +154,15 @@ def profile_csv(path: Path, *, preview_rows: int = 5) -> DatasetProfile:
         row_count=row_count,
         column_count=len(headers),
         columns=column_profiles,
-        source_sha256=hashlib.sha256(raw_bytes).hexdigest(),
-        size_bytes=len(raw_bytes),
+        source_sha256=source.sha256,
+        size_bytes=size_bytes,
         preview_rows=tuple(rows[:preview_rows]),
         kpi_candidates=kpi_candidates,
         date_candidates=date_candidates,
         category_candidates=category_candidates,
+        source_format=source.format,
+        source_internal_filename=source.internal_filename,
+        source_table_name=source.table_name,
     )
 
 
