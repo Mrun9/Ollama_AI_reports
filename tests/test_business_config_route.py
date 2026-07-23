@@ -20,6 +20,7 @@ def _upload_business_csv(client: FlaskClient):  # type: ignore[no-untyped-def]
         "/upload",
         data={"file": (io.BytesIO(content), "business.csv", "text/csv")},
         content_type="multipart/form-data",
+        follow_redirects=True,
     )
 
 
@@ -59,10 +60,12 @@ def test_confirmed_configuration_is_validated_and_persisted(
             "target_or_benchmark": "150",
             "business_objective": "Increase regional revenue.",
         },
+        follow_redirects=True,
     )
 
     assert response.status_code == 200
     assert b"Business configuration saved" in response.data
+    assert b"Generate deterministic insights" in response.data
     configuration_path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
     configuration = json.loads(configuration_path.read_text(encoding="utf-8"))
     assert configuration["dataset_id"] == dataset_id
@@ -70,6 +73,44 @@ def test_confirmed_configuration_is_validated_and_persisted(
     assert configuration["date_column"] == "date"
     assert configuration["category_columns"] == ["region"]
     assert configuration["target_or_benchmark"] == 150
+
+
+def test_deterministic_insights_are_generated_and_saved_without_ollama(
+    app: Flask, client: FlaskClient, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    upload_response = _upload_business_csv(client)
+    dataset_id = _dataset_id(upload_response.data)
+    configured = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "target_or_benchmark": "150",
+            "business_objective": "Increase regional revenue.",
+        },
+        follow_redirects=True,
+    )
+    assert configured.status_code == 200
+
+    def forbidden_ollama_call(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("Milestone 3 must not call Ollama")
+
+    monkeypatch.setattr(
+        "insight_reporter.routes.generate_configuration_suggestions",
+        forbidden_ollama_call,
+    )
+    response = client.post(f"/insights/{dataset_id}", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"Deterministic insights generated" in response.data
+    assert b"Ollama was not used" in response.data
+    insight_path = Path(app.config["INSIGHT_DIR"]) / f"{dataset_id}.json"
+    payload = json.loads(insight_path.read_text(encoding="utf-8"))
+    assert payload["dataset_id"] == dataset_id
+    assert payload["insights"]
+    assert any(item["type"] == "benchmark_breach" for item in payload["insights"])
 
 
 def test_tampered_selection_is_rejected_without_configuration_file(
@@ -87,6 +128,7 @@ def test_tampered_selection_is_rejected_without_configuration_file(
             "category_columns": ["region"],
             "business_objective": "Invalid attempt.",
         },
+        follow_redirects=True,
     )
 
     assert response.status_code == 400
@@ -107,6 +149,7 @@ def test_business_objective_is_escaped(client: FlaskClient) -> None:
             "date_column": "date",
             "business_objective": "<script>alert(1)</script>",
         },
+        follow_redirects=True,
     )
     page = response.data.decode("utf-8")
 

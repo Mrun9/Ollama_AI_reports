@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Build Derived KPI | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>Build and review derived KPI</h1>
+      <p>
+        Every formula field is editable. Python validates the selected operation and columns and
+        calculates the preview; formula text is never executed.
+      </p>
+
+      {% if configuration_error %}
+        <p role="alert"><strong>Changes rejected:</strong> {{ configuration_error }}</p>
+      {% endif %}
+
+      {% if metric %}
+        <dl>
+          <dt>Validated formula</dt>
+          <dd>{{ metric.formula_label }}</dd>
+          <dt>Source columns</dt>
+          <dd>{{ metric.source_columns|join(", ") }}</dd>
+          <dt>Aggregation</dt>
+          <dd>{{ metric.aggregation }}</dd>
+          <dt>Display format</dt>
+          <dd>{{ metric.display_format }}</dd>
+        </dl>
+      {% endif %}
+
+      {% if preview %}
+        <h2>Python calculation preview</h2>
+        <dl>
+          <dt>Total rows</dt>
+          <dd>{{ preview.total_records }}</dd>
+          <dt>Valid results</dt>
+          <dd>{{ preview.valid_result_count }}</dd>
+          <dt>Missing-input results</dt>
+          <dd>{{ preview.missing_input_count }}</dd>
+          <dt>Division-by-zero results</dt>
+          <dd>{{ preview.division_by_zero_count }}</dd>
+          <dt>Non-finite results</dt>
+          <dd>{{ preview.non_finite_result_count }}</dd>
+          <dt>Minimum</dt>
+          <dd>{{ preview.minimum if preview.minimum is not none else "None" }}</dd>
+          <dt>Maximum</dt>
+          <dd>{{ preview.maximum if preview.maximum is not none else "None" }}</dd>
+          <dt>Mean</dt>
+          <dd>{{ preview.mean if preview.mean is not none else "None" }}</dd>
+        </dl>
+      {% else %}
+        <p>Correct the formula below and recalculate its Python preview.</p>
+      {% endif %}
+
+      <form method="post"
+        action="{{ url_for('core.configure_derived_kpi', dataset_id=dataset_id) }}">
+        <h2>Editable formula</h2>
+        <p>
+          <label for="derived-name">Derived KPI name</label>
+          <input id="derived-name" name="name" maxlength="120" required
+            value="{{ form_data.get('name', metric.name if metric else '') }}">
+        </p>
+
+        <p>
+          <label for="derived-left-column">Left source column</label>
+          <select id="derived-left-column" name="left_column" required>
+            {% for column in numeric_columns %}
+              <option value="{{ column }}"
+                {% if form_data.get('left_column') == column %}selected{% endif %}>
+                {{ column }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <p>
+          <label for="derived-operation">Operation</label>
+          <select id="derived-operation" name="operation" required>
+            {% for value, label in operation_options %}
+              <option value="{{ value }}"
+                {% if form_data.get('operation') == value %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <p>
+          <label for="derived-right-column">Right source column</label>
+          <select id="derived-right-column" name="right_column" required>
+            {% for column in numeric_columns %}
+              <option value="{{ column }}"
+                {% if form_data.get('right_column') == column %}selected{% endif %}>
+                {{ column }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <p>
+          <label for="derived-aggregation">Aggregation</label>
+          <select id="derived-aggregation" name="aggregation" required>
+            {% for aggregation in aggregation_options %}
+              <option value="{{ aggregation }}"
+                {% if form_data.get('aggregation') == aggregation %}selected{% endif %}>
+                {{ aggregation }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <p>
+          <label for="derived-display-format">Display format</label>
+          <select id="derived-display-format" name="display_format" required>
+            {% for display_format in display_format_options %}
+              <option value="{{ display_format }}"
+                {% if form_data.get('display_format') == display_format %}selected{% endif %}>
+                {{ display_format }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <h2>Editable business configuration</h2>
+        <fieldset>
+          <legend>KPI direction</legend>
+          <label>
+            <input type="radio" name="kpi_direction" value="higher" required
+              {% if form_data.get('kpi_direction', 'higher') == 'higher' %}checked{% endif %}>
+            Higher is better
+          </label>
+          <label>
+            <input type="radio" name="kpi_direction" value="lower"
+              {% if form_data.get('kpi_direction') == 'lower' %}checked{% endif %}>
+            Lower is better
+          </label>
+        </fieldset>
+
+        <p>
+          <label for="derived-date-column">Date column</label>
+          <select id="derived-date-column" name="date_column">
+            <option value="">No date column</option>
+            {% for column in profile.date_candidates %}
+              <option value="{{ column }}"
+                {% if form_data.get('date_column') == column %}selected{% endif %}>
+                {{ column }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <fieldset>
+          <legend>Category or segment columns</legend>
+          {% if profile.category_candidates %}
+            {% for column in profile.category_candidates %}
+              <label>
+                <input type="checkbox" name="category_columns" value="{{ column }}"
+                  {% if column in form_data.getlist('category_columns') %}checked{% endif %}>
+                {{ column }}
+              </label>
+            {% endfor %}
+          {% else %}
+            <p>No category candidates were detected.</p>
+          {% endif %}
+        </fieldset>
+
+        <p>
+          <label for="derived-benchmark-strategy">Benchmark helper</label>
+          <select id="derived-benchmark-strategy" name="benchmark_strategy">
+            <option value="none"
+              {% if form_data.get('benchmark_strategy', 'none') == 'none' %}selected{% endif %}>
+              No automatic benchmark
+            </option>
+            <option value="dataset_mean"
+              {% if form_data.get('benchmark_strategy') == 'dataset_mean' %}selected{% endif %}>
+              Use the Python-calculated dataset mean
+            </option>
+          </select>
+        </p>
+
+        <p>
+          <label for="derived-target">Optional target or benchmark</label>
+          <input id="derived-target" name="target_or_benchmark" type="number" step="any"
+            value="{{ form_data.get('target_or_benchmark', '') }}">
+        </p>
+
+        <p>
+          <label for="derived-objective">Business objective</label>
+          <textarea id="derived-objective" name="business_objective" maxlength="2000"
+            required>{{ form_data.get('business_objective', '') }}</textarea>
+        </p>
+
+        <button type="submit"
+          formaction="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
+          Recalculate Python preview
+        </button>
+        {% if preview %}
+          <button type="submit">Confirm derived KPI configuration</button>
+        {% endif %}
+      </form>
+
+      <p>
+        <a href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}">
+          Return to dataset profile
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

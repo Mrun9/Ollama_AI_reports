@@ -12,6 +12,16 @@
       <dl>
         <dt>Primary KPI</dt>
         <dd>{{ configuration.primary_kpi }}</dd>
+        <dt>Metric type</dt>
+        <dd>{{ configuration.metric_type }}</dd>
+        {% if configuration.derived_metric %}
+          <dt>Derived formula</dt>
+          <dd>{{ configuration.derived_metric.formula_label }}</dd>
+          <dt>Aggregation</dt>
+          <dd>{{ configuration.derived_metric.aggregation }}</dd>
+          <dt>Source columns</dt>
+          <dd>{{ configuration.derived_metric.source_columns|join(", ") }}</dd>
+        {% endif %}
         <dt>Direction</dt>
         <dd>{{ configuration.kpi_direction }}</dd>
         <dt>Date column</dt>
@@ -28,6 +38,17 @@
 
       <h2>Configuration object</h2>
       <pre>{{ configuration_json }}</pre>
+      <h2>Deterministic analysis</h2>
+      <p>Generate factual observations with Python only. Ollama is not used.</p>
+      <form method="post"
+        action="{{ url_for('core.deterministic_insights', dataset_id=configuration.dataset_id) }}">
+        <button type="submit">Generate deterministic insights</button>
+      </form>
+      <p>
+        <a href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">
+          Return to dataset profile
+        </a>
+      </p>
       <p><a href="{{ url_for('core.upload_form') }}">Profile another CSV</a></p>
     </main>
   </body>

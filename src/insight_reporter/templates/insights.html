@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Deterministic Insights | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>Deterministic insights generated</h1>
+      <p>
+        {{ report.insights|length }} reproducible observations were generated with Python only.
+        Ollama was not used.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Type</th>
+            <th scope="col">Metric</th>
+            <th scope="col">Records</th>
+            <th scope="col">Confidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for insight in report.insights %}
+            <tr>
+              <td>{{ insight.id }}</td>
+              <td>{{ insight.type }}</td>
+              <td>{{ insight.metric }}</td>
+              <td>{{ insight.record_count }}</td>
+              <td>{{ insight.confidence }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h2>Evidence JSON</h2>
+      <pre>{{ report_json }}</pre>
+      <p>
+        <a href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">
+          Return to saved configuration
+        </a>
+      </p>
+      <p><a href="{{ url_for('core.upload_form') }}">Profile another CSV</a></p>
+    </main>
+  </body>
+</html>

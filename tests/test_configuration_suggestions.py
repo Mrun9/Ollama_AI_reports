@@ -267,3 +267,39 @@ def test_no_date_fake_model_call_uses_null_and_is_accepted(tmp_path: Path) -> No
     assert client.calls[0]["format"]["properties"]["suggestions"]["items"][
         "properties"
     ]["date_column"] == {"type": "null"}
+
+
+def test_model_schema_forces_empty_categories_when_none_are_detected(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "numeric-only.csv"
+    path.write_text(
+        "temperature,pressure\n20,100\n21,101\n22,102\n",
+        encoding="utf-8",
+    )
+    profile = profile_csv(path)
+    client = FakeChatClient(
+        _response(
+            _suggestion(
+                primary_kpi="temperature",
+                date_column=None,
+                category_columns=[],
+            )
+        )
+    )
+
+    batch = generate_configuration_suggestions(
+        profile,
+        dataset_id="a" * 32,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=5,
+        client=client,
+    )
+    suggestion_properties = client.calls[0]["format"]["properties"]["suggestions"][
+        "items"
+    ]["properties"]
+
+    assert profile.category_candidates == ()
+    assert suggestion_properties["category_columns"] == {"const": []}
+    assert batch.suggestions[0].category_columns == ()

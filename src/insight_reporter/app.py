@@ -28,8 +28,12 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
 
     app.config.setdefault("UPLOAD_DIR", Path(app.instance_path) / "uploads")
     app.config.setdefault("CONFIGURATION_DIR", Path(app.instance_path) / "configurations")
+    app.config.setdefault("INSIGHT_DIR", Path(app.instance_path) / "insights")
+    app.config.setdefault("NAVIGATION_STATE_DIR", Path(app.instance_path) / "navigation_state")
     Path(app.config["UPLOAD_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(app.config["CONFIGURATION_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["INSIGHT_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["NAVIGATION_STATE_DIR"]).mkdir(parents=True, exist_ok=True)
 
     configure_logging(app)
     app.register_blueprint(core)

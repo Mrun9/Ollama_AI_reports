@@ -152,6 +152,114 @@
         {% endfor %}
       {% endif %}
 
+      <h2>Optional derived KPIs</h2>
+      <p>
+        If the existing KPI columns are not suitable, ask {{ suggestion_model }} for optional
+        formulas. Existing KPIs remain available and no formula is activated automatically.
+      </p>
+      {% if derived_numeric_columns|length >= 2 %}
+        <form method="post"
+          action="{{ url_for('core.suggest_derived_kpis', dataset_id=dataset_id) }}">
+          <button type="submit">Suggest two derived KPIs</button>
+        </form>
+        <form method="post"
+          action="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
+          <input type="hidden" name="name"
+            value="Derived {{ derived_numeric_columns[0] }} and {{ derived_numeric_columns[1] }}">
+          <input type="hidden" name="operation" value="subtract">
+          <input type="hidden" name="left_column" value="{{ derived_numeric_columns[0] }}">
+          <input type="hidden" name="right_column" value="{{ derived_numeric_columns[1] }}">
+          <input type="hidden" name="aggregation" value="sum">
+          <input type="hidden" name="display_format" value="number">
+          <input type="hidden" name="kpi_direction" value="higher">
+          <input type="hidden" name="date_column" value="">
+          <input type="hidden" name="benchmark_strategy" value="none">
+          <input type="hidden" name="target_or_benchmark" value="">
+          <input type="hidden" name="business_objective" value="">
+          <button type="submit">Build a derived KPI manually</button>
+        </form>
+      {% else %}
+        <p>At least two numeric columns are required to suggest a derived KPI.</p>
+      {% endif %}
+
+      {% if derived_suggestion_error %}
+        <p role="alert">
+          <strong>Derived KPI suggestions unavailable:</strong> {{ derived_suggestion_error }}
+        </p>
+      {% endif %}
+
+      {% if rejected_derived_suggestion_count %}
+        <p role="status">
+          {{ rejected_derived_suggestion_count }} unsafe or invalid derived KPI suggestion(s)
+          were discarded by Python validation.
+        </p>
+      {% endif %}
+
+      {% if derived_suggestions %}
+        <h3>Derived KPI suggestions</h3>
+        {% for suggestion in derived_suggestions %}
+          <section>
+            <h4>{{ suggestion.metric.name }}</h4>
+            <dl>
+              <dt>Formula</dt>
+              <dd>{{ suggestion.metric.formula_label }}</dd>
+              <dt>Aggregation</dt>
+              <dd>{{ suggestion.metric.aggregation }}</dd>
+              <dt>Display format</dt>
+              <dd>{{ suggestion.metric.display_format }}</dd>
+              <dt>Direction</dt>
+              <dd>{{ suggestion.kpi_direction }}</dd>
+              <dt>Date column</dt>
+              <dd>{{ suggestion.date_column or "None" }}</dd>
+              <dt>Categories</dt>
+              <dd>
+                {{ suggestion.category_columns|join(", ") if suggestion.category_columns
+                  else "None" }}
+              </dd>
+              <dt>Suggested benchmark</dt>
+              <dd>
+                {{ "Dataset mean (calculated by Python)"
+                  if suggestion.benchmark_strategy == "dataset_mean" else "None" }}
+              </dd>
+              <dt>Business objective</dt>
+              <dd>{{ suggestion.business_objective }}</dd>
+              <dt>Model confidence</dt>
+              <dd>{{ (suggestion.confidence * 100)|round|int }}%</dd>
+            </dl>
+            <ul>
+              {% for reason in suggestion.rationale %}
+                <li>{{ reason }}</li>
+              {% endfor %}
+            </ul>
+            <form method="post"
+              action="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
+              <input type="hidden" name="name" value="{{ suggestion.metric.name }}">
+              <input type="hidden" name="operation" value="{{ suggestion.metric.operation }}">
+              <input type="hidden" name="left_column"
+                value="{{ suggestion.metric.left_column }}">
+              <input type="hidden" name="right_column"
+                value="{{ suggestion.metric.right_column }}">
+              <input type="hidden" name="aggregation"
+                value="{{ suggestion.metric.aggregation }}">
+              <input type="hidden" name="display_format"
+                value="{{ suggestion.metric.display_format }}">
+              <input type="hidden" name="kpi_direction" value="{{ suggestion.kpi_direction }}">
+              <input type="hidden" name="date_column"
+                value="{{ suggestion.date_column or '' }}">
+              {% for category in suggestion.category_columns %}
+                <input type="hidden" name="category_columns" value="{{ category }}">
+              {% endfor %}
+              <input type="hidden" name="benchmark_strategy"
+                value="{{ suggestion.benchmark_strategy }}">
+              <input type="hidden" name="target_or_benchmark" value="">
+              <input type="hidden" name="business_objective"
+                value="{{ suggestion.business_objective }}">
+              <button type="submit">Review this derived KPI</button>
+            </form>
+          </section>
+        {% endfor %}
+      {% endif %}
+
       <h2>Confirm business configuration</h2>
       {% if review_notice %}
         <p role="status"><strong>{{ review_notice }}</strong></p>

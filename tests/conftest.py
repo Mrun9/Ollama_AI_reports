@@ -17,6 +17,8 @@ def app(tmp_path: Path) -> Flask:
             "SECRET_KEY": "test-only-secret-key",
             "UPLOAD_DIR": tmp_path / "uploads",
             "CONFIGURATION_DIR": tmp_path / "configurations",
+            "INSIGHT_DIR": tmp_path / "insights",
+            "NAVIGATION_STATE_DIR": tmp_path / "navigation_state",
         }
     )
 

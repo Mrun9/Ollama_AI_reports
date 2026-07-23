@@ -21,6 +21,7 @@ def _upload(
         "/upload",
         data={"file": (io.BytesIO(content), filename, content_type)},
         content_type="multipart/form-data",
+        follow_redirects=True,
     )
 
 
@@ -230,6 +231,7 @@ def test_exactly_one_file_is_required(app: Flask, client: FlaskClient) -> None:
             ]
         },
         content_type="multipart/form-data",
+        follow_redirects=True,
     )
 
     assert response.status_code == 400

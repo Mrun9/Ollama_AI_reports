@@ -38,6 +38,20 @@ def test_configuration_directory_is_outside_static_directory(app: Flask) -> None
     assert not configuration_dir.is_relative_to(static_dir)
 
 
+def test_insight_directory_is_outside_static_directory(app: Flask) -> None:
+    insight_dir = Path(app.config["INSIGHT_DIR"]).resolve()
+    static_dir = Path(app.static_folder or "").resolve()
+
+    assert not insight_dir.is_relative_to(static_dir)
+
+
+def test_navigation_state_directory_is_outside_static_directory(app: Flask) -> None:
+    state_dir = Path(app.config["NAVIGATION_STATE_DIR"]).resolve()
+    static_dir = Path(app.static_folder or "").resolve()
+
+    assert not state_dir.is_relative_to(static_dir)
+
+
 def test_health_endpoint_has_security_headers(client: FlaskClient) -> None:
     response = client.get("/health")
 

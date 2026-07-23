@@ -23,6 +23,7 @@ def _upload(client: FlaskClient):  # type: ignore[no-untyped-def]
         "/upload",
         data={"file": (io.BytesIO(content), "business.csv", "text/csv")},
         content_type="multipart/form-data",
+        follow_redirects=True,
     )
 
 
@@ -73,7 +74,7 @@ def test_generate_suggestions_displays_validated_cards(
         lambda *_args, **_kwargs: SuggestionBatch((_suggestion(),), rejected_count=1),
     )
 
-    response = client.post(f"/suggest/{dataset_id}")
+    response = client.post(f"/suggest/{dataset_id}", follow_redirects=True)
 
     assert response.status_code == 200
     assert b"Suggested configurations" in response.data
@@ -97,7 +98,7 @@ def test_ollama_failure_keeps_manual_configuration_available(
         unavailable,
     )
 
-    response = client.post(f"/suggest/{dataset_id}")
+    response = client.post(f"/suggest/{dataset_id}", follow_redirects=True)
 
     assert response.status_code == 503
     assert b"AI suggestions unavailable" in response.data
@@ -119,6 +120,7 @@ def test_use_suggestion_prefills_existing_editable_form(client: FlaskClient) -> 
             "target_or_benchmark": "",
             "business_objective": "Evaluate regional revenue performance.",
         },
+        follow_redirects=True,
     )
 
     assert response.status_code == 200
@@ -141,6 +143,7 @@ def test_tampered_posted_suggestion_is_rejected(client: FlaskClient) -> None:
             "date_column": "date",
             "business_objective": "Tampered configuration.",
         },
+        follow_redirects=True,
     )
 
     assert response.status_code == 400
@@ -158,7 +161,7 @@ def test_suggestion_text_is_html_escaped(client: FlaskClient, monkeypatch) -> No
         ),
     )
 
-    response = client.post(f"/suggest/{dataset_id}")
+    response = client.post(f"/suggest/{dataset_id}", follow_redirects=True)
     page = response.data.decode("utf-8")
 
     assert response.status_code == 200
