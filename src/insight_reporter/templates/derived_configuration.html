@@ -77,6 +77,16 @@
           <code>/</code>, parentheses, and <code>ABS(...)</code>.
         </p>
 
+        {% with
+          context_target="derived-formula",
+          context_target_label="formula",
+          context_insert_mode="formula",
+          context_secondary_target="derived-objective",
+          context_secondary_target_label="objective"
+        %}
+          {% include "_dataset_context.html" %}
+        {% endwith %}
+
         <p>
           <label for="calculation-level">Calculation level</label>
           <select id="calculation-level" name="calculation_level" required>

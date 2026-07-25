@@ -164,6 +164,19 @@ def test_on_demand_suggestion_review_confirmation_and_insights_workflow(
     assert evidence["metric_definition"]["metric_type"] == "derived"
     assert evidence["metric_definition"]["formula"] == "[revenue] - [cost]"
     assert evidence["insights"]
+    evidence_path = Path(app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+    evidence_records = json.loads(evidence_path.read_text(encoding="utf-8"))["records"]
+    assert evidence_records
+    assert all(
+        record["kpi_definition"]["metric_type"] == "derived"
+        for record in evidence_records
+        if record["metric_id"] != "DATASET"
+    )
+    assert all(
+        record["kpi_definition"]["formula_label"] == "[revenue] - [cost]"
+        for record in evidence_records
+        if record["metric_id"] != "DATASET"
+    )
 
 
 def test_tampered_derived_formula_is_rejected(client: FlaskClient) -> None:

@@ -18,6 +18,10 @@ def app(tmp_path: Path) -> Flask:
             "UPLOAD_DIR": tmp_path / "uploads",
             "CONFIGURATION_DIR": tmp_path / "configurations",
             "INSIGHT_DIR": tmp_path / "insights",
+            "EVIDENCE_DIR": tmp_path / "evidence",
+            "CHART_DIR": tmp_path / "charts",
+            "VISUALIZATION_DIR": tmp_path / "visualizations",
+            "VISUALIZATION_PREVIEW_DIR": tmp_path / "visualization_previews",
             "NAVIGATION_STATE_DIR": tmp_path / "navigation_state",
         }
     )

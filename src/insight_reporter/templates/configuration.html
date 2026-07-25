@@ -97,6 +97,22 @@
         action="{{ url_for('core.deterministic_insights', dataset_id=configuration.dataset_id) }}">
         <button type="submit">Generate deterministic insights</button>
       </form>
+      <h2>Manual visualizations</h2>
+      <p>
+        Build report-selectable charts from configured KPIs or supplementary source columns.
+        Supplementary charts remain clearly labelled and do not become KPIs or deterministic
+        insights.
+      </p>
+      <p>
+        <a href="{{ url_for('core.visualization_builder', dataset_id=configuration.dataset_id) }}">
+          Build a manual visualization
+        </a>
+      </p>
+      <p>
+        <a href="{{ url_for('core.saved_visualizations', dataset_id=configuration.dataset_id) }}">
+          View saved visualizations
+        </a>
+      </p>
       <p>
         <a href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">
           Return to dataset profile

@@ -1,0 +1,155 @@
+<aside aria-labelledby="dataset-context-heading">
+  <h2 id="dataset-context-heading">Dataset context</h2>
+  <p>
+    Use the insert buttons instead of retyping names. The tokens are stable only for
+    this dataset and are resolved by Python before use.
+  </p>
+  <p>
+    <strong>{{ dataset_context.row_count }}</strong> records ·
+    {{ dataset_context.source.format|upper }}
+    {% if dataset_context.source.worksheet %}
+      · worksheet {{ dataset_context.source.worksheet }}
+    {% endif %}
+  </p>
+
+  {% macro insert_button(item, insert_value) %}
+    {% if context_insert_mode != "formula" or item.kind == "numeric" %}
+      <button type="button"
+        data-context-target="{{ context_target }}"
+        data-context-mode="{{ context_insert_mode }}"
+        data-context-insert="{{ insert_value }}">
+        Insert{% if context_target_label %} in {{ context_target_label }}{% endif %}
+      </button>
+    {% endif %}
+    {% if context_secondary_target %}
+      <button type="button"
+        data-context-target="{{ context_secondary_target }}"
+        data-context-mode="prompt"
+        data-context-insert="{{ item.insert_text }}">
+        Insert in {{ context_secondary_target_label }}
+      </button>
+    {% endif %}
+  {% endmacro %}
+
+  <details open>
+    <summary>Configured KPIs ({{ dataset_context.metrics|length }})</summary>
+    {% if dataset_context.metrics %}
+      <ul>
+        {% for item in dataset_context.metrics %}
+          <li>
+            <code>@{{ item.token }}</code> <strong>{{ item.name }}</strong>
+            {% if item.details.primary %} · primary{% endif %}
+            · {{ item.details.aggregation }}
+            · {{ item.details.display_format }}
+            · {{ item.details.direction }} is better
+            {% if item.details.formula %}
+              <br>Formula: <code>{{ item.details.formula }}</code>
+              · {{ item.details.calculation_level }} level
+            {% endif %}
+            {{ insert_button(item, item.insert_text) }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No KPI has been configured yet.</p>
+    {% endif %}
+  </details>
+
+  <details>
+    <summary>Numeric columns ({{ dataset_context.numeric_columns|length }})</summary>
+    <ul>
+      {% for item in dataset_context.numeric_columns %}
+        <li>
+          <code>@{{ item.token }}</code> <strong>{{ item.name }}</strong>
+          {% if item.details.statistics %}
+            · min {{ item.details.statistics.minimum }}
+            · max {{ item.details.statistics.maximum }}
+            · mean {{ item.details.statistics.mean }}
+          {% endif %}
+          · missing {{ item.details.missing_count }}
+          {% if context_insert_mode == "formula" %}
+            {{ insert_button(item, "[" ~ item.name|replace("]", "]]") ~ "]") }}
+          {% else %}
+            {{ insert_button(item, item.insert_text) }}
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </details>
+
+  <details>
+    <summary>
+      Category and boolean columns
+      ({{ dataset_context.categories|length + dataset_context.booleans|length }})
+    </summary>
+    <ul>
+      {% for item in dataset_context.categories + dataset_context.booleans %}
+        <li>
+          <code>@{{ item.token }}</code> <strong>{{ item.name }}</strong>
+          · {{ item.details.unique_count }} unique
+          {% if item.details["values"] %}
+            · values: {{ item.details["values"]|join(", ") }}
+            {% if item.details.values_truncated %}…{% endif %}
+          {% endif %}
+          {{ insert_button(item, item.insert_text) }}
+        </li>
+      {% endfor %}
+    </ul>
+  </details>
+
+  <details>
+    <summary>Date columns ({{ dataset_context.dates|length }})</summary>
+    {% if dataset_context.dates %}
+      <ul>
+        {% for item in dataset_context.dates %}
+          <li>
+            <code>@{{ item.token }}</code> <strong>{{ item.name }}</strong>
+            {% if item.details.date_range %}
+              · {{ item.details.date_range.earliest }} to
+              {{ item.details.date_range.latest }}
+            {% endif %}
+            {{ insert_button(item, item.insert_text) }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No date column was detected.</p>
+    {% endif %}
+  </details>
+
+  {% if dataset_context.other_columns %}
+    <details>
+      <summary>Other columns ({{ dataset_context.other_columns|length }})</summary>
+      <ul>
+        {% for item in dataset_context.other_columns %}
+          <li>
+            <code>@{{ item.token }}</code> <strong>{{ item.name }}</strong>
+            · {{ item.kind }} · {{ item.details.unique_count }} unique
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
+
+  {% if dataset_context.saved_visualizations or dataset_context.evidence %}
+    <details>
+      <summary>Existing report assets</summary>
+      <ul>
+        {% for item in dataset_context.saved_visualizations %}
+          <li>
+            <code>@{{ item.token }}</code> {{ item.title }}
+            · {{ item.classification }}
+            {% if item.include_in_report %} · selected for report{% endif %}
+          </li>
+        {% endfor %}
+        {% for item in dataset_context.evidence %}
+          <li>
+            {{ item.evidence_id }} · {{ item.insight_type }} · {{ item.metric }}
+            {% if item.has_chart %} · chart available{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
+</aside>
+<script defer src="{{ url_for('static', filename='context_panel.js') }}"></script>

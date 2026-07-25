@@ -4,3 +4,5 @@
 ollama==0.6.2
 # Read-only validation and normalization of approved .xlsx inputs.
 openpyxl==3.1.5
+# Deterministic evidence charts rendered with the non-interactive Agg backend.
+matplotlib==3.11.1

@@ -2,7 +2,7 @@
 
 import json
 import re
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from flask import (
@@ -13,6 +13,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     url_for,
 )
 from werkzeug.datastructures import MultiDict
@@ -33,6 +34,10 @@ from insight_reporter.configuration_suggestions import (
     ConfigurationSuggestion,
     ConfigurationSuggestionError,
     generate_configuration_suggestions,
+)
+from insight_reporter.dataset_context import (
+    DatasetContext,
+    build_dataset_context,
 )
 from insight_reporter.dataset_ingestion import (
     DatasetValidationError,
@@ -66,6 +71,15 @@ from insight_reporter.derived_metrics import (
     validate_derived_metric,
     validate_formula_metric,
 )
+from insight_reporter.evidence_layer import (
+    EvidenceError,
+    chart_filename_for,
+    delete_chart_files,
+    generate_evidence,
+    load_evidence_payload,
+    referenced_chart_filenames,
+    save_evidence_report,
+)
 from insight_reporter.insight_engine import (
     InsightEngineError,
     generate_insights,
@@ -75,6 +89,26 @@ from insight_reporter.navigation_state import (
     NavigationStateError,
     load_navigation_state,
     save_navigation_state,
+)
+from insight_reporter.visualization_builder import (
+    AGGREGATIONS,
+    CHART_TYPES,
+    DATE_GRANULARITIES,
+    FILTER_MODES,
+    SCALES,
+    VisualizationArtifact,
+    VisualizationError,
+    artifact_chart_filename,
+    build_visualization,
+    delete_chart,
+    delete_preview,
+    list_visualizations,
+    load_preview,
+    load_visualization,
+    parse_visualization_spec,
+    save_preview,
+    save_visualization,
+    spec_to_form,
 )
 
 core = Blueprint("core", __name__)
@@ -641,9 +675,328 @@ def remove_configured_metric(dataset_id: str):  # type: ignore[no-untyped-def]
     )
 
 
+@core.get("/visualizations/<dataset_id>")
+def saved_visualizations(dataset_id: str):  # type: ignore[no-untyped-def]
+    """List user-created KPI and supplementary visualizations."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        visualizations = list_visualizations(
+            dataset_id=dataset_id,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+    except (BusinessConfigurationError, VisualizationError) as error:
+        abort(422, description=str(error))
+    return render_template(
+        "visualizations.html",
+        dataset_id=dataset_id,
+        visualizations=visualizations,
+    )
+
+
+@core.get("/visualizations/<dataset_id>/new")
+def visualization_builder(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Display the stable manual visualization builder."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+    except BusinessConfigurationError as error:
+        abort(422, description=str(error))
+    state = _load_view_state("visualization_builder", dataset_id=dataset_id)
+    state_form = _form_from_state(state.get("form_data"))
+    form_data = state_form or _default_visualization_form(profile)
+    edit_id = request.args.get("edit", "")
+    if state_form is None and edit_id:
+        try:
+            artifact = load_visualization(
+                edit_id,
+                dataset_id=dataset_id,
+                visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+                profile=profile,
+                configuration=configuration,
+            )
+            form_data = _visualization_form_from_artifact(artifact)
+        except VisualizationError as error:
+            abort(404, description=str(error))
+    return (
+        render_template(
+            "visualization_builder.html",
+            dataset_id=dataset_id,
+            profile=profile,
+            configuration=configuration,
+            form_data=form_data,
+            error=_state_text(state, "error"),
+            chart_types=CHART_TYPES,
+            aggregations=AGGREGATIONS,
+            date_granularities=DATE_GRANULARITIES,
+            filter_modes=FILTER_MODES,
+            scales=SCALES,
+            numeric_columns=tuple(
+                column.name
+                for column in profile.columns
+                if column.inferred_type.value == "numeric"
+                and not column.is_constant
+                and not column.is_empty
+            ),
+        ),
+        _state_status(state),
+    )
+
+
+@core.post("/visualizations/<dataset_id>/preview")
+def preview_visualization(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Validate and generate a short-lived visualization preview."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        values = _visualization_request_values(request.form)
+        spec = parse_visualization_spec(values)
+        if spec.replaces_visualization_id is not None:
+            load_visualization(
+                spec.replaces_visualization_id,
+                dataset_id=dataset_id,
+                visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+                profile=profile,
+                configuration=configuration,
+            )
+        artifact = build_visualization(
+            _load_dataset_view_for_id(dataset_id),
+            profile=profile,
+            configuration=configuration,
+            spec=spec,
+            chart_dir=Path(current_app.config["CHART_DIR"]),
+        )
+        token = save_preview(
+            artifact,
+            preview_dir=Path(current_app.config["VISUALIZATION_PREVIEW_DIR"]),
+            chart_dir=Path(current_app.config["CHART_DIR"]),
+        )
+    except (BusinessConfigurationError, VisualizationError) as error:
+        return _redirect_with_state(
+            "core.visualization_builder",
+            {
+                "view": "visualization_builder",
+                "dataset_id": dataset_id,
+                "form_data": _form_to_state(request.form),
+                "error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+        )
+    return redirect(
+        url_for(
+            "core.visualization_preview",
+            dataset_id=dataset_id,
+            token=token,
+        ),
+        code=303,
+    )
+
+
+@core.get("/visualizations/<dataset_id>/preview/<token>")
+def visualization_preview(dataset_id: str, token: str):  # type: ignore[no-untyped-def]
+    """Display one validated draft from a reloadable GET URL."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        artifact = load_preview(
+            token,
+            dataset_id=dataset_id,
+            preview_dir=Path(current_app.config["VISUALIZATION_PREVIEW_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+    except (BusinessConfigurationError, VisualizationError) as error:
+        abort(404, description=str(error))
+    return _render_visualization(
+        artifact,
+        preview_token=token,
+        artifact_json=json.dumps(artifact.to_dict(), indent=2, sort_keys=True),
+    )
+
+
+@core.get("/visualizations/<dataset_id>/preview/<token>/chart")
+def visualization_preview_chart(
+    dataset_id: str, token: str
+):  # type: ignore[no-untyped-def]
+    """Serve a draft chart only through its validated preview token."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        artifact = load_preview(
+            token,
+            dataset_id=dataset_id,
+            preview_dir=Path(current_app.config["VISUALIZATION_PREVIEW_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+        filename = artifact_chart_filename(artifact)
+    except (BusinessConfigurationError, VisualizationError) as error:
+        abort(404, description=str(error))
+    return _send_visualization_chart(filename)
+
+
+@core.post("/visualizations/<dataset_id>/preview/<token>/save")
+def confirm_visualization(dataset_id: str, token: str):  # type: ignore[no-untyped-def]
+    """Save a validated draft as a stable report-selectable visualization."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        artifact = load_preview(
+            token,
+            dataset_id=dataset_id,
+            preview_dir=Path(current_app.config["VISUALIZATION_PREVIEW_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+        previous = None
+        if artifact.spec.replaces_visualization_id is not None:
+            previous = load_visualization(
+                artifact.spec.replaces_visualization_id,
+                dataset_id=dataset_id,
+                visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+                profile=profile,
+                configuration=configuration,
+            )
+        saved, _path = save_visualization(
+            artifact,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            previous=previous,
+        )
+        delete_preview(
+            token,
+            preview_dir=Path(current_app.config["VISUALIZATION_PREVIEW_DIR"]),
+        )
+        if previous is not None:
+            delete_chart(
+                previous.chart.filename,
+                chart_dir=Path(current_app.config["CHART_DIR"]),
+            )
+    except (BusinessConfigurationError, VisualizationError) as error:
+        abort(422, description=str(error))
+    return redirect(
+        url_for(
+            "core.saved_visualization",
+            dataset_id=dataset_id,
+            visualization_id=saved.visualization_id,
+        ),
+        code=303,
+    )
+
+
+@core.get("/visualizations/<dataset_id>/<visualization_id>")
+def saved_visualization(
+    dataset_id: str, visualization_id: str
+):  # type: ignore[no-untyped-def]
+    """Display a saved visualization and its reproducible supporting data."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        artifact = load_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+    except (BusinessConfigurationError, VisualizationError) as error:
+        abort(404, description=str(error))
+    return _render_visualization(
+        artifact,
+        artifact_json=json.dumps(artifact.to_dict(), indent=2, sort_keys=True),
+    )
+
+
+@core.get("/visualizations/<dataset_id>/<visualization_id>/chart")
+def saved_visualization_chart(
+    dataset_id: str, visualization_id: str
+):  # type: ignore[no-untyped-def]
+    """Serve a saved chart only through its validated visualization record."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        artifact = load_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+        filename = artifact_chart_filename(artifact)
+    except (BusinessConfigurationError, VisualizationError) as error:
+        abort(404, description=str(error))
+    return _send_visualization_chart(filename)
+
+
+@core.post("/visualizations/<dataset_id>/<visualization_id>/regenerate")
+def regenerate_visualization(
+    dataset_id: str, visualization_id: str
+):  # type: ignore[no-untyped-def]
+    """Recalculate a saved visualization from its retained source and specification."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+        previous = load_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+        spec = replace(
+            previous.spec,
+            replaces_visualization_id=visualization_id,
+        )
+        regenerated = build_visualization(
+            _load_dataset_view_for_id(dataset_id),
+            profile=profile,
+            configuration=configuration,
+            spec=spec,
+            chart_dir=Path(current_app.config["CHART_DIR"]),
+            assistant_metadata=previous.assistant,
+        )
+        try:
+            saved, _path = save_visualization(
+                regenerated,
+                visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+                previous=previous,
+            )
+        except VisualizationError:
+            delete_chart(
+                regenerated.chart.filename,
+                chart_dir=Path(current_app.config["CHART_DIR"]),
+            )
+            raise
+        delete_chart(
+            previous.chart.filename,
+            chart_dir=Path(current_app.config["CHART_DIR"]),
+        )
+    except (BusinessConfigurationError, VisualizationError) as error:
+        abort(422, description=str(error))
+    return redirect(
+        url_for(
+            "core.saved_visualization",
+            dataset_id=dataset_id,
+            visualization_id=saved.visualization_id,
+        ),
+        code=303,
+    )
+
+
 @core.post("/insights/<dataset_id>")
 def deterministic_insights(dataset_id: str):  # type: ignore[no-untyped-def]
-    """Generate and save factual observations using Python only."""
+    """Generate factual observations, evidence records, and charts using Python."""
 
     profile = _load_profile(dataset_id)
     configuration_path = Path(current_app.config["CONFIGURATION_DIR"]) / (
@@ -654,26 +1007,66 @@ def deterministic_insights(dataset_id: str):  # type: ignore[no-untyped-def]
 
     try:
         configuration = load_business_configuration(configuration_path, profile=profile)
+        view = _load_dataset_view_for_id(dataset_id)
         report = generate_insights(
-            _load_dataset_view_for_id(dataset_id),
+            view,
             profile=profile,
             configuration=configuration,
         )
-        report_path = save_insight_report(
-            report,
-            insight_dir=Path(current_app.config["INSIGHT_DIR"]),
+        evidence = generate_evidence(
+            view,
+            profile=profile,
+            configuration=configuration,
+            insight_report=report,
+            chart_dir=Path(current_app.config["CHART_DIR"]),
         )
-    except (BusinessConfigurationError, InsightEngineError) as error:
+        evidence_path = Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+        previous_payload = None
+        if evidence_path.is_file():
+            try:
+                previous_payload = load_evidence_payload(
+                    evidence_path,
+                    dataset_id=dataset_id,
+                )
+            except EvidenceError:
+                current_app.logger.warning(
+                    "Previous evidence report is unreadable: id=%s", dataset_id
+                )
+        new_chart_filenames = referenced_chart_filenames(evidence.to_dict())
+        try:
+            report_path = save_insight_report(
+                report,
+                insight_dir=Path(current_app.config["INSIGHT_DIR"]),
+            )
+            saved_evidence_path = save_evidence_report(
+                evidence,
+                evidence_dir=Path(current_app.config["EVIDENCE_DIR"]),
+            )
+        except (EvidenceError, OSError) as error:
+            delete_chart_files(
+                Path(current_app.config["CHART_DIR"]),
+                new_chart_filenames,
+            )
+            if isinstance(error, EvidenceError):
+                raise
+            raise EvidenceError("Evidence artifacts could not be saved.") from error
+        delete_chart_files(
+            Path(current_app.config["CHART_DIR"]),
+            referenced_chart_filenames(previous_payload),
+        )
+    except (BusinessConfigurationError, InsightEngineError, EvidenceError) as error:
         current_app.logger.warning(
-            "Deterministic insights rejected: id=%s reason=%s", dataset_id, error
+            "Deterministic evidence rejected: id=%s reason=%s", dataset_id, error
         )
         abort(422, description=str(error))
 
     current_app.logger.info(
-        "Deterministic insights generated: id=%s count=%d path=%s",
+        "Deterministic evidence generated: id=%s insights=%d records=%d paths=%s,%s",
         dataset_id,
         len(report.insights),
+        len(evidence.records),
         report_path.name,
+        saved_evidence_path.name,
     )
     return redirect(
         url_for("core.saved_insights", dataset_id=dataset_id), code=303
@@ -694,10 +1087,50 @@ def saved_insights(dataset_id: str):  # type: ignore[no-untyped-def]
         abort(422, description="Saved insight report is unreadable.")
     if not isinstance(report, dict) or report.get("dataset_id") != dataset_id:
         abort(422, description="Saved insight report is invalid.")
+    evidence_path = Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+    evidence = None
+    if evidence_path.is_file():
+        try:
+            evidence = load_evidence_payload(evidence_path, dataset_id=dataset_id)
+        except EvidenceError as error:
+            abort(422, description=str(error))
     return render_template(
         "insights.html",
         report=report,
         report_json=json.dumps(report, indent=2, sort_keys=True),
+        evidence=evidence,
+        evidence_json=(
+            json.dumps(evidence, indent=2, sort_keys=True)
+            if evidence is not None
+            else None
+        ),
+    )
+
+
+@core.get("/evidence/<dataset_id>/<evidence_id>/chart")
+def evidence_chart(dataset_id: str, evidence_id: str):  # type: ignore[no-untyped-def]
+    """Serve one chart only when referenced by the dataset's evidence record."""
+
+    _dataset_path(dataset_id)
+    evidence_path = Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+    if not evidence_path.is_file():
+        abort(404)
+    try:
+        payload = load_evidence_payload(evidence_path, dataset_id=dataset_id)
+    except EvidenceError as error:
+        abort(422, description=str(error))
+    filename = chart_filename_for(payload, evidence_id=evidence_id)
+    if filename is None:
+        abort(404)
+    chart_path = Path(current_app.config["CHART_DIR"]) / filename
+    if not chart_path.is_file():
+        abort(404)
+    return send_from_directory(
+        Path(current_app.config["CHART_DIR"]),
+        filename,
+        mimetype="image/png",
+        conditional=True,
+        max_age=0,
     )
 
 
@@ -784,6 +1217,15 @@ def _render_profile(
     review_notice: str | None = None,
     status_code: int = 200,
 ):  # type: ignore[no-untyped-def]
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+    except BusinessConfigurationError:
+        configuration = None
+    dataset_context = _build_dataset_context(
+        dataset_id,
+        profile,
+        configuration=configuration,
+    )
     return (
         render_template(
             "preview.html",
@@ -804,6 +1246,7 @@ def _render_profile(
             ),
             review_notice=review_notice,
             suggestion_model=current_app.config["OLLAMA_MODEL"],
+            dataset_context=dataset_context,
         ),
         status_code,
     )
@@ -853,6 +1296,15 @@ def _render_derived_editor(
     configuration_error: str | None,
     status_code: int = 200,
 ):  # type: ignore[no-untyped-def]
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+    except BusinessConfigurationError:
+        configuration = None
+    dataset_context = _build_dataset_context(
+        dataset_id,
+        profile,
+        configuration=configuration,
+    )
     return (
         render_template(
             "derived_configuration.html",
@@ -869,6 +1321,7 @@ def _render_derived_editor(
             display_format_options=("number", "percentage", "currency"),
             configuration_error=configuration_error,
             form_data=form_data,
+            dataset_context=dataset_context,
         ),
         status_code,
     )
@@ -890,6 +1343,139 @@ def _render_saved_configuration(
             ),
         ),
         status_code,
+    )
+
+
+def _visualization_request_values(
+    values: MultiDict[str, str],
+) -> dict[str, object]:
+    return {
+        "title": values.get("title", ""),
+        "chart_type": values.get("chart_type", ""),
+        "measure_selectors": values.getlist("measure_selectors"),
+        "x_column": values.get("x_column", ""),
+        "series_column": values.get("series_column", ""),
+        "aggregation": values.get("aggregation", ""),
+        "date_granularity": values.get("date_granularity", ""),
+        "filter_column": values.get("filter_column", ""),
+        "filter_mode": values.get("filter_mode", ""),
+        "filter_values": values.get("filter_values", ""),
+        "date_start": values.get("date_start", ""),
+        "date_end": values.get("date_end", ""),
+        "sort_by": values.get("sort_by", ""),
+        "sort_direction": values.get("sort_direction", ""),
+        "top_n": values.get("top_n", ""),
+        "scale": values.get("scale", ""),
+        "bin_count": values.get("bin_count", ""),
+        "include_in_report": values.get("include_in_report", ""),
+        "replaces_visualization_id": values.get(
+            "replaces_visualization_id", ""
+        ),
+    }
+
+
+def _default_visualization_form(profile: DatasetProfile) -> MultiDict[str, str]:
+    values = MultiDict[str, str]()
+    values["title"] = "Manual dataset visualization"
+    values["chart_type"] = "category_bar"
+    values["aggregation"] = "configured"
+    values["date_granularity"] = "month"
+    values["filter_mode"] = "include"
+    values["sort_by"] = "value"
+    values["sort_direction"] = "descending"
+    values["top_n"] = "10"
+    values["scale"] = "linear"
+    values["bin_count"] = "10"
+    values["include_in_report"] = "yes"
+    if profile.category_candidates:
+        values["x_column"] = profile.category_candidates[0]
+    return values
+
+
+def _visualization_form_from_artifact(
+    artifact: VisualizationArtifact,
+) -> MultiDict[str, str]:
+    values = spec_to_form(artifact)
+    form = MultiDict[str, str]()
+    for key, value in values.items():
+        if key == "measure_selectors" and isinstance(value, list):
+            form.setlist(key, [str(item) for item in value])
+        else:
+            form[key] = str(value) if value is not None else ""
+    return form
+
+
+def _build_dataset_context(
+    dataset_id: str,
+    profile: DatasetProfile,
+    *,
+    configuration: BusinessConfiguration | None,
+) -> DatasetContext:
+    view = _load_dataset_view_for_id(dataset_id)
+    visualizations: tuple[VisualizationArtifact, ...] = ()
+    evidence = None
+    if configuration is not None:
+        try:
+            visualizations = list_visualizations(
+                dataset_id=dataset_id,
+                visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+                profile=profile,
+                configuration=configuration,
+            )
+        except VisualizationError as error:
+            current_app.logger.info(
+                "Saved visualizations excluded from dataset context: id=%s reason=%s",
+                dataset_id,
+                error,
+            )
+        evidence_path = (
+            Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+        )
+        if evidence_path.is_file():
+            try:
+                evidence = load_evidence_payload(
+                    evidence_path,
+                    dataset_id=dataset_id,
+                )
+            except EvidenceError as error:
+                current_app.logger.info(
+                    "Evidence excluded from dataset context: id=%s reason=%s",
+                    dataset_id,
+                    error,
+                )
+    return build_dataset_context(
+        view,
+        profile=profile,
+        configuration=configuration,
+        saved_visualizations=visualizations,
+        evidence_payload=evidence,
+    )
+
+
+def _render_visualization(
+    artifact: VisualizationArtifact,
+    *,
+    artifact_json: str,
+    preview_token: str | None = None,
+):  # type: ignore[no-untyped-def]
+    return render_template(
+        "visualization.html",
+        artifact=artifact,
+        artifact_json=artifact_json,
+        preview_token=preview_token,
+    )
+
+
+def _send_visualization_chart(filename: str):  # type: ignore[no-untyped-def]
+    chart_path = Path(current_app.config["CHART_DIR"]) / filename
+    if not chart_path.is_file():
+        abort(404)
+    return send_from_directory(
+        Path(current_app.config["CHART_DIR"]),
+        filename,
+        mimetype="image/png",
+        conditional=True,
+        max_age=0,
     )
 
 

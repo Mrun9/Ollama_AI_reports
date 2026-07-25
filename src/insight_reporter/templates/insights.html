@@ -3,41 +3,144 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Deterministic Insights | AI Insight Reporter</title>
+    <title>Deterministic Evidence | AI Insight Reporter</title>
+    <style>
+      body { font-family: system-ui, sans-serif; line-height: 1.45; margin: 2rem; }
+      main { max-width: 1100px; margin: 0 auto; }
+      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1.5rem 0; padding: 1rem; }
+      dl { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr; gap: 0.35rem 1rem; }
+      dt { font-weight: 700; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
+      th, td { border: 1px solid #bbb; padding: 0.4rem 0.55rem; text-align: left; }
+      img { height: auto; max-width: 100%; }
+      pre { background: #f4f4f4; max-height: 32rem; overflow: auto; padding: 1rem; white-space: pre-wrap; }
+    </style>
   </head>
   <body>
     <main>
       <h1>Deterministic insights generated</h1>
       <p>
         {{ report.insights|length }} reproducible observations were generated with Python only.
-        Ollama was not used.
+        Ollama was not used for calculations, evidence, rankings, or charts.
       </p>
 
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">ID</th>
-            <th scope="col">Type</th>
-            <th scope="col">Metric</th>
-            <th scope="col">Records</th>
-            <th scope="col">Confidence</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for insight in report.insights %}
-            <tr>
-              <td>{{ insight.id }}</td>
-              <td>{{ insight.type }}</td>
-              <td>{{ insight.metric }}</td>
-              <td>{{ insight.record_count }}</td>
-              <td>{{ insight.confidence }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      {% if evidence %}
+        <p>
+          {{ evidence.records|length }} evidence records let a reviewer trace every observation
+          to its source and supporting values.
+        </p>
 
-      <h2>Evidence JSON</h2>
-      <pre>{{ report_json }}</pre>
+        {% for record in evidence.records|sort(attribute="ranking.rank") %}
+          <article id="{{ record.id }}">
+            <h2>#{{ record.ranking.rank }} — {{ record.insight_type }}</h2>
+            <dl>
+              <dt>Evidence ID</dt>
+              <dd>{{ record.id }}</dd>
+              <dt>Insight ID</dt>
+              <dd>{{ record.insight_id }}</dd>
+              <dt>KPI</dt>
+              <dd>{{ record.metric }} ({{ record.metric_id }})</dd>
+              <dt>Source</dt>
+              <dd>
+                {{ record.source.filename }} · {{ record.source.format|upper }}
+                {% if record.source.worksheet %} · worksheet {{ record.source.worksheet }}{% endif %}
+              </dd>
+              <dt>SHA-256</dt>
+              <dd>{{ record.source.sha256 }}</dd>
+              <dt>Columns</dt>
+              <dd>{{ record.source_columns|join(", ") if record.source_columns else "None" }}</dd>
+              <dt>Filters</dt>
+              <dd>{{ record.filters if record.filters else "None" }}</dd>
+              <dt>Periods</dt>
+              <dd>{{ record.periods|join(", ") if record.periods else "Not applicable" }}</dd>
+              <dt>Records analyzed</dt>
+              <dd>{{ record.record_count }}</dd>
+              <dt>Ranking scores</dt>
+              <dd>
+                impact {{ record.ranking.impact }},
+                confidence {{ record.ranking.confidence }},
+                relevance {{ record.ranking.relevance }},
+                combined {{ record.ranking.combined }}
+              </dd>
+            </dl>
+
+            <h3>Calculation</h3>
+            <p>{{ record.calculation_description }}</p>
+
+            {% if record.kpi_definition.metric_type == "derived" %}
+              <p>
+                <strong>Derived KPI formula:</strong>
+                {{ record.kpi_definition.formula_label }}
+                ({{ record.kpi_definition.calculation_level }} calculation;
+                {{ record.kpi_definition.aggregation }} aggregation)
+              </p>
+            {% endif %}
+
+            {% if record.chart %}
+              <figure>
+                <img
+                  src="{{ url_for('core.evidence_chart', dataset_id=evidence.dataset_id, evidence_id=record.id) }}"
+                  alt="{{ record.chart.alt_text }}"
+                >
+                <figcaption>
+                  {{ record.chart.title }} · generated from
+                  {{ record.chart.record_count }} supporting rows.
+                </figcaption>
+              </figure>
+            {% endif %}
+
+            <h3>Supporting data</h3>
+            {% if record.supporting_data %}
+              {% set headers = record.supporting_data[0].keys() %}
+              <table>
+                <thead>
+                  <tr>
+                    {% for header in headers %}
+                      <th scope="col">{{ header }}</th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in record.supporting_data %}
+                    <tr>
+                      {% for header in headers %}
+                        <td>{{ row.get(header) }}</td>
+                      {% endfor %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <p>No supporting rows were produced because this analysis was skipped safely.</p>
+            {% endif %}
+
+            {% if record.limitations %}
+              <h3>Limitations</h3>
+              <ul>
+                {% for limitation in record.limitations %}
+                  <li>{{ limitation }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </article>
+        {% endfor %}
+
+        <details>
+          <summary>Evidence JSON</summary>
+          <pre>{{ evidence_json }}</pre>
+        </details>
+      {% else %}
+        <p>
+          This older insight result has no Milestone 4A evidence artifact. Return to the
+          configuration and generate deterministic insights again.
+        </p>
+      {% endif %}
+
+      <details>
+        <summary>Deterministic insight JSON</summary>
+        <pre>{{ report_json }}</pre>
+      </details>
       <p>
         <a href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">
           Return to saved configuration

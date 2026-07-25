@@ -359,6 +359,14 @@
               required>{{ form_data.get('business_objective', '') if form_data else '' }}</textarea>
           </p>
 
+          {% with
+            context_target="business_objective",
+            context_target_label="objective",
+            context_insert_mode="prompt"
+          %}
+            {% include "_dataset_context.html" %}
+          {% endwith %}
+
           <button type="submit">Confirm configuration</button>
         </form>
       {% else %}

@@ -14,7 +14,10 @@ def _upload_business_csv(client: FlaskClient):  # type: ignore[no-untyped-def]
         b"customer_id,date,region,revenue\n"
         b"C-1,2026-01-01,North,100\n"
         b"C-2,2026-01-02,South,120\n"
-        b"C-3,2026-01-03,North,140\n"
+        b"C-3,2026-02-01,North,140\n"
+        b"C-4,2026-02-02,South,160\n"
+        b"C-5,2026-03-01,North,180\n"
+        b"C-6,2026-03-02,South,200\n"
     )
     return client.post(
         "/upload",
@@ -112,6 +115,19 @@ def test_deterministic_insights_are_generated_and_saved_without_ollama(
     assert payload["dataset_id"] == dataset_id
     assert payload["insights"]
     assert any(item["type"] == "benchmark_breach" for item in payload["insights"])
+    evidence_path = Path(app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    assert len(evidence["records"]) == len(payload["insights"])
+    chart_record = next(
+        record for record in evidence["records"] if record["chart"] is not None
+    )
+    chart = client.get(
+        f"/evidence/{dataset_id}/{chart_record['id']}/chart"
+    )
+    assert chart.status_code == 200
+    assert chart.mimetype == "image/png"
+    assert chart.data.startswith(b"\x89PNG\r\n\x1a\n")
+    assert client.get(f"/evidence/{dataset_id}/../../escape/chart").status_code == 404
 
 
 def test_tampered_selection_is_rejected_without_configuration_file(

@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Visualization Builder | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>Build a manual visualization</h1>
+      <p>
+        Select configured KPIs, supplementary numeric source columns, or record count.
+        Python validates the configuration and generates every plotted value.
+      </p>
+      <p>
+        Non-KPI selections are allowed for the final report, but they will be labelled as
+        supplementary visualizations rather than KPI evidence.
+      </p>
+
+      {% if error %}
+        <p role="alert"><strong>Visualization rejected:</strong> {{ error }}</p>
+      {% endif %}
+
+      <form method="post"
+        action="{{ url_for('core.preview_visualization', dataset_id=dataset_id) }}">
+        <input type="hidden" name="replaces_visualization_id"
+          value="{{ form_data.get('replaces_visualization_id', '') }}">
+
+        <p>
+          <label for="visualization-title">Chart title</label>
+          <input id="visualization-title" name="title" maxlength="120" required
+            value="{{ form_data.get('title', '') }}">
+        </p>
+
+        <p>
+          <label for="chart-type">Chart type</label>
+          <select id="chart-type" name="chart_type" required>
+            {% set chart_labels = {
+              "time_line": "Time-series line",
+              "category_bar": "Category bar",
+              "category_bar_horizontal": "Horizontal category bar",
+              "scatter": "Scatter plot",
+              "histogram": "Distribution histogram",
+              "box": "Box and outliers"
+            } %}
+            {% for chart_type in chart_types %}
+              <option value="{{ chart_type }}"
+                {% if form_data.get('chart_type') == chart_type %}selected{% endif %}>
+                {{ chart_labels[chart_type] }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <fieldset>
+          <legend>Measures (select one to five)</legend>
+          {% for metric in configuration.metrics %}
+            {% set selector = "metric:" ~ metric.metric_id %}
+            <label>
+              <input type="checkbox" name="measure_selectors" value="{{ selector }}"
+                {% if selector in form_data.getlist('measure_selectors') %}checked{% endif %}>
+              KPI: {{ metric.name }} ({{ metric.display_format }})
+            </label>
+          {% endfor %}
+          <label>
+            <input type="checkbox" name="measure_selectors" value="count:records"
+              {% if "count:records" in form_data.getlist('measure_selectors') %}checked{% endif %}>
+            Supplementary: record count
+          </label>
+          {% for column in numeric_columns %}
+            {% set selector = "column:" ~ column %}
+            <label>
+              <input type="checkbox" name="measure_selectors" value="{{ selector }}"
+                {% if selector in form_data.getlist('measure_selectors') %}checked{% endif %}>
+              Supplementary numeric column: {{ column }}
+            </label>
+          {% endfor %}
+        </fieldset>
+
+        <p>
+          <label for="x-column">X-axis or box-plot category</label>
+          <select id="x-column" name="x_column">
+            <option value="">Not applicable</option>
+            <optgroup label="Date columns">
+              {% for column in profile.date_candidates %}
+                <option value="{{ column }}"
+                  {% if form_data.get('x_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Category columns">
+              {% for column in profile.category_candidates %}
+                <option value="{{ column }}"
+                  {% if form_data.get('x_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Numeric columns for scatter plots">
+              {% for column in numeric_columns %}
+                <option value="{{ column }}"
+                  {% if form_data.get('x_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </optgroup>
+          </select>
+        </p>
+
+        <p>
+          <label for="series-column">Optional series/category colour</label>
+          <select id="series-column" name="series_column">
+            <option value="">No series</option>
+            {% for column in profile.category_candidates %}
+              <option value="{{ column }}"
+                {% if form_data.get('series_column') == column %}selected{% endif %}>
+                {{ column }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <p>
+          <label for="visualization-aggregation">Aggregation</label>
+          <select id="visualization-aggregation" name="aggregation" required>
+            {% for aggregation in aggregations %}
+              <option value="{{ aggregation }}"
+                {% if form_data.get('aggregation') == aggregation %}selected{% endif %}>
+                {{ "Use configured KPI aggregation" if aggregation == "configured" else aggregation }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+        <p>
+          Aggregate-formula KPIs always use their formula. The selection above applies to source,
+          supplementary, and row-derived measures.
+        </p>
+
+        <p>
+          <label for="date-granularity">Date granularity</label>
+          <select id="date-granularity" name="date_granularity" required>
+            {% for granularity in date_granularities %}
+              <option value="{{ granularity }}"
+                {% if form_data.get('date_granularity') == granularity %}selected{% endif %}>
+                {{ granularity }}
+              </option>
+            {% endfor %}
+          </select>
+        </p>
+
+        <fieldset>
+          <legend>Optional filters</legend>
+          <p>
+            <label for="filter-column">Category filter column</label>
+            <select id="filter-column" name="filter_column">
+              <option value="">No category filter</option>
+              {% for column in profile.category_candidates %}
+                <option value="{{ column }}"
+                  {% if form_data.get('filter_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+          <p>
+            <label for="filter-values">
+              Category values, one exact value per line
+            </label>
+            <textarea id="filter-values" name="filter_values">{{ form_data.get('filter_values', '') }}</textarea>
+          </p>
+          <p>
+            <label for="filter-mode">Category filter mode</label>
+            <select id="filter-mode" name="filter_mode">
+              {% for mode in filter_modes %}
+                <option value="{{ mode }}"
+                  {% if form_data.get('filter_mode') == mode %}selected{% endif %}>
+                  {{ mode }} listed values
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+          <p>
+            <label for="date-start">Start date</label>
+            <input id="date-start" name="date_start" type="date"
+              value="{{ form_data.get('date_start', '') }}">
+          </p>
+          <p>
+            <label for="date-end">End date</label>
+            <input id="date-end" name="date_end" type="date"
+              value="{{ form_data.get('date_end', '') }}">
+          </p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Display settings</legend>
+          <p>
+            <label for="sort-by">Sort categories by</label>
+            <select id="sort-by" name="sort_by">
+              <option value="value"
+                {% if form_data.get('sort_by') == 'value' %}selected{% endif %}>value</option>
+              <option value="label"
+                {% if form_data.get('sort_by') == 'label' %}selected{% endif %}>label</option>
+            </select>
+          </p>
+          <p>
+            <label for="sort-direction">Sort direction</label>
+            <select id="sort-direction" name="sort_direction">
+              <option value="descending"
+                {% if form_data.get('sort_direction') == 'descending' %}selected{% endif %}>
+                descending
+              </option>
+              <option value="ascending"
+                {% if form_data.get('sort_direction') == 'ascending' %}selected{% endif %}>
+                ascending
+              </option>
+            </select>
+          </p>
+          <p>
+            <label for="top-n">Top-N categories (1–50)</label>
+            <input id="top-n" name="top_n" type="number" min="1" max="50"
+              value="{{ form_data.get('top_n', '10') }}">
+          </p>
+          <p>
+            <label for="axis-scale">Value-axis scale</label>
+            <select id="axis-scale" name="scale">
+              {% for scale in scales %}
+                <option value="{{ scale }}"
+                  {% if form_data.get('scale') == scale %}selected{% endif %}>
+                  {{ scale }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+          <p>
+            <label for="bin-count">Histogram bins (5–50)</label>
+            <input id="bin-count" name="bin_count" type="number" min="5" max="50"
+              value="{{ form_data.get('bin_count', '10') }}">
+          </p>
+        </fieldset>
+
+        <p>
+          <label>
+            <input type="checkbox" name="include_in_report" value="yes"
+              {% if form_data.get('include_in_report') %}checked{% endif %}>
+            Include this visualization in the final report
+          </label>
+        </p>
+
+        <button type="submit">Generate validated preview</button>
+      </form>
+
+      <h2>Compatibility summary</h2>
+      <ul>
+        <li>Line: date x-axis; aggregate or row-level measures.</li>
+        <li>Bar: category x-axis; aggregate or row-level measures.</li>
+        <li>Scatter: numeric x-axis and exactly one row-level measure.</li>
+        <li>Histogram: exactly one row-level measure.</li>
+        <li>Box: exactly one row-level measure and optional category.</li>
+        <li>Multiple measures must have compatible display formats.</li>
+      </ul>
+
+      <p>
+        <a href="{{ url_for('core.saved_visualizations', dataset_id=dataset_id) }}">
+          View saved visualizations
+        </a>
+      </p>
+      <p>
+        <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
+          Return to saved configuration
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

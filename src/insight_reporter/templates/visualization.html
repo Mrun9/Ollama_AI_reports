@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ artifact.spec.title }} | AI Insight Reporter</title>
+    <style>
+      body { font-family: system-ui, sans-serif; line-height: 1.45; margin: 2rem; }
+      main { max-width: 1100px; margin: 0 auto; }
+      dl { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr; gap: 0.35rem 1rem; }
+      dt { font-weight: 700; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
+      th, td { border: 1px solid #bbb; padding: 0.4rem 0.55rem; text-align: left; }
+      img { height: auto; max-width: 100%; }
+      pre { background: #f4f4f4; max-height: 32rem; overflow: auto; padding: 1rem; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>{{ artifact.spec.title }}</h1>
+      {% if preview_token %}
+        <p><strong>Validated preview:</strong> save it to retain this visualization.</p>
+      {% else %}
+        <p>Saved visualization {{ artifact.visualization_id }}</p>
+      {% endif %}
+
+      {% if artifact.classification == "supplementary" %}
+        <p role="note">
+          <strong>Supplementary visualization:</strong>
+          this chart may be included in the report, but it is not a confirmed KPI,
+          deterministic insight, or evidence claim.
+        </p>
+      {% else %}
+        <p><strong>KPI visualization:</strong> every selected measure is a configured KPI.</p>
+      {% endif %}
+
+      {% if artifact.assistant %}
+        <section aria-labelledby="assistant-provenance-heading">
+          <h2 id="assistant-provenance-heading">Ollama-assisted setup</h2>
+          <dl>
+            <dt>Model</dt>
+            <dd>{{ artifact.assistant.model }}</dd>
+            <dt>User request</dt>
+            <dd>{{ artifact.assistant.user_request }}</dd>
+            <dt>Model confidence</dt>
+            <dd>{{ artifact.assistant.confidence }}</dd>
+            <dt>Why these settings</dt>
+            <dd>
+              <ul>
+                {% for reason in artifact.assistant.rationale %}
+                  <li>{{ reason }}</li>
+                {% endfor %}
+              </ul>
+            </dd>
+          </dl>
+          <p>
+            These are model-proposed settings. All columns, filters, calculations, and
+            chart data below were resolved and validated by Python.
+          </p>
+        </section>
+      {% endif %}
+
+      <dl>
+        <dt>Chart type</dt>
+        <dd>{{ artifact.spec.chart_type }}</dd>
+        <dt>Measures</dt>
+        <dd>{{ artifact.measures|map(attribute="label")|join(", ") }}</dd>
+        <dt>Source</dt>
+        <dd>
+          {{ artifact.source.filename }} · {{ artifact.source.format|upper }}
+          {% if artifact.source.worksheet %} · worksheet {{ artifact.source.worksheet }}{% endif %}
+        </dd>
+        <dt>SHA-256</dt>
+        <dd>{{ artifact.source.sha256 }}</dd>
+        <dt>Source columns</dt>
+        <dd>{{ artifact.source_columns|join(", ") or "Record count only" }}</dd>
+        <dt>Filtered records</dt>
+        <dd>{{ artifact.filtered_record_count }}</dd>
+        <dt>Include in final report</dt>
+        <dd>{{ "Yes" if artifact.spec.include_in_report else "No" }}</dd>
+      </dl>
+
+      <figure>
+        {% if preview_token %}
+          <img
+            src="{{ url_for('core.visualization_preview_chart', dataset_id=artifact.dataset_id, token=preview_token) }}"
+            alt="{{ artifact.chart.alt_text }}"
+          >
+        {% else %}
+          <img
+            src="{{ url_for('core.saved_visualization_chart', dataset_id=artifact.dataset_id, visualization_id=artifact.visualization_id) }}"
+            alt="{{ artifact.chart.alt_text }}"
+          >
+        {% endif %}
+        <figcaption>
+          {{ artifact.chart.title }} · {{ artifact.chart.record_count }} supporting rows.
+        </figcaption>
+      </figure>
+
+      <h2>Measure definitions</h2>
+      {% for measure in artifact.measures %}
+        <section>
+          <h3>{{ measure.label }}</h3>
+          <dl>
+            <dt>Role</dt>
+            <dd>{{ measure.role }}</dd>
+            <dt>Aggregation</dt>
+            <dd>{{ measure.effective_aggregation }}</dd>
+            <dt>Display format</dt>
+            <dd>{{ measure.display_format }}</dd>
+            {% if measure.formula %}
+              <dt>Formula</dt>
+              <dd>{{ measure.formula }}</dd>
+              <dt>Calculation level</dt>
+              <dd>{{ measure.calculation_level }}</dd>
+            {% endif %}
+          </dl>
+        </section>
+      {% endfor %}
+
+      <h2>Supporting data</h2>
+      {% if artifact.supporting_data %}
+        {% set headers = artifact.supporting_data[0].keys() %}
+        <table>
+          <thead>
+            <tr>
+              {% for header in headers %}
+                <th scope="col">{{ header }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in artifact.supporting_data %}
+              <tr>
+                {% for header in headers %}
+                  <td>{{ row.get(header) }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+
+      {% if preview_token %}
+        <form method="post"
+          action="{{ url_for('core.confirm_visualization', dataset_id=artifact.dataset_id, token=preview_token) }}">
+          <button type="submit">
+            {{ "Replace saved visualization" if artifact.spec.replaces_visualization_id else "Save visualization" }}
+          </button>
+        </form>
+      {% else %}
+        <p>
+          <a href="{{ url_for('core.visualization_builder', dataset_id=artifact.dataset_id, edit=artifact.visualization_id) }}">
+            Edit this visualization
+          </a>
+        </p>
+        <form method="post"
+          action="{{ url_for('core.regenerate_visualization', dataset_id=artifact.dataset_id, visualization_id=artifact.visualization_id) }}">
+          <button type="submit">Regenerate from retained source</button>
+        </form>
+      {% endif %}
+
+      <details>
+        <summary>Reproducible visualization JSON</summary>
+        <pre>{{ artifact_json }}</pre>
+      </details>
+
+      <p>
+        <a href="{{ url_for('core.saved_visualizations', dataset_id=artifact.dataset_id) }}">
+          View saved visualizations
+        </a>
+      </p>
+      <p>
+        <a href="{{ url_for('core.saved_configuration', dataset_id=artifact.dataset_id) }}">
+          Return to saved configuration
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

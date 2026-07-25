@@ -12,13 +12,14 @@ dependencies = [
     "Flask>=3.1,<4",
     "ollama>=0.6.2,<0.7",
     "openpyxl>=3.1.5,<4",
+    "matplotlib>=3.11,<4",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-insight_reporter = ["templates/*.html"]
+insight_reporter = ["templates/*.html", "static/*.js"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"

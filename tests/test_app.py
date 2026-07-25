@@ -45,6 +45,22 @@ def test_insight_directory_is_outside_static_directory(app: Flask) -> None:
     assert not insight_dir.is_relative_to(static_dir)
 
 
+def test_evidence_and_chart_directories_are_outside_static_directory(
+    app: Flask,
+) -> None:
+    static_dir = Path(app.static_folder).resolve()
+
+    for setting in (
+        "EVIDENCE_DIR",
+        "CHART_DIR",
+        "VISUALIZATION_DIR",
+        "VISUALIZATION_PREVIEW_DIR",
+    ):
+        directory = Path(app.config[setting]).resolve()
+        assert directory.is_dir()
+        assert not directory.is_relative_to(static_dir)
+
+
 def test_navigation_state_directory_is_outside_static_directory(app: Flask) -> None:
     state_dir = Path(app.config["NAVIGATION_STATE_DIR"]).resolve()
     static_dir = Path(app.static_folder or "").resolve()

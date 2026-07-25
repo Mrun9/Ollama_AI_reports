@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Saved Visualizations | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>Saved manual visualizations</h1>
+      <p>
+        KPI and supplementary visualizations are listed separately in their saved metadata.
+        Only charts marked for report inclusion should be considered by the final report builder.
+      </p>
+      <p>
+        <a href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
+          Build a manual visualization
+        </a>
+      </p>
+
+      {% if visualizations %}
+        <ul>
+          {% for artifact in visualizations %}
+            <li>
+              <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                {{ artifact.spec.title }}
+              </a>
+              — {{ artifact.classification }}
+              — {{ "included in report" if artifact.spec.include_in_report else "not included in report" }}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No manual visualizations have been saved for this dataset.</p>
+      {% endif %}
+
+      <p>
+        <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
+          Return to saved configuration
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

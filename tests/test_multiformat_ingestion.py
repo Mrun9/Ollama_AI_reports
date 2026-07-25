@@ -235,6 +235,16 @@ def test_multi_sheet_xlsx_requires_explicit_selection(
     assert configured.status_code == 200
     assert configuration["sources"][0]["format"] == "xlsx"
     assert configuration["sources"][0]["table_name"] == "Costs"
+    insights = client.post(f"/insights/{dataset_id}", follow_redirects=True)
+    evidence = json.loads(
+        (
+            Path(app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert insights.status_code == 200
+    assert evidence["sources"][0]["format"] == "xlsx"
+    assert evidence["sources"][0]["table_name"] == "Costs"
+    assert all(record["source"]["worksheet"] == "Costs" for record in evidence["records"])
 
 
 def test_unavailable_xlsx_sheet_is_rejected_without_path_injection(
@@ -366,10 +376,18 @@ def test_json_configuration_and_insights_remain_format_independent(
     assert configuration["sources"][0]["format"] == "json"
     assert configuration["sources"][0]["table_name"] is None
     assert b"period_change" in insights.data
-    evidence = json.loads(
+    insight_report = json.loads(
         (
             Path(app.config["INSIGHT_DIR"]) / f"{dataset_id}.json"
         ).read_text(encoding="utf-8")
     )
-    assert evidence["schema_version"] == 4
+    evidence = json.loads(
+        (
+            Path(app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert insight_report["schema_version"] == 4
+    assert insight_report["sources"][0]["format"] == "json"
+    assert evidence["schema_version"] == 1
     assert evidence["sources"][0]["format"] == "json"
+    assert all(record["source"]["format"] == "json" for record in evidence["records"])

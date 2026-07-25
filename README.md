@@ -5,10 +5,12 @@ evidence-grounded reports. Python will perform deterministic calculations, and a
 model provides optional configuration suggestions before later generating narrative text from
 verified evidence.
 
-The project currently implements **Milestone 3.7: Multi-format Dataset Ingestion**. It profiles one
+The project currently implements **Milestone 4B: Manual Visualization Builder**. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
-or derived KPIs; optionally asks local Ollama for advisory suggestions; and performs every KPI
-calculation and insight in Python.
+or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
+every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
+evidence; and lets users configure, review, and save validated KPI or supplementary charts for the
+final report.
 
 ## Current capabilities
 
@@ -63,11 +65,35 @@ calculation and insight in Python.
 - Pearson correlations labelled strictly as associations
 - Row-level target or benchmark breach counts and percentages
 - Explicit handling for small samples, missing dates, zero denominators, and constant columns
-- Reproducible evidence JSON under `instance/insights/`
+- Reproducible deterministic insight JSON under `instance/insights/`
+- One stable evidence ID and evidence record for every deterministic insight
+- Source filename, format, SHA-256 hash, and selected Excel worksheet in every evidence record
+- KPI definition, source columns, filters, periods, calculation description, and supporting table
+- Reproducible impact, confidence, relevance, combined-score, and rank values
+- Automatic time-trend, category-comparison, segment-contribution, IQR-distribution, and
+  missing-data charts
+- Randomized chart filenames and validated chart serving from non-public `instance/charts/`
+- Versioned evidence JSON under `instance/evidence/`
+- Evidence generation for CSV, JSON, XLSX, source KPIs, derived KPIs, and one-to-five KPI registries
+- Manual visualization builder with preview, save, reopen, edit, and regeneration flows
+- Report-selectable KPI visualizations and clearly labelled supplementary visualizations
+- Supplementary numeric-column and record-count measures that do not become configured KPIs
+- Time-series line, vertical/horizontal category bar, scatter, histogram, and box charts
+- Day, month, quarter, and year grouping for time-series visualizations
+- Structured date/category filters, include/exclude modes, sorting, Top-N, bin count, and scale
+- One-to-five compatible measures on line and category charts
+- Recalculation of aggregate-formula KPIs within each displayed period or category
+- Secure versioned visualization JSON under `instance/visualizations/`
+- Short-lived validated preview artifacts under `instance/visualization_previews/`
+- Stable dataset-context tokens for configured KPIs, numeric columns, categories, booleans, dates,
+  saved visualizations, and evidence
+- Dataset-context panels beside the formula editor and business-objective input, with safe insert
+  buttons
 - Localhost-only and debug-off defaults
 
-Ollama is optional: dataset upload, profiling, manual configuration, and deterministic insight
-generation continue to work without it.
+Ollama is optional: dataset upload, profiling, manual configuration, derived formulas,
+deterministic insights, automatic evidence, and the manual visualization builder continue to work
+without it.
 
 ## Setup with the existing Conda environment
 
@@ -108,7 +134,10 @@ formula-plus-configuration options, or **Build a derived KPI manually** to start
 Edit the formula or configuration fields and recalculate the Python preview before confirming it.
 The saved configuration page can change the primary KPI and each KPI's direction or benchmark.
 From the saved-configuration page, select **Generate deterministic insights** to run the Python-only
-engine and review its evidence JSON.
+engine and review the ranked evidence cards, supporting tables, charts, and JSON artifacts.
+Select **Build a manual visualization** to configure an additional chart from validated fields and
+settings. Previewed charts are not retained until explicitly saved. A saved supplementary chart may
+be included in the final report, but remains labelled as supplementary rather than KPI evidence.
 
 All form actions use POST/Redirect/GET. Dataset profiles, suggestion results, formula previews,
 saved configurations, validation messages, and insight reports therefore finish on stable GET URLs,
@@ -127,7 +156,11 @@ CSV / flat JSON / selected XLSX worksheet
                                               -> user confirmation
                                               -> derived KPI configuration
                                   -> Python deterministic insight engine
-                                  -> validated evidence JSON
+                                  -> deterministic insight JSON
+                                  -> ranked evidence records and Python charts
+                                  -> optional manual KPI/supplementary visualization
+                                  -> Python validation/calculation/chart preview
+                                  -> user-confirmed final-report inclusion
 ```
 
 Confirm the expected routes with:
@@ -145,6 +178,13 @@ GET   /dataset/<dataset_id>/sheet
 GET   /derived/<dataset_id>
 GET   /configuration/<dataset_id>
 GET   /insights/<dataset_id>
+GET   /evidence/<dataset_id>/<evidence_id>/chart
+GET   /visualizations/<dataset_id>
+GET   /visualizations/<dataset_id>/new
+GET   /visualizations/<dataset_id>/preview/<token>
+GET   /visualizations/<dataset_id>/preview/<token>/chart
+GET   /visualizations/<dataset_id>/<visualization_id>
+GET   /visualizations/<dataset_id>/<visualization_id>/chart
 GET   /health
 POST  /upload
 POST  /dataset/<dataset_id>/sheet
@@ -158,9 +198,15 @@ POST  /configuration/<dataset_id>/primary
 POST  /configuration/<dataset_id>/metric
 POST  /configuration/<dataset_id>/remove
 POST  /insights/<dataset_id>
+POST  /visualizations/<dataset_id>/preview
+POST  /visualizations/<dataset_id>/preview/<token>/save
+POST  /visualizations/<dataset_id>/<visualization_id>/regenerate
 ```
 
 ## Derived KPI rules
+
+New users should begin with the worked examples and decision guide in
+[Derived KPI Formula Guide](FORMULA_GUIDE.md).
 
 - Derived KPI suggestions are optional; the model is never forced to derive a KPI.
 - Ollama returns at most two derived options. Each can include an applicable date, categories,
@@ -191,6 +237,53 @@ POST  /insights/<dataset_id>
   analysis because their segment changes cannot be reconciled as additive contributions.
 - Every evidence report stores the derived formula, aggregation, display format, null policies, and
   actual source columns.
+
+## Automatic evidence and chart rules
+
+- Evidence IDs are deterministic hashes of immutable dataset and insight identity fields. Chart
+  filenames are separately randomized and never derived from uploaded filenames or labels.
+- Each deterministic insight has exactly one evidence record, including warnings and analyses that
+  were skipped safely.
+- Evidence records retain the safe internal source filename, format, full SHA-256 hash, and selected
+  worksheet for XLSX sources.
+- Supporting data comes from the deterministic insight output or from the exact row-level values
+  used by its Python calculation. Correlations include sufficient statistics that reproduce the
+  Pearson coefficient.
+- Impact, confidence, and relevance use documented Python scoring rules on a zero-to-one scale.
+  The combined score is `0.5 × impact + 0.3 × confidence + 0.2 × relevance`; rank ties use the
+  stable evidence ID.
+- Time trends visualize period/value evidence; category comparisons visualize segment rankings;
+  contribution charts visualize segment changes; box plots visualize the exact IQR input values;
+  and the missing-data overview uses profiled missing counts.
+- Empty or skipped results do not create placeholder or broken charts.
+- Matplotlib uses its non-interactive `Agg` backend. Chart labels have control characters removed,
+  math-text delimiters escaped, and length limited before rendering.
+- Charts and evidence are outside Flask's static directory. A chart is served only when its safe
+  basename is referenced by the requested dataset and evidence record.
+- Regenerating evidence atomically replaces its JSON and removes only the old chart files referenced
+  by the previous evidence artifact.
+
+## Visualization validation rules
+
+- A chart may use configured KPIs, non-constant numeric source columns, or record count.
+- A chart containing any unconfigured measure is stored as a `supplementary` visualization. It may
+  be selected for the final report but is not converted into a KPI, deterministic insight, or
+  evidence claim.
+- Time-series charts require a recognized date column. Category charts require a recognized
+  category column. Scatter plots require a numeric x-axis and exactly one row-level measure.
+- Histograms and box plots accept one source or row-derived measure. Aggregate-formula KPIs are
+  rejected for row-level charts because they do not have one value per source row.
+- Aggregate-formula KPIs are recalculated from the applicable rows in every period or category.
+- Multiple measures must share a display format. Dual-axis charts are deliberately unsupported.
+- Structured category filters may include or exclude up to 50 exact values. Date filters require
+  valid ISO start/end dates, Top-N is limited to 1–50, and series grouping is limited to 12 values.
+- Logarithmic scale is rejected when any plotted value is zero or negative and is not offered for
+  histogram or box charts.
+- Every preview and saved chart includes source hash/format/worksheet, measure definitions,
+  filters, axes, aggregation, supporting data, and a randomized chart filename.
+- Drafts use unguessable preview tokens and expire after 24 hours. Saved charts receive stable
+  `VIS-...` identifiers.
+- Manual visualization generation never calls Ollama.
 
 ## Deterministic calculation rules
 
@@ -259,7 +352,8 @@ data.
   loaded, so tampering is rejected.
 - Insight calculations never call Ollama and never delegate arithmetic to a language model.
 - Insight files are stored outside the static directory and contain source-column traceability.
-- Ollama receives column metadata, descriptive statistics, and candidate lists—not raw preview rows.
+- Ollama visualization assistance receives stable tokens, KPI definitions, descriptive statistics,
+  bounded category values, and date ranges—not raw preview rows, free-text cells, or source rows.
 - Column names are treated as untrusted data in the prompt and model output is treated as untrusted.
 - Structured output is validated again in Python before suggestions are displayed.
 - The model-facing JSON grammar stays simple for `llama3.2` while restricting KPI,
