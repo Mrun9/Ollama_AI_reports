@@ -388,6 +388,10 @@ def test_json_configuration_and_insights_remain_format_independent(
     )
     assert insight_report["schema_version"] == 4
     assert insight_report["sources"][0]["format"] == "json"
-    assert evidence["schema_version"] == 1
+    assert evidence["schema_version"] == 2
+    assert all(
+        isinstance(record["observation"], dict)
+        for record in evidence["records"]
+    )
     assert evidence["sources"][0]["format"] == "json"
     assert all(record["source"]["format"] == "json" for record in evidence["records"])

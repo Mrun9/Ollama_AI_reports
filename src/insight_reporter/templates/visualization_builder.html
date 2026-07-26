@@ -33,6 +33,18 @@
         </p>
 
         <p>
+          <label for="visualization-purpose">
+            What question should this visualization answer? (optional)
+          </label>
+          <textarea id="visualization-purpose" name="purpose"
+            maxlength="500">{{ form_data.get('purpose', '') }}</textarea>
+        </p>
+        <p>
+          This purpose is retained as user-provided context for report narration.
+          Python still calculates every factual observation.
+        </p>
+
+        <p>
           <label for="chart-type">Chart type</label>
           <select id="chart-type" name="chart_type" required>
             {% set chart_labels = {

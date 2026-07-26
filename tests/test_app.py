@@ -55,6 +55,9 @@ def test_evidence_and_chart_directories_are_outside_static_directory(
         "CHART_DIR",
         "VISUALIZATION_DIR",
         "VISUALIZATION_PREVIEW_DIR",
+        "REPORT_CONFIGURATION_DIR",
+        "REPORT_PACKAGE_DIR",
+        "GENERATED_REPORT_DIR",
     ):
         directory = Path(app.config[setting]).resolve()
         assert directory.is_dir()

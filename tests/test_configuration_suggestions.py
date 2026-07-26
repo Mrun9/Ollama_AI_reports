@@ -179,6 +179,54 @@ def test_prompt_contains_profile_metadata_but_not_raw_rows(tmp_path: Path) -> No
     assert call["think"] is False
 
 
+def test_existing_kpis_are_excluded_from_repeat_suggestions(
+    tmp_path: Path,
+) -> None:
+    profile = _profile(tmp_path)
+    client = FakeChatClient(
+        _response(
+            _suggestion(
+                title="Cost control",
+                primary_kpi="cost",
+                kpi_direction="lower",
+            )
+        )
+    )
+
+    batch = generate_configuration_suggestions(
+        profile,
+        dataset_id="a" * 32,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=5,
+        client=client,
+        excluded_kpis=("revenue",),
+    )
+
+    assert batch.suggestions[0].primary_kpi == "cost"
+    call = client.calls[0]
+    kpi_enum = call["format"]["properties"]["suggestions"]["items"][
+        "properties"
+    ]["primary_kpi"]["enum"]
+    assert kpi_enum == ["cost"]
+    profile_payload = json.loads(
+        call["messages"][1]["content"].split("\n", maxsplit=1)[1]
+    )
+    assert profile_payload["candidate_columns"]["kpi"] == ["cost"]
+
+
+def test_excluded_kpi_returned_by_model_is_rejected(tmp_path: Path) -> None:
+    profile = _profile(tmp_path)
+
+    with pytest.raises(ConfigurationSuggestionError, match="no valid"):
+        parse_suggestion_response(
+            _response(_suggestion(primary_kpi="revenue")),
+            profile=profile,
+            dataset_id="a" * 32,
+            allowed_kpis=("cost",),
+        )
+
+
 def test_profile_summary_never_contains_preview_rows(tmp_path: Path) -> None:
     summary = build_profile_summary(_profile(tmp_path))
 

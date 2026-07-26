@@ -21,6 +21,9 @@ def app(tmp_path: Path) -> Flask:
             "EVIDENCE_DIR": tmp_path / "evidence",
             "CHART_DIR": tmp_path / "charts",
             "VISUALIZATION_DIR": tmp_path / "visualizations",
+            "REPORT_CONFIGURATION_DIR": tmp_path / "report_configurations",
+            "REPORT_PACKAGE_DIR": tmp_path / "report_packages",
+            "GENERATED_REPORT_DIR": tmp_path / "generated_reports",
             "VISUALIZATION_PREVIEW_DIR": tmp_path / "visualization_previews",
             "NAVIGATION_STATE_DIR": tmp_path / "navigation_state",
         }

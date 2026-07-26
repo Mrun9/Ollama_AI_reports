@@ -64,6 +64,7 @@ def _dataset(tmp_path: Path):  # type: ignore[no-untyped-def]
 def _spec(**overrides):  # type: ignore[no-untyped-def]
     values = {
         "title": "Stress by segment",
+        "purpose": "Compare average stress by segment.",
         "chart_type": "category_bar",
         "measure_selectors": ["column:stress"],
         "x_column": "segment",
@@ -408,6 +409,8 @@ def test_saved_visualization_is_reopened_and_tampering_is_rejected(
     )
 
     assert loaded.to_dict() == saved.to_dict()
+    assert loaded.schema_version == 3
+    assert loaded.spec.purpose == "Compare average stress by segment."
     assert list_visualizations(
         dataset_id="a" * 32,
         visualization_dir=tmp_path / "visualizations",
@@ -426,6 +429,38 @@ def test_saved_visualization_is_reopened_and_tampering_is_rejected(
             profile=profile,
             configuration=configuration,
         )
+
+
+def test_version_two_visualization_without_purpose_remains_loadable(
+    tmp_path: Path,
+) -> None:
+    _path, view, profile, configuration = _dataset(tmp_path)
+    artifact = build_visualization(
+        view,
+        profile=profile,
+        configuration=configuration,
+        spec=_spec(),
+        chart_dir=tmp_path / "charts",
+    )
+    saved, path = save_visualization(
+        artifact,
+        visualization_dir=tmp_path / "visualizations",
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["schema_version"] = 2
+    payload["spec"].pop("purpose")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_visualization(
+        saved.visualization_id or "",
+        dataset_id="a" * 32,
+        visualization_dir=tmp_path / "visualizations",
+        profile=profile,
+        configuration=configuration,
+    )
+
+    assert loaded.schema_version == 2
+    assert loaded.spec.purpose == ""
 
 
 @pytest.mark.parametrize("source_format", ["json", "xlsx"])
@@ -525,6 +560,7 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     builder = client.get(f"/visualizations/{dataset_id}/new")
     assert builder.status_code == 200
     assert b"Build a manual visualization" in builder.data
+    assert b"What question should this visualization answer?" in builder.data
     assert b"Supplementary numeric column: stress" in builder.data
     assert b"Describe what you want to visualize" not in builder.data
     assert b"Generate validated preview with Ollama" not in builder.data
@@ -537,6 +573,7 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
         f"/visualizations/{dataset_id}/preview",
         data={
             "title": "<script>Stress by segment</script>",
+            "purpose": "<script>Which segment is highest?</script>",
             "chart_type": "category_bar",
             "measure_selectors": ["column:stress"],
             "x_column": "segment",
@@ -562,6 +599,7 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     assert preview.status_code == 200
     assert b"Supplementary visualization" in preview.data
     assert b"&lt;script&gt;Stress by segment&lt;/script&gt;" in preview.data
+    assert b"&lt;script&gt;Which segment is highest?&lt;/script&gt;" in preview.data
     assert b"<script>Stress by segment</script>" not in preview.data
     token = preview_url.rsplit("/", 1)[-1]
     chart = client.get(f"{preview_url}/chart")
@@ -588,6 +626,10 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     payload = json.loads(saved_path.read_text(encoding="utf-8"))
     old_chart = Path(app.config["CHART_DIR"]) / payload["chart"]["filename"]
     assert payload["classification"] == "supplementary"
+    assert payload["schema_version"] == 3
+    assert payload["spec"]["purpose"] == (
+        "<script>Which segment is highest?</script>"
+    )
     assert old_chart.is_file()
 
     regenerated = client.post(
@@ -609,6 +651,7 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
         f"/visualizations/{dataset_id}/preview",
         data={
             "title": "Updated stress chart",
+            "purpose": "Compare the updated segment values.",
             "chart_type": "category_bar_horizontal",
             "measure_selectors": ["column:stress"],
             "x_column": "segment",

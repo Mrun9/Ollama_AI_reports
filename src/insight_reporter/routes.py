@@ -22,6 +22,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from insight_reporter.business_config import (
     BusinessConfiguration,
     BusinessConfigurationError,
+    add_source_metrics,
     load_business_configuration,
     remove_metric,
     save_business_configuration,
@@ -89,6 +90,32 @@ from insight_reporter.navigation_state import (
     NavigationStateError,
     load_navigation_state,
     save_navigation_state,
+)
+from insight_reporter.report_configuration import (
+    AUDIENCES,
+    DETAIL_LEVELS,
+    TONES,
+    ReportConfiguration,
+    ReportConfigurationError,
+    artifact_sha256,
+    load_report_configuration,
+    save_report_configuration,
+    validate_report_configuration,
+)
+from insight_reporter.report_generation_package import (
+    ReportGenerationPackage,
+    ReportGenerationPackageError,
+    build_report_generation_package,
+    save_report_generation_package,
+)
+from insight_reporter.report_narration import (
+    NarratedEvidence,
+    NarrativeStory,
+    ReportNarrationError,
+    generate_narrated_report,
+    latest_generated_report,
+    load_generated_report,
+    save_generated_report,
 )
 from insight_reporter.visualization_builder import (
     AGGREGATIONS,
@@ -318,14 +345,21 @@ def suggest_configurations(dataset_id: str):  # type: ignore[no-untyped-def]
         )
 
     try:
+        existing = _load_existing_configuration(dataset_id, profile)
+        excluded_kpis = (
+            tuple(metric.name for metric in existing.metrics)
+            if existing is not None
+            else ()
+        )
         batch = generate_configuration_suggestions(
             profile,
             dataset_id=dataset_id,
             model=str(current_app.config["OLLAMA_MODEL"]),
             host=str(current_app.config["OLLAMA_HOST"]),
             timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+            excluded_kpis=excluded_kpis,
         )
-    except ConfigurationSuggestionError as error:
+    except (BusinessConfigurationError, ConfigurationSuggestionError) as error:
         current_app.logger.warning(
             "Local configuration suggestions unavailable: id=%s model=%s reason=%s",
             dataset_id,
@@ -356,16 +390,49 @@ def review_suggestion(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        validate_business_configuration(
-            profile,
-            dataset_id=dataset_id,
-            primary_kpi=request.form.get("primary_kpi", ""),
-            kpi_direction=request.form.get("kpi_direction", ""),
-            date_column=request.form.get("date_column", ""),
-            category_columns=request.form.getlist("category_columns"),
-            target_or_benchmark=request.form.get("target_or_benchmark", ""),
-            business_objective=request.form.get("business_objective", ""),
-        )
+        existing = _load_existing_configuration(dataset_id, profile)
+        if existing is None:
+            validate_business_configuration(
+                profile,
+                dataset_id=dataset_id,
+                primary_kpi=request.form.get("primary_kpi", ""),
+                kpi_direction=request.form.get("kpi_direction", ""),
+                date_column=request.form.get("date_column", ""),
+                category_columns=request.form.getlist("category_columns"),
+                target_or_benchmark=request.form.get(
+                    "target_or_benchmark", ""
+                ),
+                business_objective=request.form.get(
+                    "business_objective", ""
+                ),
+            )
+            form_data = request.form.copy()
+            notice = (
+                "AI suggestion loaded. Review or edit every field before "
+                "confirming."
+            )
+        else:
+            form_data = request.form.copy()
+            suggested_kpi = request.form.get("primary_kpi", "")
+            add_source_metrics(
+                profile,
+                dataset_id=dataset_id,
+                source_columns=[suggested_kpi],
+                kpi_direction=request.form.get("kpi_direction", ""),
+                existing_configuration=existing,
+                date_column=request.form.get("date_column", ""),
+                category_columns=request.form.getlist("category_columns"),
+                business_objective=request.form.get(
+                    "business_objective", ""
+                ),
+            )
+            form_data.pop("primary_kpi", None)
+            form_data.setlist("source_kpis", [suggested_kpi])
+            form_data["context_submitted"] = "yes"
+            notice = (
+                "Additional KPI suggestion loaded. Review the KPI and shared "
+                "analysis context before adding it."
+            )
     except BusinessConfigurationError as error:
         return _redirect_profile_state(
             dataset_id,
@@ -376,8 +443,8 @@ def review_suggestion(dataset_id: str):  # type: ignore[no-untyped-def]
 
     return _redirect_profile_state(
         dataset_id,
-        form_data=_form_to_state(request.form),
-        review_notice="AI suggestion loaded. Review or edit every field before confirming.",
+        form_data=_form_to_state(form_data),
+        review_notice=notice,
     )
 
 
@@ -487,18 +554,49 @@ def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = validate_business_configuration(
-            profile,
-            dataset_id=dataset_id,
-            primary_kpi=request.form.get("primary_kpi", ""),
-            kpi_direction=request.form.get("kpi_direction", ""),
-            date_column=request.form.get("date_column", ""),
-            category_columns=request.form.getlist("category_columns"),
-            target_or_benchmark=request.form.get("target_or_benchmark", ""),
-            business_objective=request.form.get("business_objective", ""),
-            secondary_kpis=request.form.getlist("secondary_kpis"),
-            existing_configuration=_load_existing_configuration(dataset_id, profile),
-        )
+        existing = _load_existing_configuration(dataset_id, profile)
+        if existing is None:
+            configuration = validate_business_configuration(
+                profile,
+                dataset_id=dataset_id,
+                primary_kpi=request.form.get("primary_kpi", ""),
+                kpi_direction=request.form.get("kpi_direction", ""),
+                date_column=request.form.get("date_column", ""),
+                category_columns=request.form.getlist("category_columns"),
+                target_or_benchmark=request.form.get(
+                    "target_or_benchmark", ""
+                ),
+                business_objective=request.form.get(
+                    "business_objective", ""
+                ),
+                secondary_kpis=request.form.getlist("secondary_kpis"),
+            )
+        else:
+            context_submitted = (
+                request.form.get("context_submitted", "") == "yes"
+            )
+            configuration = add_source_metrics(
+                profile,
+                dataset_id=dataset_id,
+                source_columns=request.form.getlist("source_kpis"),
+                kpi_direction=request.form.get("kpi_direction", ""),
+                existing_configuration=existing,
+                date_column=(
+                    request.form.get("date_column", "")
+                    if context_submitted
+                    else None
+                ),
+                category_columns=(
+                    request.form.getlist("category_columns")
+                    if context_submitted
+                    else None
+                ),
+                business_objective=(
+                    request.form.get("business_objective", "")
+                    if context_submitted
+                    else None
+                ),
+            )
     except BusinessConfigurationError as error:
         return _redirect_profile_state(
             dataset_id,
@@ -673,6 +771,446 @@ def remove_configured_metric(dataset_id: str):  # type: ignore[no-untyped-def]
     return redirect(
         url_for("core.saved_configuration", dataset_id=dataset_id), code=303
     )
+
+
+@core.get("/reports/<dataset_id>/configure")
+def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Display the deterministic Milestone 5A report selection form."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration, evidence, visualizations = _report_assets(
+            dataset_id,
+            profile,
+        )
+    except (BusinessConfigurationError, EvidenceError, VisualizationError) as error:
+        abort(422, description=str(error))
+    state = _load_view_state("report_configuration", dataset_id=dataset_id)
+    form_data = _form_from_state(state.get("form_data"))
+    stale_notice = None
+    if form_data is None:
+        report_path = _report_configuration_path(dataset_id)
+        if report_path.is_file():
+            try:
+                saved = load_report_configuration(
+                    report_path,
+                    configuration=configuration,
+                    evidence_payload=evidence,
+                    visualizations=visualizations,
+                )
+                form_data = _report_form_from_configuration(saved)
+            except ReportConfigurationError as error:
+                stale_notice = str(error)
+        if form_data is None:
+            form_data = _default_report_form(
+                configuration,
+                evidence_payload=evidence,
+                visualizations=visualizations,
+            )
+    return (
+        render_template(
+            "report_configuration_form.html",
+            dataset_id=dataset_id,
+            configuration=configuration,
+            evidence_records=_sorted_evidence_records(evidence),
+            visualizations=visualizations,
+            visualization_metric_requirements={
+                artifact.visualization_id: tuple(
+                    measure.selector.removeprefix("metric:")
+                    for measure in artifact.measures
+                    if measure.selector.startswith("metric:")
+                )
+                for artifact in visualizations
+                if artifact.visualization_id is not None
+            },
+            metric_names={
+                metric.metric_id: metric.name
+                for metric in configuration.metrics
+            },
+            form_data=form_data,
+            audiences=AUDIENCES,
+            tones=TONES,
+            detail_levels=DETAIL_LEVELS,
+            report_error=_state_text(state, "report_error"),
+            stale_notice=stale_notice,
+        ),
+        _state_status(state),
+    )
+
+
+@core.post("/reports/<dataset_id>/configure")
+def configure_report(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Validate and atomically retain one report selection."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration, evidence, visualizations = _report_assets(
+            dataset_id,
+            profile,
+        )
+        report = validate_report_configuration(
+            configuration,
+            evidence_payload=evidence,
+            visualizations=visualizations,
+            title=request.form.get("title", ""),
+            business_objective=request.form.get(
+                "business_objective", ""
+            ),
+            audience=request.form.get("audience", ""),
+            tone=request.form.get("tone", ""),
+            detail_level=request.form.get("detail_level", ""),
+            user_notes=request.form.get("user_notes", ""),
+            include_evidence_appendix=request.form.get(
+                "include_evidence_appendix", ""
+            ),
+            selected_metric_ids=request.form.getlist(
+                "selected_metric_ids"
+            ),
+            selected_evidence_ids=request.form.getlist(
+                "selected_evidence_ids"
+            ),
+            selected_visualization_ids=request.form.getlist(
+                "selected_visualization_ids"
+            ),
+        )
+        package = build_report_generation_package(
+            report,
+            configuration=configuration,
+            evidence_payload=evidence,
+            visualizations=visualizations,
+        )
+        save_report_configuration(
+            report,
+            report_configuration_dir=Path(
+                current_app.config["REPORT_CONFIGURATION_DIR"]
+            ),
+        )
+        save_report_generation_package(
+            package,
+            package_dir=Path(current_app.config["REPORT_PACKAGE_DIR"]),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        VisualizationError,
+    ) as error:
+        return _redirect_with_state(
+            "core.report_configuration_form",
+            {
+                "view": "report_configuration",
+                "dataset_id": dataset_id,
+                "form_data": _form_to_state(request.form),
+                "report_error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+        )
+    return redirect(
+        url_for("core.saved_report_configuration", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.get("/reports/<dataset_id>/configuration")
+def saved_report_configuration(
+    dataset_id: str,
+):  # type: ignore[no-untyped-def]
+    """Review a saved report selection from a stable, revalidated GET URL."""
+
+    profile = _load_profile(dataset_id)
+    path = _report_configuration_path(dataset_id)
+    if not path.is_file():
+        abort(404)
+    try:
+        configuration, evidence, visualizations = _report_assets(
+            dataset_id,
+            profile,
+        )
+        report = load_report_configuration(
+            path,
+            configuration=configuration,
+            evidence_payload=evidence,
+            visualizations=visualizations,
+        )
+        package = build_report_generation_package(
+            report,
+            configuration=configuration,
+            evidence_payload=evidence,
+            visualizations=visualizations,
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        VisualizationError,
+    ) as error:
+        abort(422, description=str(error))
+    metric_by_id = {
+        metric.metric_id: metric for metric in configuration.metrics
+    }
+    evidence_by_id = {
+        str(record.get("id")): record
+        for record in _sorted_evidence_records(evidence)
+    }
+    visualization_by_id = {
+        artifact.visualization_id: artifact
+        for artifact in visualizations
+        if artifact.visualization_id is not None
+    }
+    state = _load_view_state(
+        "saved_report_configuration",
+        dataset_id=dataset_id,
+    )
+    try:
+        latest_report = latest_generated_report(
+            dataset_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+            expected_package_sha256=artifact_sha256(package.to_dict()),
+        )
+    except ReportNarrationError:
+        latest_report = None
+    return (
+        render_template(
+            "report_configuration.html",
+            report=report,
+            selected_metrics=tuple(
+                metric_by_id[metric_id]
+                for metric_id in report.selected_metric_ids
+            ),
+            selected_evidence=tuple(
+                evidence_by_id[evidence_id]
+                for evidence_id in report.selected_evidence_ids
+            ),
+            selected_visualizations=tuple(
+                visualization_by_id[visualization_id]
+                for visualization_id in report.selected_visualization_ids
+            ),
+            report_package=package,
+            report_json=json.dumps(
+                report.to_dict(),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+            narration_error=_state_text(state, "narration_error"),
+            narration_model=current_app.config["OLLAMA_MODEL"],
+            latest_generated_report=latest_report,
+        ),
+        _state_status(state),
+    )
+
+
+@core.get("/reports/<dataset_id>/package")
+def report_generation_package(
+    dataset_id: str,
+):  # type: ignore[no-untyped-def]
+    """Return the current bounded report-synthesis input as JSON."""
+
+    profile = _load_profile(dataset_id)
+    path = _report_configuration_path(dataset_id)
+    if not path.is_file():
+        abort(404)
+    try:
+        configuration, evidence, visualizations = _report_assets(
+            dataset_id,
+            profile,
+        )
+        report = load_report_configuration(
+            path,
+            configuration=configuration,
+            evidence_payload=evidence,
+            visualizations=visualizations,
+        )
+        package = build_report_generation_package(
+            report,
+            configuration=configuration,
+            evidence_payload=evidence,
+            visualizations=visualizations,
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        VisualizationError,
+    ) as error:
+        abort(422, description=str(error))
+    return jsonify(package.to_dict())
+
+
+@core.post("/reports/<dataset_id>/generate")
+def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Generate and retain one evidence-grounded report version."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        _configuration, _evidence, _visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+        draft = generate_narrated_report(
+            package,
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=int(
+                current_app.config["OLLAMA_TIMEOUT_SECONDS"]
+            ),
+        )
+        generated, _path = save_generated_report(
+            draft,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        ReportNarrationError,
+        VisualizationError,
+    ) as error:
+        current_app.logger.warning(
+            "Evidence-grounded report generation unavailable: id=%s "
+            "model=%s reason=%s",
+            dataset_id,
+            current_app.config["OLLAMA_MODEL"],
+            error,
+        )
+        return _redirect_with_state(
+            "core.saved_report_configuration",
+            {
+                "view": "saved_report_configuration",
+                "dataset_id": dataset_id,
+                "narration_error": str(error),
+                "status_code": 503,
+            },
+            dataset_id=dataset_id,
+        )
+    return redirect(
+        url_for(
+            "core.generated_report",
+            dataset_id=dataset_id,
+            report_id=generated.report_id,
+        ),
+        code=303,
+    )
+
+
+@core.get("/reports/<dataset_id>/generated")
+def latest_report(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Open the latest generated report bound to the current package."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        _configuration, _evidence, _visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+        report = latest_generated_report(
+            dataset_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+            expected_package_sha256=artifact_sha256(package.to_dict()),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        ReportNarrationError,
+        VisualizationError,
+    ) as error:
+        abort(422, description=str(error))
+    if report is None:
+        abort(404)
+    return redirect(
+        url_for(
+            "core.generated_report",
+            dataset_id=dataset_id,
+            report_id=report.report_id,
+        ),
+        code=303,
+    )
+
+
+@core.get("/reports/<dataset_id>/generated/<report_id>")
+def generated_report(
+    dataset_id: str,
+    report_id: str,
+):  # type: ignore[no-untyped-def]
+    """Render one immutable, source-bound generated report."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        _configuration, _evidence, _visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+        report = load_generated_report(
+            dataset_id,
+            report_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+            expected_package_sha256=artifact_sha256(package.to_dict()),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        ReportNarrationError,
+        VisualizationError,
+    ) as error:
+        abort(422, description=str(error))
+    return render_template(
+        "generated_report.html",
+        report=report,
+        story_sections=_generated_story_sections(report.stories),
+        sections=_generated_report_sections(report.items),
+        report_json=json.dumps(
+            report.to_dict(),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+    )
+
+
+@core.get("/reports/<dataset_id>/generated/<report_id>/json")
+def generated_report_json(
+    dataset_id: str,
+    report_id: str,
+):  # type: ignore[no-untyped-def]
+    """Return one current generated report artifact as JSON."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        _configuration, _evidence, _visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+        report = load_generated_report(
+            dataset_id,
+            report_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+            expected_package_sha256=artifact_sha256(package.to_dict()),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        ReportNarrationError,
+        VisualizationError,
+    ) as error:
+        abort(422, description=str(error))
+    return jsonify(report.to_dict())
 
 
 @core.get("/visualizations/<dataset_id>")
@@ -1247,6 +1785,20 @@ def _render_profile(
             review_notice=review_notice,
             suggestion_model=current_app.config["OLLAMA_MODEL"],
             dataset_context=dataset_context,
+            configuration=configuration,
+            unconfigured_source_columns=(
+                tuple(
+                    candidate
+                    for candidate in profile.kpi_candidates
+                    if candidate.casefold()
+                    not in {
+                        metric.name.casefold()
+                        for metric in configuration.metrics
+                    }
+                )
+                if configuration is not None
+                else profile.kpi_candidates
+            ),
         ),
         status_code,
     )
@@ -1322,6 +1874,7 @@ def _render_derived_editor(
             configuration_error=configuration_error,
             form_data=form_data,
             dataset_context=dataset_context,
+            configuration=configuration,
         ),
         status_code,
     )
@@ -1351,6 +1904,7 @@ def _visualization_request_values(
 ) -> dict[str, object]:
     return {
         "title": values.get("title", ""),
+        "purpose": values.get("purpose", ""),
         "chart_type": values.get("chart_type", ""),
         "measure_selectors": values.getlist("measure_selectors"),
         "x_column": values.get("x_column", ""),
@@ -1377,6 +1931,7 @@ def _visualization_request_values(
 def _default_visualization_form(profile: DatasetProfile) -> MultiDict[str, str]:
     values = MultiDict[str, str]()
     values["title"] = "Manual dataset visualization"
+    values["purpose"] = ""
     values["chart_type"] = "category_bar"
     values["aggregation"] = "configured"
     values["date_granularity"] = "month"
@@ -1449,6 +2004,213 @@ def _build_dataset_context(
         configuration=configuration,
         saved_visualizations=visualizations,
         evidence_payload=evidence,
+    )
+
+
+def _report_assets(
+    dataset_id: str,
+    profile: DatasetProfile,
+) -> tuple[
+    BusinessConfiguration,
+    dict[str, object] | None,
+    tuple[VisualizationArtifact, ...],
+]:
+    configuration = _require_configuration(dataset_id, profile)
+    evidence_path = (
+        Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+    )
+    evidence = (
+        load_evidence_payload(evidence_path, dataset_id=dataset_id)
+        if evidence_path.is_file()
+        else None
+    )
+    visualizations = list_visualizations(
+        dataset_id=dataset_id,
+        visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        profile=profile,
+        configuration=configuration,
+    )
+    return configuration, evidence, visualizations
+
+
+def _current_report_package(
+    dataset_id: str,
+    profile: DatasetProfile,
+) -> tuple[
+    BusinessConfiguration,
+    dict[str, object] | None,
+    tuple[VisualizationArtifact, ...],
+    ReportGenerationPackage,
+]:
+    configuration, evidence, visualizations = _report_assets(
+        dataset_id,
+        profile,
+    )
+    report_path = _report_configuration_path(dataset_id)
+    if not report_path.is_file():
+        raise ReportConfigurationError(
+            "Configure and save report content before generating narration."
+        )
+    report = load_report_configuration(
+        report_path,
+        configuration=configuration,
+        evidence_payload=evidence,
+        visualizations=visualizations,
+    )
+    package = build_report_generation_package(
+        report,
+        configuration=configuration,
+        evidence_payload=evidence,
+        visualizations=visualizations,
+    )
+    return configuration, evidence, visualizations, package
+
+
+def _generated_report_sections(
+    items: tuple[NarratedEvidence, ...],
+) -> tuple[tuple[str, tuple[NarratedEvidence, ...]], ...]:
+    labels = (
+        ("key_findings", "Key findings"),
+        ("trends_and_changes", "Trends and changes"),
+        ("segment_analysis", "Segment analysis"),
+        ("anomalies", "Anomalies"),
+        ("associations", "Associations"),
+        ("benchmarks", "Benchmarks and thresholds"),
+        ("manual_visualizations", "Manual visualizations"),
+        (
+            "data_quality_and_limitations",
+            "Data quality and analysis limitations",
+        ),
+    )
+    return tuple(
+        (
+            label,
+            tuple(item for item in items if item.section == section),
+        )
+        for section, label in labels
+        if any(item.section == section for item in items)
+    )
+
+
+def _generated_story_sections(
+    stories: tuple[NarrativeStory, ...],
+) -> tuple[tuple[str, tuple[NarrativeStory, ...]], ...]:
+    labels = (
+        ("key_findings", "Key findings"),
+        ("trends_and_changes", "Trends and changes"),
+        ("segment_analysis", "Segment analysis"),
+        ("anomalies", "Anomalies"),
+        ("associations", "Associations"),
+        ("benchmarks", "Benchmarks and thresholds"),
+        ("manual_visualizations", "Manual visualizations"),
+        (
+            "data_quality_and_limitations",
+            "Data quality and analysis limitations",
+        ),
+    )
+    return tuple(
+        (
+            label,
+            tuple(
+                story for story in stories if story.section == section
+            ),
+        )
+        for section, label in labels
+        if any(story.section == section for story in stories)
+    )
+
+
+def _sorted_evidence_records(
+    evidence_payload: dict[str, object] | None,
+) -> tuple[dict[str, object], ...]:
+    if evidence_payload is None:
+        return ()
+    records = evidence_payload.get("records")
+    if not isinstance(records, list) or not all(
+        isinstance(record, dict) for record in records
+    ):
+        raise EvidenceError("Saved evidence records are invalid.")
+
+    def sort_key(record: dict[str, object]) -> tuple[int, str]:
+        ranking = record.get("ranking")
+        rank = ranking.get("rank") if isinstance(ranking, dict) else None
+        return (
+            rank if isinstance(rank, int) and rank > 0 else 1_000_000,
+            str(record.get("id", "")),
+        )
+
+    return tuple(sorted(records, key=sort_key))
+
+
+def _default_report_form(
+    configuration: BusinessConfiguration,
+    *,
+    evidence_payload: dict[str, object] | None,
+    visualizations: tuple[VisualizationArtifact, ...],
+) -> MultiDict[str, str]:
+    values = MultiDict[str, str]()
+    values["title"] = f"{configuration.primary_metric.name} insight report"
+    values["business_objective"] = configuration.business_objective
+    values["audience"] = "management"
+    values["tone"] = "professional"
+    values["detail_level"] = "standard"
+    values["include_evidence_appendix"] = "yes"
+    values.setlist(
+        "selected_metric_ids",
+        [metric.metric_id for metric in configuration.metrics],
+    )
+    values.setlist(
+        "selected_evidence_ids",
+        [
+            str(record["id"])
+            for record in _sorted_evidence_records(evidence_payload)
+            if isinstance(record.get("id"), str)
+        ],
+    )
+    values.setlist(
+        "selected_visualization_ids",
+        [
+            artifact.visualization_id
+            for artifact in visualizations
+            if artifact.visualization_id is not None
+            and artifact.spec.include_in_report
+        ],
+    )
+    return values
+
+
+def _report_form_from_configuration(
+    report: ReportConfiguration,
+) -> MultiDict[str, str]:
+    values = MultiDict[str, str]()
+    values["title"] = report.title
+    values["business_objective"] = report.business_objective
+    values["audience"] = report.audience
+    values["tone"] = report.tone
+    values["detail_level"] = report.detail_level
+    values["user_notes"] = report.user_notes
+    values["include_evidence_appendix"] = (
+        "yes" if report.include_evidence_appendix else ""
+    )
+    values.setlist(
+        "selected_metric_ids",
+        list(report.selected_metric_ids),
+    )
+    values.setlist(
+        "selected_evidence_ids",
+        list(report.selected_evidence_ids),
+    )
+    values.setlist(
+        "selected_visualization_ids",
+        list(report.selected_visualization_ids),
+    )
+    return values
+
+
+def _report_configuration_path(dataset_id: str) -> Path:
+    return (
+        Path(current_app.config["REPORT_CONFIGURATION_DIR"])
+        / f"{dataset_id}.json"
     )
 
 

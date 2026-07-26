@@ -89,6 +89,7 @@ class EvidenceRecord:
     filters: dict[str, object]
     periods: tuple[str, ...]
     calculation_description: str
+    observation: dict[str, object]
     supporting_data: tuple[dict[str, object], ...]
     record_count: int
     ranking: EvidenceRanking
@@ -108,6 +109,7 @@ class EvidenceRecord:
             "filters": self.filters,
             "periods": list(self.periods),
             "calculation_description": self.calculation_description,
+            "observation": self.observation,
             "supporting_data": list(self.supporting_data),
             "record_count": self.record_count,
             "ranking": self.ranking.to_dict(),
@@ -187,6 +189,7 @@ def generate_evidence(
                 filters=dict(insight.filters),
                 periods=_periods(insight),
                 calculation_description=_calculation_description(insight),
+                observation=dict(insight.observation),
                 supporting_data=supporting_data,
                 record_count=insight.record_count,
                 ranking=_ranking(insight),
@@ -202,7 +205,7 @@ def generate_evidence(
         raise EvidenceError("Evidence generation failed safely.") from error
 
     return EvidenceReport(
-        schema_version=1,
+        schema_version=2,
         dataset_id=insight_report.dataset_id,
         sources=tuple(source.to_dict() for source in view.sources),
         records=_assign_ranks(records),
@@ -245,7 +248,7 @@ def load_evidence_payload(path: Path, *, dataset_id: str) -> dict[str, object]:
         raise EvidenceError("Saved evidence report is unreadable.") from error
     if (
         not isinstance(payload, dict)
-        or payload.get("schema_version") != 1
+        or payload.get("schema_version") not in {1, 2}
         or payload.get("dataset_id") != dataset_id
         or not isinstance(payload.get("records"), list)
     ):

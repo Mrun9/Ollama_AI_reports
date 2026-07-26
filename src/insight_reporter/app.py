@@ -32,6 +32,18 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     app.config.setdefault("CHART_DIR", Path(app.instance_path) / "charts")
     app.config.setdefault("VISUALIZATION_DIR", Path(app.instance_path) / "visualizations")
     app.config.setdefault(
+        "REPORT_CONFIGURATION_DIR",
+        Path(app.instance_path) / "report_configurations",
+    )
+    app.config.setdefault(
+        "REPORT_PACKAGE_DIR",
+        Path(app.instance_path) / "report_packages",
+    )
+    app.config.setdefault(
+        "GENERATED_REPORT_DIR",
+        Path(app.instance_path) / "generated_reports",
+    )
+    app.config.setdefault(
         "VISUALIZATION_PREVIEW_DIR",
         Path(app.instance_path) / "visualization_previews",
     )
@@ -42,6 +54,12 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     Path(app.config["EVIDENCE_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(app.config["CHART_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(app.config["VISUALIZATION_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["REPORT_CONFIGURATION_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["REPORT_PACKAGE_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["GENERATED_REPORT_DIR"]).mkdir(
+        parents=True,
+        exist_ok=True,
+    )
     Path(app.config["VISUALIZATION_PREVIEW_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(app.config["NAVIGATION_STATE_DIR"]).mkdir(parents=True, exist_ok=True)
 

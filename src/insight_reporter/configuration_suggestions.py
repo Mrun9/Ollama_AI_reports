@@ -111,11 +111,19 @@ def _response_schema(
 SUGGESTION_RESPONSE_SCHEMA = _response_schema()
 
 
-def build_suggestion_response_schema(profile: DatasetProfile) -> dict[str, Any]:
+def build_suggestion_response_schema(
+    profile: DatasetProfile,
+    *,
+    kpi_candidates: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     """Constrain model selections to candidates produced by deterministic profiling."""
 
     return _response_schema(
-        kpi_candidates=profile.kpi_candidates,
+        kpi_candidates=(
+            profile.kpi_candidates
+            if kpi_candidates is None
+            else kpi_candidates
+        ),
         date_candidates=profile.date_candidates,
         category_candidates=profile.category_candidates,
     )
@@ -167,10 +175,25 @@ def generate_configuration_suggestions(
     host: str,
     timeout_seconds: int,
     client: _ChatClient | None = None,
+    excluded_kpis: tuple[str, ...] = (),
 ) -> SuggestionBatch:
     """Ask local Ollama for structured suggestions, then validate every field."""
 
-    profile_summary = build_profile_summary(profile)
+    excluded = {name.casefold() for name in excluded_kpis}
+    available_kpis = tuple(
+        candidate
+        for candidate in profile.kpi_candidates
+        if candidate.casefold() not in excluded
+    )
+    if not available_kpis:
+        raise ConfigurationSuggestionError(
+            "No unconfigured source KPI candidates remain; "
+            "use the derived KPI builder for a formula-based KPI."
+        )
+    profile_summary = build_profile_summary(
+        profile,
+        kpi_candidates=available_kpis,
+    )
     profile_json = json.dumps(profile_summary, ensure_ascii=False, sort_keys=True)
     if len(profile_json) > _MAX_PROFILE_JSON_CHARACTERS:
         raise ConfigurationSuggestionError(
@@ -193,7 +216,10 @@ def generate_configuration_suggestions(
                     ),
                 },
             ],
-            format=build_suggestion_response_schema(profile),
+            format=build_suggestion_response_schema(
+                profile,
+                kpi_candidates=available_kpis,
+            ),
             stream=False,
             think=False,
             options={"temperature": 0},
@@ -205,10 +231,19 @@ def generate_configuration_suggestions(
         ) from error
 
     content = _response_content(response)
-    return parse_suggestion_response(content, profile=profile, dataset_id=dataset_id)
+    return parse_suggestion_response(
+        content,
+        profile=profile,
+        dataset_id=dataset_id,
+        allowed_kpis=available_kpis,
+    )
 
 
-def build_profile_summary(profile: DatasetProfile) -> dict[str, object]:
+def build_profile_summary(
+    profile: DatasetProfile,
+    *,
+    kpi_candidates: tuple[str, ...] | None = None,
+) -> dict[str, object]:
     """Return model context without any raw or preview row values."""
 
     columns: list[dict[str, object]] = []
@@ -233,7 +268,11 @@ def build_profile_summary(profile: DatasetProfile) -> dict[str, object]:
         "column_count": profile.column_count,
         "columns": columns,
         "candidate_columns": {
-            "kpi": list(profile.kpi_candidates),
+            "kpi": list(
+                profile.kpi_candidates
+                if kpi_candidates is None
+                else kpi_candidates
+            ),
             "date": list(profile.date_candidates),
             "category": list(profile.category_candidates),
         },
@@ -241,7 +280,11 @@ def build_profile_summary(profile: DatasetProfile) -> dict[str, object]:
 
 
 def parse_suggestion_response(
-    content: str, *, profile: DatasetProfile, dataset_id: str
+    content: str,
+    *,
+    profile: DatasetProfile,
+    dataset_id: str,
+    allowed_kpis: tuple[str, ...] | None = None,
 ) -> SuggestionBatch:
     """Parse untrusted model JSON and retain only valid suggestions."""
 
@@ -271,6 +314,7 @@ def parse_suggestion_response(
                 raw_suggestion,
                 profile=profile,
                 dataset_id=dataset_id,
+                allowed_kpis=allowed_kpis,
             )
         except (BusinessConfigurationError, ConfigurationSuggestionError):
             rejected_count += 1
@@ -297,7 +341,11 @@ def parse_suggestion_response(
 
 
 def _validate_suggestion(
-    value: object, *, profile: DatasetProfile, dataset_id: str
+    value: object,
+    *,
+    profile: DatasetProfile,
+    dataset_id: str,
+    allowed_kpis: tuple[str, ...] | None,
 ) -> ConfigurationSuggestion:
     if not isinstance(value, dict):
         raise ConfigurationSuggestionError("Suggestion must be an object.")
@@ -306,6 +354,10 @@ def _validate_suggestion(
 
     title = _bounded_string(value.get("title"), field="title", maximum=120)
     primary_kpi = _bounded_string(value.get("primary_kpi"), field="KPI", maximum=500)
+    if allowed_kpis is not None and primary_kpi not in allowed_kpis:
+        raise ConfigurationSuggestionError(
+            "Suggestion KPI is already configured or unavailable."
+        )
     kpi_direction = _bounded_string(
         value.get("kpi_direction"), field="direction", maximum=20
     )

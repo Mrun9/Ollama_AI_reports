@@ -142,6 +142,11 @@
         <pre>{{ report_json }}</pre>
       </details>
       <p>
+        <a href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">
+          Configure report content
+        </a>
+      </p>
+      <p>
         <a href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">
           Return to saved configuration
         </a>

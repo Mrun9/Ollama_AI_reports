@@ -1,16 +1,18 @@
 # AI Insight Reporter
 
 AI Insight Reporter is a local-first proof of concept for turning raw business data into
-evidence-grounded reports. Python will perform deterministic calculations, and a local Ollama
-model provides optional configuration suggestions before later generating narrative text from
-verified evidence.
+evidence-grounded reports. Python performs deterministic calculations, and a local Ollama model
+provides optional configuration suggestions and evidence-grounded narrative wording from verified
+Python facts.
 
-The project currently implements **Milestone 4B: Manual Visualization Builder**. It profiles one
+The project currently implements **Milestone 5B.1: Multi-evidence report synthesis**. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
 or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
 every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
-evidence; and lets users configure, review, and save validated KPI or supplementary charts for the
-final report.
+evidence; lets users configure, review, and save validated KPI or supplementary charts; and creates
+a source-bound selection of the trusted KPIs, evidence, and charts. It then builds a bounded,
+evidence-only JSON package and uses local Ollama for structured stories whose numerical claims are
+validated against Python facts.
 
 ## Current capabilities
 
@@ -36,6 +38,10 @@ final report.
 - Constant and empty-column flags
 - Candidate KPI, date, and category columns
 - Optional one-to-three configuration suggestions from local Ollama
+- Repeatable additional source-KPI suggestions after the primary configuration is saved
+- Configured KPI names excluded from later Ollama suggestion schemas and profile context
+- User-reviewed AI prefilling of KPI direction and shared date, category, and business-objective
+  context
 - JSON-schema-constrained model responses at temperature zero
 - Python rejection of hallucinated columns, extra fields, duplicate suggestions, and invented targets
 - Model confidence and evidence-based rationale displayed as advisory information
@@ -53,6 +59,8 @@ final report.
   dimensions, benchmark, direction, role, and objective
 - User confirmation before a derived KPI becomes active
 - One-to-five KPI registry with one primary KPI and optional additional KPIs
+- Additive source-KPI flow that retains the current primary and all existing KPIs
+- Duplicate derived-KPI names rejected instead of silently replacing an existing KPI
 - Per-KPI direction and optional target or benchmark
 - Ability to change the primary KPI or remove a non-primary KPI
 - Version-4 source-table-aware configuration with backward-compatible version-1 through version-3
@@ -85,15 +93,58 @@ final report.
 - Recalculation of aggregate-formula KPIs within each displayed period or category
 - Secure versioned visualization JSON under `instance/visualizations/`
 - Short-lived validated preview artifacts under `instance/visualization_previews/`
+- Optional user-provided question or purpose stored with each manual visualization
+- Deterministic evidence for saved manual charts, including displayed extrema, period change,
+  descriptive distribution statistics, or Pearson association as applicable
+- Stable `MVE-...` manual-visualization evidence IDs and bounded supporting tables
 - Stable dataset-context tokens for configured KPIs, numeric columns, categories, booleans, dates,
   saved visualizations, and evidence
 - Dataset-context panels beside the formula editor and business-objective input, with safe insert
   buttons
+- Report title, objective, audience, tone, detail level, and user-labelled notes
+- Selection of one or more configured KPIs, ranked evidence records, and report-included manual
+  charts
+- KPI-to-evidence checkbox synchronization: selecting a KPI selects its evidence, while
+  deselecting it clears and disables those records
+- KPI-visualization dependency synchronization: selecting a KPI chart selects its required KPI,
+  while deselecting that KPI removes incompatible chart selections
+- Validation that selected evidence belongs to a selected KPI and selected charts remain
+  reproducible
+- Canonical fingerprints for the business configuration, selected evidence, and chart definitions
+- Atomic report-configuration JSON under `instance/report_configurations/`
+- Bounded report-generation packages under `instance/report_packages/`
+- Exact deterministic observation payloads retained in evidence schema version 2
+- Report packages containing selected KPI definitions, source metadata, deterministic evidence,
+  and manual-visualization evidence without raw dataset rows or row identifiers
+- User notes explicitly labelled as user-provided rather than deterministic evidence
+- Stable report-configuration review and edit pages
+- Read-only JSON endpoint for reviewing the exact future model input
+- Explicit recovery instructions when regenerated evidence or edited charts make a saved report
+  selection stale
+- Stable `STY-...` story packs containing up to three related evidence records for one metric
+- Structured headline, observation, interpretation, follow-up, and caveat fields
+- Deterministic fallback stories when an individual model response fails validation
+- A bounded catalogue of exact Python-verified display values, qualitative labels, and allowed
+  fact-reference paths in model prompts
+- Structured responses restricted to the exact supplied `STY-...`, `EVD-...`, and `MVE-...` scope
+- Per-story rejection of rounded, invented, or unreferenced numbers; unsupported percentage or
+  currency symbols; number words; unknown references; modified story scope; or causal language
+- Ollama-selected fact references resolved into exact numerical claims by Python
+- Python-rendered facts kept separate from explicitly labelled AI-written interpretation
+- Calculation, source columns, fact path, and evidence ID shown for each resolved numerical claim
+- KPI-only report generation without an Ollama call when no evidence was selected
+- Immutable versioned report JSON under `instance/generated_reports/`
+- Escaped HTML reports with KPI overview, evidence sections, limitations, source traceability,
+  and an optional evidence appendix
+- Regeneration that appends a version and preserves the last valid report on Ollama failure
+- Current-package fingerprint validation whenever a generated report is reopened
+- KPI-only report configuration when no optional evidence or manual chart is selected
+- No Ollama call during report configuration
 - Localhost-only and debug-off defaults
 
-Ollama is optional: dataset upload, profiling, manual configuration, derived formulas,
-deterministic insights, automatic evidence, and the manual visualization builder continue to work
-without it.
+Ollama is optional for upload, profiling, manual configuration, formulas, deterministic insights,
+automatic evidence, manual charts, and KPI-only reports. AI-written report commentary requires the
+configured local model.
 
 ## Setup with the existing Conda environment
 
@@ -136,8 +187,31 @@ The saved configuration page can change the primary KPI and each KPI's direction
 From the saved-configuration page, select **Generate deterministic insights** to run the Python-only
 engine and review the ranked evidence cards, supporting tables, charts, and JSON artifacts.
 Select **Build a manual visualization** to configure an additional chart from validated fields and
-settings. Previewed charts are not retained until explicitly saved. A saved supplementary chart may
-be included in the final report, but remains labelled as supplementary rather than KPI evidence.
+settings. The optional question field records what the user wants the chart to answer. Previewed
+charts are not retained until explicitly saved. A saved supplementary chart may be included in the
+final report, but remains labelled as supplementary rather than KPI evidence.
+Select **Configure report content** to choose the KPIs, deterministic evidence, and report-included
+manual charts that should be handed to later report generation. The saved review page displays the
+source metadata and artifact fingerprints that bind those selections to their current definitions.
+It also displays the Python-generated evidence for selected manual charts and links to the exact
+bounded JSON package prepared for Milestone 5B.1.
+Select **Generate report with llama3.2:latest** to create an immutable HTML report version.
+Related evidence is grouped into concise report stories. Python independently resolves every
+displayed numerical claim, while Ollama interpretation is separately labelled. Regenerating creates
+a new version and does not replace the previous valid report.
+
+After the first configuration is saved, return to the dataset profile and select
+**Suggest additional source KPIs** to request another set from Ollama. Already configured KPI names
+are excluded. Reviewing an option prefills its KPI direction plus the shared date, category, and
+business-objective context; nothing is saved until the user confirms it. The date, categories, and
+business objective are currently dataset-wide settings, so changing them applies to every
+configured KPI.
+
+Report configuration and package creation do not call Ollama. Milestone 5B.1 calls Ollama only after
+the user explicitly selects **Generate report**. User notes remain explicitly labelled as
+user-provided context. If an older evidence artifact is present,
+regenerate deterministic insights once before saving a report so the exact observation fields are
+available to the package.
 
 All form actions use POST/Redirect/GET. Dataset profiles, suggestion results, formula previews,
 saved configurations, validation messages, and insight reports therefore finish on stable GET URLs,
@@ -161,6 +235,14 @@ CSV / flat JSON / selected XLSX worksheet
                                   -> optional manual KPI/supplementary visualization
                                   -> Python validation/calculation/chart preview
                                   -> user-confirmed final-report inclusion
+                                  -> validated report-content selection
+                                  -> fingerprinted report-configuration JSON
+                                  -> deterministic manual-chart evidence
+                                  -> bounded report-generation JSON package
+                                  -> bounded multi-evidence story packs
+                                  -> structured Ollama synthesis
+                                  -> Python validation and fact/story separation
+                                  -> immutable generated-report JSON and HTML
 ```
 
 Confirm the expected routes with:
@@ -185,6 +267,12 @@ GET   /visualizations/<dataset_id>/preview/<token>
 GET   /visualizations/<dataset_id>/preview/<token>/chart
 GET   /visualizations/<dataset_id>/<visualization_id>
 GET   /visualizations/<dataset_id>/<visualization_id>/chart
+GET   /reports/<dataset_id>/configure
+GET   /reports/<dataset_id>/configuration
+GET   /reports/<dataset_id>/package
+GET   /reports/<dataset_id>/generated
+GET   /reports/<dataset_id>/generated/<report_id>
+GET   /reports/<dataset_id>/generated/<report_id>/json
 GET   /health
 POST  /upload
 POST  /dataset/<dataset_id>/sheet
@@ -201,6 +289,8 @@ POST  /insights/<dataset_id>
 POST  /visualizations/<dataset_id>/preview
 POST  /visualizations/<dataset_id>/preview/<token>/save
 POST  /visualizations/<dataset_id>/<visualization_id>/regenerate
+POST  /reports/<dataset_id>/configure
+POST  /reports/<dataset_id>/generate
 ```
 
 ## Derived KPI rules
@@ -281,9 +371,89 @@ New users should begin with the worked examples and decision guide in
   histogram or box charts.
 - Every preview and saved chart includes source hash/format/worksheet, measure definitions,
   filters, axes, aggregation, supporting data, and a randomized chart filename.
+- The optional visualization question is stored as user-provided context, escaped when displayed,
+  and limited to 500 characters.
+- Report readiness derives chart observations in Python from the saved supporting data. It never
+  asks Ollama to interpret a manual chart.
+- Manual-chart evidence is descriptive only: category and distribution facts do not imply causes,
+  while scatter correlation is explicitly labelled as association rather than causation.
 - Drafts use unguessable preview tokens and expire after 24 hours. Saved charts receive stable
   `VIS-...` identifiers.
 - Manual visualization generation never calls Ollama.
+
+## Report configuration and readiness rules
+
+Milestone 5A.1 creates the reproducible selection and model-input contract consumed by Milestone
+5B.
+
+- At least one configured KPI must be selected. Up to five configured KPIs are supported.
+- Evidence is optional. KPI evidence must belong to a selected KPI; dataset-wide evidence such as
+  missing-data warnings may be selected independently.
+- In the report form, selecting a KPI initially selects all of its deterministic evidence.
+  Individual evidence records may then be removed; deselecting the KPI clears all of them.
+- Manual charts are optional and must already be saved with **Include in report** enabled.
+- Charts that use configured KPI measures must use KPIs selected for the report.
+- Each manual chart displays its required report KPIs. Selecting the chart selects those KPIs;
+  deselecting a required KPI clears the incompatible chart.
+- Supplementary charts remain explicitly labelled and cannot become KPI evidence.
+- Title, objective, audience, tone, detail level, and user notes are validated and escaped when
+  displayed.
+- The current business configuration, selected evidence artifact, and each selected visualization
+  definition receive canonical SHA-256 fingerprints.
+- Source filename, format, hash, and selected Excel worksheet metadata remain attached.
+- Saved report configurations are fully revalidated when opened. Changed source artifacts are
+  rejected as stale instead of silently producing a different report.
+- A stale report is recovered by returning to report configuration, regenerating deterministic
+  insights/evidence when those changed, reopening or regenerating changed manual visualizations,
+  and then reviewing and saving the selection again.
+- Every selected deterministic evidence record contributes its exact Python observation object.
+  Evidence created before schema version 2 must be regenerated rather than inferred from a chart or
+  supporting table.
+- Every selected manual visualization receives stable deterministic evidence derived from its
+  validated chart specification and supporting data.
+- The package is bounded to 50 evidence records, 12 supporting rows per deterministic evidence
+  record, and 20 manual visualizations. Any omitted selected IDs are listed explicitly.
+- Raw dataset rows, internal row numbers, identifier columns, and free-text source values are not
+  included in the report-generation package.
+- The package declares that all numbers come from Python, causal claims are prohibited, and unknown
+  evidence or visualization IDs are prohibited.
+- `GET /reports/<dataset_id>/package` exposes the exact current package for review after the saved
+  configuration and all fingerprints pass validation.
+- Saving is atomic, uses the server-generated dataset ID, and stores JSON outside Flask's static
+  directory.
+
+## Evidence-grounded narration rules
+
+- The model never receives raw source rows or deterministic supporting tables.
+- Up to 10 high-priority evidence records are grouped by metric into at most five stable story
+  packs. Each story pack contains at most three related evidence records, with capacity reserved
+  for up to two selected manual visualizations.
+- Qualitative facts omit numeric leaves, while each evidence descriptor exposes at most three
+  Python-calculated fact references with an exact display value and label.
+- The model receives qualitative labels, calculation descriptions, limitations, report objective,
+  audience, tone, and detail level. All supplied text remains untrusted data.
+- The JSON schema requires one headline, finding, interpretation, follow-up, caveat, and bounded
+  fact-reference list for the exact story ID.
+- A story may select up to four facts across its related evidence records. Narrative fields may
+  quote only their exact display values. Python checks every numeric token and rejects rounding,
+  calculations, invented values, dates, evidence IDs, common number words, unsupported units, and
+  causal language. Percentage signs are allowed only for percentage-labelled facts; correlations
+  remain associations.
+- Python verifies that every selected fact belongs to the story pack, resolves the original value
+  independently, and displays the claim beside its evidence ID.
+- Python copies the original observation object into the generated report and renders it separately
+  in the collapsible evidence appendix. Ollama cannot edit an observation or resolved fact value.
+- Each resolved claim exposes its evidence ID, fact path, exact value, calculation description, and
+  source columns so the appendix explains how the number was produced.
+- With no selected evidence, a KPI-only report is generated without calling Ollama.
+- An invalid model story is replaced by a deterministic summary. Other stories and every Python
+  fact remain in the generated report.
+- Connection or persistence failures occur before saving a new version and never delete or
+  overwrite an existing valid report.
+- Generated reports are immutable versioned artifacts and reopen only while their source-package
+  fingerprint matches the current configuration and evidence.
+- HTML values are escaped, user notes remain labelled as user-provided, and model wording remains
+  labelled as AI-written interpretation.
 
 ## Deterministic calculation rules
 
@@ -323,8 +493,8 @@ The application reads these optional process environment variables:
 | `APP_MAX_CSV_ROWS` | `5000` | Maximum data rows for every supported format |
 | `APP_MAX_CSV_COLUMNS` | `200` | Maximum columns for every supported format |
 | `APP_CSV_PREVIEW_ROWS` | `5` | Rows displayed after validation |
-| `APP_OLLAMA_MODEL` | `llama3.2:latest` | Local model used only for suggestions |
-| `APP_OLLAMA_TIMEOUT_SECONDS` | `120` | Local suggestion request timeout |
+| `APP_OLLAMA_MODEL` | `llama3.2:latest` | Local model used for suggestions and report commentary |
+| `APP_OLLAMA_TIMEOUT_SECONDS` | `120` | Local Ollama request timeout |
 
 The `APP_MAX_CSV_ROWS`, `APP_MAX_CSV_COLUMNS`, and `APP_CSV_PREVIEW_ROWS` names are retained for
 backward compatibility, but their limits now apply equally to CSV, JSON, and XLSX inputs.
@@ -352,9 +522,16 @@ data.
   loaded, so tampering is rejected.
 - Insight calculations never call Ollama and never delegate arithmetic to a language model.
 - Insight files are stored outside the static directory and contain source-column traceability.
-- Ollama visualization assistance receives stable tokens, KPI definitions, descriptive statistics,
-  bounded category values, and date ranges—not raw preview rows, free-text cells, or source rows.
-- Column names are treated as untrusted data in the prompt and model output is treated as untrusted.
+- Report selections are checked against current KPI, evidence, visualization, and source metadata
+  before saving and whenever reopened.
+- Report configuration files are stored outside the static directory and use only server-generated
+  dataset IDs as filenames.
+- Report-generation packages are stored outside the static directory and contain bounded evidence
+  instead of raw source rows.
+- Generated reports are stored outside the static directory using server-generated dataset and
+  report IDs.
+- Column names are treated as untrusted data in the remaining configuration-suggestion prompts,
+  and model output is treated as untrusted.
 - Structured output is validated again in Python before suggestions are displayed.
 - The model-facing JSON grammar stays simple for `llama3.2` while restricting KPI,
   date, and category selections to profiler candidates; Python enforces the remaining constraints.
@@ -390,6 +567,8 @@ This standalone check is optional and separate from the Flask workflow.
   code.
 - AI confidence is advisory and not a calibrated probability.
 - Suggestions depend on the semantic ability of the selected local model and require human review.
-- No Ollama report narration in the Flask workflow
-- No report generation
+- No PDF or DOCX export yet
+- Generated synthesis remains intentionally bounded to related evidence packs rather than
+  unconstrained long-form model prose
+- A report configuration currently belongs to one dataset scope
 - No persistent history, authentication, or multi-user isolation

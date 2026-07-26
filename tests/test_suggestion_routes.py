@@ -1,8 +1,11 @@
 """Plain-HTML route tests for optional AI-assisted configuration."""
 
 import io
+import json
 import re
+from pathlib import Path
 
+from flask import Flask
 from flask.testing import FlaskClient
 
 from insight_reporter.configuration_suggestions import (
@@ -35,17 +38,37 @@ def _dataset_id(response_data: bytes) -> str:
 
 def _suggestion(
     objective: str = "Evaluate regional revenue performance.",
+    *,
+    primary_kpi: str = "revenue",
+    direction: str = "higher",
+    title: str = "Revenue performance",
 ) -> ConfigurationSuggestion:
     return ConfigurationSuggestion(
-        title="Revenue performance",
-        primary_kpi="revenue",
-        kpi_direction="higher",
+        title=title,
+        primary_kpi=primary_kpi,
+        kpi_direction=direction,
         date_column="date",
         category_columns=("region",),
         target_or_benchmark=None,
         business_objective=objective,
         confidence=0.91,
         rationale=("Revenue is a valid numeric KPI candidate.",),
+    )
+
+
+def _upload_multi_kpi(client: FlaskClient):  # type: ignore[no-untyped-def]
+    content = (
+        b"date,region,revenue,cost,units\n"
+        b"2026-01-01,North,100,60,4\n"
+        b"2026-01-02,South,120,70,5\n"
+        b"2026-02-01,North,140,80,6\n"
+        b"2026-02-02,South,160,90,7\n"
+    )
+    return client.post(
+        "/upload",
+        data={"file": (io.BytesIO(content), "multi-kpi.csv", "text/csv")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
     )
 
 
@@ -167,3 +190,99 @@ def test_suggestion_text_is_html_escaped(client: FlaskClient, monkeypatch) -> No
     assert response.status_code == 200
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
     assert "<script>alert(1)</script>" not in page
+
+
+def test_ai_can_suggest_and_review_an_additional_source_kpi(
+    app: Flask,
+    client: FlaskClient,
+    monkeypatch,
+) -> None:
+    uploaded = _upload_multi_kpi(client)
+    dataset_id = _dataset_id(uploaded.data)
+    client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "business_objective": "Track revenue performance.",
+        },
+        follow_redirects=True,
+    )
+    captured: dict[str, object] = {}
+    cost_suggestion = _suggestion(
+        "Control operating costs by region over time.",
+        primary_kpi="cost",
+        direction="lower",
+        title="Cost control",
+    )
+
+    def suggest(*_args, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return SuggestionBatch((cost_suggestion,), rejected_count=0)
+
+    monkeypatch.setattr(
+        "insight_reporter.routes.generate_configuration_suggestions",
+        suggest,
+    )
+
+    profile_page = client.get(f"/dataset/{dataset_id}")
+    assert b"Suggest additional source KPIs" in profile_page.data
+    suggested = client.post(
+        f"/suggest/{dataset_id}",
+        follow_redirects=True,
+    )
+    assert captured["excluded_kpis"] == ("revenue",)
+    assert b"Suggested additional KPI configurations" in suggested.data
+    assert b"Review and add this KPI" in suggested.data
+    reviewed = client.post(
+        f"/review-suggestion/{dataset_id}",
+        data={
+            "primary_kpi": "cost",
+            "kpi_direction": "lower",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "target_or_benchmark": "",
+            "business_objective": (
+                "Control operating costs by region over time."
+            ),
+        },
+        follow_redirects=True,
+    )
+    assert reviewed.status_code == 200
+    assert b"Additional KPI suggestion loaded" in reviewed.data
+    assert re.search(rb'value="cost"[^>]*checked', reviewed.data) is not None
+    assert b"Control operating costs by region over time." in reviewed.data
+
+    added = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "source_kpis": ["cost"],
+            "kpi_direction": "lower",
+            "context_submitted": "yes",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "business_objective": (
+                "Control operating costs by region over time."
+            ),
+        },
+        follow_redirects=True,
+    )
+
+    assert added.status_code == 200
+    path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert [metric["name"] for metric in payload["metrics"]] == [
+        "revenue",
+        "cost",
+    ]
+    primary = next(
+        metric
+        for metric in payload["metrics"]
+        if metric["metric_id"] == payload["primary_metric_id"]
+    )
+    assert primary["name"] == "revenue"
+    assert payload["business_objective"] == (
+        "Control operating costs by region over time."
+    )

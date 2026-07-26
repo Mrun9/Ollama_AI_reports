@@ -273,26 +273,32 @@ def validate_derived_business_configuration(
         target=_parse_optional_target(target_or_benchmark),
     )
     existing_metrics = existing_configuration.metrics if existing_configuration else ()
-    without_same_name = tuple(
-        item
-        for item in existing_metrics
-        if item.name.casefold() != metric.name.casefold()
+    same_name = next(
+        (
+            item
+            for item in existing_metrics
+            if item.name.casefold() == metric.name.casefold()
+        ),
+        None,
     )
-    metrics = _deduplicate_metrics((*without_same_name, metric))
+    if same_name is not None:
+        if same_name.metric_id == metric.metric_id:
+            raise BusinessConfigurationError(
+                f'The KPI "{metric.name}" is already configured.'
+            )
+        raise BusinessConfigurationError(
+            f'A KPI named "{metric.name}" already exists. '
+            "Use a unique name for a new derived KPI."
+        )
+    metrics = _deduplicate_metrics((*existing_metrics, metric))
     if len(metrics) > _MAX_METRICS:
         raise BusinessConfigurationError(
             f"The KPI registry supports at most {_MAX_METRICS} metrics."
         )
-    replacing_primary = (
-        existing_configuration is not None
-        and existing_configuration.primary_metric.name.casefold()
-        == metric.name.casefold()
-    )
     primary_metric_id = (
         metric.metric_id
         if metric_role == "primary"
         or existing_configuration is None
-        or replacing_primary
         else existing_configuration.primary_metric_id
     )
     return _build_configuration(
@@ -303,6 +309,111 @@ def validate_derived_business_configuration(
         date_column=date_column,
         category_columns=category_columns,
         business_objective=business_objective,
+    )
+
+
+def add_source_metrics(
+    profile: DatasetProfile,
+    *,
+    dataset_id: str,
+    source_columns: list[str],
+    kpi_direction: str,
+    existing_configuration: BusinessConfiguration,
+    date_column: str | None = None,
+    category_columns: list[str] | None = None,
+    business_objective: str | None = None,
+) -> BusinessConfiguration:
+    """Append source-column KPIs without rebuilding the existing registry."""
+
+    if existing_configuration.dataset_id != dataset_id:
+        raise BusinessConfigurationError(
+            "Existing configuration does not match this dataset."
+        )
+    if not source_columns:
+        raise BusinessConfigurationError(
+            "Select at least one new source KPI to add."
+        )
+    if len(source_columns) != len(set(source_columns)):
+        raise BusinessConfigurationError(
+            "New source KPI selections must not contain duplicates."
+        )
+    if any(column not in profile.kpi_candidates for column in source_columns):
+        raise BusinessConfigurationError(
+            "Select measurable KPIs from the available candidates."
+        )
+    source = _single_source(profile, dataset_id)
+    if existing_configuration.sources != (source,):
+        raise BusinessConfigurationError(
+            "Existing configuration does not match the retained dataset."
+        )
+    if kpi_direction not in _DIRECTIONS:
+        raise BusinessConfigurationError(
+            "KPI direction must be either higher or lower."
+        )
+    configured_source_columns = {
+        metric.source.column
+        for metric in existing_configuration.metrics
+        if metric.metric_type == "source" and metric.source is not None
+    }
+    already_configured = [
+        column
+        for column in source_columns
+        if column in configured_source_columns
+    ]
+    if already_configured:
+        raise BusinessConfigurationError(
+            "These source KPIs are already configured: "
+            + ", ".join(already_configured)
+            + "."
+        )
+    existing_names = {
+        metric.name.casefold() for metric in existing_configuration.metrics
+    }
+    conflicting_names = [
+        column for column in source_columns if column.casefold() in existing_names
+    ]
+    if conflicting_names:
+        raise BusinessConfigurationError(
+            "These KPI names are already configured: "
+            + ", ".join(conflicting_names)
+            + "."
+        )
+    additions = tuple(
+        _source_metric(
+            source,
+            column,
+            direction=kpi_direction,
+            target=None,
+        )
+        for column in source_columns
+    )
+    metrics = (*existing_configuration.metrics, *additions)
+    if len(metrics) > _MAX_METRICS:
+        remaining = _MAX_METRICS - len(existing_configuration.metrics)
+        raise BusinessConfigurationError(
+            f"Only {remaining} more KPI(s) can be added; "
+            f"the registry supports at most {_MAX_METRICS}."
+        )
+    return _build_configuration(
+        profile,
+        dataset_id=dataset_id,
+        metrics=metrics,
+        primary_metric_id=existing_configuration.primary_metric_id,
+        date_column=(
+            existing_configuration.date_column or ""
+            if date_column is None
+            else date_column
+        ),
+        category_columns=(
+            list(existing_configuration.category_columns)
+            if category_columns is None
+            else category_columns
+        ),
+        business_objective=(
+            existing_configuration.business_objective
+            if business_objective is None
+            else business_objective
+        ),
     )
 
 

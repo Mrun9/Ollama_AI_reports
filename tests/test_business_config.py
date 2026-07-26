@@ -7,6 +7,7 @@ import pytest
 
 from insight_reporter.business_config import (
     BusinessConfigurationError,
+    add_source_metrics,
     load_business_configuration,
     remove_metric,
     save_business_configuration,
@@ -334,3 +335,124 @@ def test_derived_metric_can_be_added_without_replacing_existing_primary(
 
     assert updated.primary_kpi == "revenue"
     assert [metric.name for metric in updated.metrics] == ["revenue", "Profit"]
+
+
+def test_source_metrics_are_appended_without_reselecting_primary(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "append-source.csv"
+    path.write_text(
+        "date,region,revenue,cost,units\n"
+        "2026-01-01,North,100,60,4\n"
+        "2026-01-02,South,120,70,5\n"
+        "2026-01-03,North,140,80,6\n",
+        encoding="utf-8",
+    )
+    profile = profile_csv(path)
+    configuration = validate_business_configuration(
+        profile,
+        dataset_id="8" * 32,
+        primary_kpi="revenue",
+        kpi_direction="higher",
+        date_column="date",
+        category_columns=["region"],
+        target_or_benchmark="",
+        business_objective="Compare operational KPIs.",
+    )
+    original_primary = configuration.primary_metric_id
+
+    configuration = add_source_metrics(
+        profile,
+        dataset_id="8" * 32,
+        source_columns=["cost"],
+        kpi_direction="lower",
+        existing_configuration=configuration,
+    )
+    configuration = add_source_metrics(
+        profile,
+        dataset_id="8" * 32,
+        source_columns=["units"],
+        kpi_direction="higher",
+        existing_configuration=configuration,
+    )
+
+    assert configuration.primary_metric_id == original_primary
+    assert [metric.name for metric in configuration.metrics] == [
+        "revenue",
+        "cost",
+        "units",
+    ]
+    assert configuration.metrics[1].kpi_direction == "lower"
+
+
+def test_different_derived_formula_cannot_silently_replace_same_name(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "duplicate-derived-name.csv"
+    path.write_text(
+        "date,region,revenue,cost\n"
+        "2026-01-01,North,100,60\n"
+        "2026-01-02,South,120,70\n"
+        "2026-01-03,North,140,80\n",
+        encoding="utf-8",
+    )
+    profile = profile_csv(path)
+    configuration = validate_business_configuration(
+        profile,
+        dataset_id="7" * 32,
+        primary_kpi="revenue",
+        kpi_direction="higher",
+        date_column="date",
+        category_columns=["region"],
+        target_or_benchmark="",
+        business_objective="Compare revenue and profit.",
+    )
+    first = validate_formula_metric(
+        profile,
+        name="Profit",
+        formula="[revenue] - [cost]",
+        calculation_level="row",
+        aggregation="sum",
+        display_format="currency",
+        source_id=source_id_from_hash(profile.source_sha256),
+    )
+    configuration = validate_derived_business_configuration(
+        profile,
+        dataset_id="7" * 32,
+        derived_metric=first,
+        kpi_direction="higher",
+        date_column="date",
+        category_columns=["region"],
+        target_or_benchmark="",
+        business_objective="Compare revenue and profit.",
+        existing_configuration=configuration,
+        metric_role="secondary",
+    )
+    conflicting = validate_formula_metric(
+        profile,
+        name="Profit",
+        formula="[revenue] / [cost]",
+        calculation_level="row",
+        aggregation="mean",
+        display_format="number",
+        source_id=source_id_from_hash(profile.source_sha256),
+    )
+
+    with pytest.raises(BusinessConfigurationError, match="unique name"):
+        validate_derived_business_configuration(
+            profile,
+            dataset_id="7" * 32,
+            derived_metric=conflicting,
+            kpi_direction="higher",
+            date_column="date",
+            category_columns=["region"],
+            target_or_benchmark="",
+            business_objective="Compare revenue and profit.",
+            existing_configuration=configuration,
+            metric_role="secondary",
+        )
+
+    assert [metric.name for metric in configuration.metrics] == [
+        "revenue",
+        "Profit",
+    ]

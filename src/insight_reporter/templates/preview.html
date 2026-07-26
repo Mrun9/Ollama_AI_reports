@@ -88,19 +88,52 @@
         </tbody>
       </table>
 
-      <h2>AI-assisted configuration suggestions</h2>
-      <p>
-        Optional: ask the local {{ suggestion_model }} model to suggest configurations from the
-        profile metadata above. Raw and preview rows are not sent. Manual configuration remains
-        available below.
-      </p>
-
-      {% if profile.kpi_candidates %}
-        <form method="post" action="{{ url_for('core.suggest_configurations', dataset_id=dataset_id) }}">
-          <button type="submit">Generate AI suggestions</button>
-        </form>
+      {% if configuration %}
+        <h2>Existing business configuration</h2>
+        <p>
+          The current primary KPI is <strong>{{ configuration.primary_kpi }}</strong>.
+          Adding another KPI below keeps this primary KPI and every existing KPI.
+        </p>
+        <p>
+          <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
+            View all {{ configuration.metrics|length }} configured KPI(s)
+          </a>
+        </p>
+        <h2>AI-assisted additional KPI suggestions</h2>
+        <p>
+          Ask {{ suggestion_model }} for another set of suggestions using only unconfigured
+          source KPI candidates. Each option includes direction, date/category context,
+          business objective, confidence, and rationale. Nothing is added automatically.
+        </p>
+        {% if configuration.metrics|length >= 5 %}
+          <p>The KPI registry already contains the maximum of five KPIs.</p>
+        {% elif unconfigured_source_columns %}
+          <form method="post"
+            action="{{ url_for('core.suggest_configurations', dataset_id=dataset_id) }}">
+            <button type="submit">Suggest additional source KPIs</button>
+          </form>
+        {% else %}
+          <p>
+            All measurable source KPI candidates are already configured. You can still build a
+            derived KPI below if the registry has room.
+          </p>
+        {% endif %}
       {% else %}
-        <p>No measurable KPI candidates are available for AI suggestions.</p>
+        <h2>AI-assisted configuration suggestions</h2>
+        <p>
+          Optional: ask the local {{ suggestion_model }} model to suggest configurations from the
+          profile metadata above. Raw and preview rows are not sent. Manual configuration remains
+          available below.
+        </p>
+
+        {% if profile.kpi_candidates %}
+          <form method="post"
+            action="{{ url_for('core.suggest_configurations', dataset_id=dataset_id) }}">
+            <button type="submit">Generate AI suggestions</button>
+          </form>
+        {% else %}
+          <p>No measurable KPI candidates are available for AI suggestions.</p>
+        {% endif %}
       {% endif %}
 
       {% if suggestion_error %}
@@ -114,12 +147,15 @@
       {% endif %}
 
       {% if suggestions %}
-        <h3>Suggested configurations</h3>
+        <h3>
+          {{ "Suggested additional KPI configurations" if configuration
+            else "Suggested configurations" }}
+        </h3>
         {% for suggestion in suggestions %}
           <section>
             <h4>{{ suggestion.title }}</h4>
             <dl>
-              <dt>Primary KPI</dt>
+              <dt>{{ "Additional KPI" if configuration else "Primary KPI" }}</dt>
               <dd>{{ suggestion.primary_kpi }}</dd>
               <dt>Direction</dt>
               <dd>{{ suggestion.kpi_direction }}</dd>
@@ -152,7 +188,9 @@
               <input type="hidden" name="target_or_benchmark" value="">
               <input type="hidden" name="business_objective"
                 value="{{ suggestion.business_objective }}">
-              <button type="submit">Use this suggestion</button>
+              <button type="submit">
+                {{ "Review and add this KPI" if configuration else "Use this suggestion" }}
+              </button>
             </form>
           </section>
         {% endfor %}
@@ -267,7 +305,9 @@
         {% endfor %}
       {% endif %}
 
-      <h2>Confirm business configuration</h2>
+      <h2>
+        {{ "Add source KPIs" if configuration else "Confirm business configuration" }}
+      </h2>
       {% if review_notice %}
         <p role="status"><strong>{{ review_notice }}</strong></p>
       {% endif %}
@@ -275,7 +315,107 @@
         <p role="alert"><strong>Configuration rejected:</strong> {{ configuration_error }}</p>
       {% endif %}
 
-      {% if profile.kpi_candidates %}
+      {% if configuration %}
+        {% if configuration.metrics|length < 5 %}
+          <form method="post"
+            action="{{ url_for('core.configure_dataset', dataset_id=dataset_id) }}">
+            <input type="hidden" name="context_submitted" value="yes">
+            <fieldset>
+              <legend>New source KPIs</legend>
+              <p>
+                Select only the new columns to add. Existing KPIs are retained automatically.
+              </p>
+              {% for column in profile.kpi_candidates %}
+                <label>
+                  <input type="checkbox" name="source_kpis" value="{{ column }}"
+                    {% if column not in unconfigured_source_columns %}disabled{% endif %}
+                    {% if form_data and column in form_data.getlist('source_kpis') %}checked{% endif %}>
+                  {{ column }}
+                  {% if column not in unconfigured_source_columns %}(already configured){% endif %}
+                </label>
+              {% endfor %}
+            </fieldset>
+
+            <fieldset>
+              <legend>Direction for the new KPI(s)</legend>
+              <label>
+                <input type="radio" name="kpi_direction" value="higher" required
+                  {% if not form_data or form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>
+                Higher is better
+              </label>
+              <label>
+                <input type="radio" name="kpi_direction" value="lower"
+                  {% if form_data and form_data.get('kpi_direction') == 'lower' %}checked{% endif %}>
+                Lower is better
+              </label>
+            </fieldset>
+
+            <p>
+              Targets and directions can be edited independently after the KPIs are added.
+            </p>
+
+            <h3>Shared analysis context</h3>
+            <p>
+              These settings apply to every configured KPI. AI suggestions may prefill them,
+              but you must review them before saving.
+            </p>
+            <p>
+              <label for="additional-date-column">Date column</label>
+              <select id="additional-date-column" name="date_column">
+                <option value="">No date column</option>
+                {% for column in profile.date_candidates %}
+                  <option value="{{ column }}"
+                    {% if (
+                      form_data.get('date_column', configuration.date_column or '')
+                      if form_data else configuration.date_column or ''
+                    ) == column %}selected{% endif %}>
+                    {{ column }}
+                  </option>
+                {% endfor %}
+              </select>
+            </p>
+
+            <fieldset>
+              <legend>Category or segment columns</legend>
+              {% if profile.category_candidates %}
+                {% for column in profile.category_candidates %}
+                  <label>
+                    <input type="checkbox" name="category_columns" value="{{ column }}"
+                      {% if column in (
+                        form_data.getlist('category_columns')
+                        if form_data else configuration.category_columns
+                      ) %}checked{% endif %}>
+                    {{ column }}
+                  </label>
+                {% endfor %}
+              {% else %}
+                <p>No category candidates were detected.</p>
+              {% endif %}
+            </fieldset>
+
+            <p>
+              <label for="additional-business-objective">Business objective</label>
+              <textarea id="additional-business-objective" name="business_objective"
+                maxlength="2000" required>{{ (
+                  form_data.get('business_objective', configuration.business_objective)
+                  if form_data else configuration.business_objective
+                ) }}</textarea>
+            </p>
+
+            {% with
+              context_target="additional-business-objective",
+              context_target_label="objective",
+              context_insert_mode="prompt"
+            %}
+              {% include "_dataset_context.html" %}
+            {% endwith %}
+
+            <button type="submit">Add selected KPI(s)</button>
+          </form>
+        {% else %}
+          <p>The KPI registry already contains the maximum of five KPIs.</p>
+        {% endif %}
+      {% elif profile.kpi_candidates %}
         <form method="post" action="{{ url_for('core.configure_dataset', dataset_id=dataset_id) }}">
           <p>
             <label for="primary_kpi">Primary KPI</label>

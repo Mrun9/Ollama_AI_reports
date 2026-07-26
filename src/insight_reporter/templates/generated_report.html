@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ report.report_settings.title }} | AI Insight Reporter</title>
+    <style>
+      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
+      main { max-width: 1050px; margin: 0 auto; }
+      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
+      dl { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr; gap: 0.35rem 1rem; }
+      dt { font-weight: 700; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      pre { background: #f4f4f4; max-height: 28rem; overflow: auto; padding: 1rem; white-space: pre-wrap; }
+      .source-label { font-weight: 700; }
+      .story { border-left: 0.35rem solid #315c9b; }
+      .finding { font-size: 1.08rem; }
+      .story-source { color: #555; font-size: 0.92rem; }
+      .claim-list { padding-left: 1.3rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>{{ report.report_settings.title }}</h1>
+      <p>
+        Generated report version {{ report.version }} ·
+        {{ report.generated_at }} · local model {{ report.model }}
+      </p>
+
+      <h2>Executive summary</h2>
+      <p>
+        <span class="source-label">User-provided business objective:</span>
+        {{ report.report_settings.business_objective }}
+      </p>
+      {% if report.stories %}
+        <p>
+          The highest-priority findings synthesize related evidence below.
+          Every displayed numerical claim is independently resolved from
+          Python evidence.
+        </p>
+        {% for story in report.stories[:3] %}
+          <article class="story">
+            <h3>{{ story.headline }}</h3>
+            <p class="finding">
+              <span class="source-label">Finding:</span>
+              {{ story.finding }}
+            </p>
+            <p>
+              <span class="source-label">Why it matters:</span>
+              {{ story.interpretation }}
+            </p>
+            {% if story.fact_references %}
+              <ul class="claim-list">
+                {% for fact_reference in story.fact_references %}
+                  <li>
+                    {{ fact_reference.prefix }}
+                    <strong>{{ fact_reference.formatted_value }}</strong>
+                    {% if report.report_settings.include_evidence_appendix %}
+                      <a href="#{{ fact_reference.evidence_id }}">
+                        [{{ fact_reference.evidence_id }}]
+                      </a>
+                    {% else %}
+                      [{{ fact_reference.evidence_id }}]
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </article>
+        {% endfor %}
+      {% elif report.items %}
+        <p>
+          This earlier report version contains evidence-level commentary.
+          Generate a new version to use multi-evidence synthesis.
+        </p>
+      {% else %}
+        <p>
+          No evidence was selected. This report therefore contains configured
+          KPI definitions and user-provided context only.
+        </p>
+      {% endif %}
+
+      <h2>KPI overview</h2>
+      {% if report.kpis %}
+        <ul>
+          {% for kpi in report.kpis %}
+            <li>
+              {{ kpi.name }} · {{ kpi.metric_type }}
+              {% if kpi.kpi_direction %}
+                · {{ kpi.kpi_direction }} is better
+              {% endif %}
+              {% if kpi.derived_metric %}
+                · Python formula {{ kpi.derived_metric.formula_label }}
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No KPI definitions were retained.</p>
+      {% endif %}
+
+      {% if story_sections %}
+        {% for section_title, stories in story_sections %}
+          <section>
+            <h2>{{ section_title }}</h2>
+            {% for story in stories %}
+              <article class="story" id="{{ story.story_id }}">
+                <h3>{{ story.headline }}</h3>
+                <p class="story-source">
+                  {{ "AI-synthesized from verified Python evidence" if story.narration_source == "ollama" else "Deterministic fallback summary" }}
+                  · {{ story.story_id }}
+                </p>
+                <p class="finding">
+                  <span class="source-label">Observation:</span>
+                  {{ story.finding }}
+                </p>
+                <p>
+                  <span class="source-label">AI-written interpretation:</span>
+                  {{ story.interpretation }}
+                </p>
+                <p>
+                  <span class="source-label">Suggested follow-up:</span>
+                  {{ story.follow_up }}
+                </p>
+                <p>
+                  <span class="source-label">Important caveat:</span>
+                  {{ story.caveat }}
+                </p>
+                {% if story.fact_references %}
+                  <h4>Verified numerical claims</h4>
+                  <ul class="claim-list">
+                    {% for fact_reference in story.fact_references %}
+                      <li>
+                        {{ fact_reference.prefix }}
+                        <strong>{{ fact_reference.formatted_value }}</strong>
+                        {% if fact_reference.suffix %}
+                          {{ fact_reference.suffix }}
+                        {% endif %}
+                        {% if report.report_settings.include_evidence_appendix %}
+                          <a href="#{{ fact_reference.evidence_id }}">
+                            [{{ fact_reference.evidence_id }}]
+                          </a>
+                        {% else %}
+                          [{{ fact_reference.evidence_id }}]
+                        {% endif %}
+                        <details>
+                          <summary>
+                            How this referenced value was produced
+                          </summary>
+                          <dl>
+                            <dt>Evidence ID</dt>
+                            <dd>{{ fact_reference.evidence_id }}</dd>
+                            <dt>Fact path</dt>
+                            <dd>{{ fact_reference.path }}</dd>
+                            <dt>Exact Python value</dt>
+                            <dd>{{ fact_reference.formatted_value }}</dd>
+                          </dl>
+                        </details>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% endif %}
+                <p>
+                  <span class="source-label">Supporting evidence:</span>
+                  {% for evidence_id in story.evidence_ids %}
+                    {% if report.report_settings.include_evidence_appendix %}
+                      <a href="#{{ evidence_id }}">{{ evidence_id }}</a>
+                    {% else %}
+                      {{ evidence_id }}
+                    {% endif %}{{ "," if not loop.last }}
+                  {% endfor %}
+                </p>
+              </article>
+            {% endfor %}
+          </section>
+        {% endfor %}
+      {% else %}
+      {% for section_title, items in sections %}
+        <section>
+          <h2>{{ section_title }}</h2>
+          {% for item in items %}
+            <article id="{{ item.evidence_id }}">
+              <h3>{{ item.title }}</h3>
+              <dl>
+                <dt>Evidence ID</dt>
+                <dd>{{ item.evidence_id }}</dd>
+                <dt>Evidence type</dt>
+                <dd>{{ item.evidence_kind }}</dd>
+                <dt>Metric or measure</dt>
+                <dd>{{ item.metric }}</dd>
+                <dt>Insight or chart type</dt>
+                <dd>{{ item.insight_type }}</dd>
+                <dt>Records analyzed</dt>
+                <dd>{{ item.record_count }}</dd>
+                <dt>Source columns</dt>
+                <dd>
+                  {{ item.source_columns|join(", ") if item.source_columns else "None" }}
+                </dd>
+              </dl>
+              <h4>Python calculation</h4>
+              <p>{{ item.calculation_description }}</p>
+              <h4>Python-generated facts</h4>
+              <pre>{{ item.facts|tojson(indent=2) }}</pre>
+              {% if item.commentary %}
+                <h4>AI-written interpretation</h4>
+                <p>{{ item.commentary }}</p>
+                {% for fact_reference in item.fact_references %}
+                  <p>
+                    {{ fact_reference.prefix }}
+                    <strong>{{ fact_reference.formatted_value }}</strong>
+                    <span>({{ fact_reference.label }})</span>
+                    {% if fact_reference.suffix %}
+                      {{ fact_reference.suffix }}
+                    {% endif %}
+                    <strong>[{{ item.evidence_id }}]</strong>
+                  </p>
+                  <details>
+                    <summary>
+                      How this referenced value was produced
+                    </summary>
+                    <dl>
+                      <dt>Evidence ID</dt>
+                      <dd>{{ item.evidence_id }}</dd>
+                      <dt>Fact path</dt>
+                      <dd>{{ fact_reference.path }}</dd>
+                      <dt>Exact Python value</dt>
+                      <dd>{{ fact_reference.formatted_value }}</dd>
+                      <dt>Calculation</dt>
+                      <dd>{{ item.calculation_description }}</dd>
+                      <dt>Source columns</dt>
+                      <dd>
+                        {{ item.source_columns|join(", ") if item.source_columns else "None" }}
+                      </dd>
+                    </dl>
+                  </details>
+                {% endfor %}
+                <p>
+                  Ollama may quote only the validated display value from its
+                  selected reference. Python independently resolves the claim
+                  above and rejects every other numerical value.
+                </p>
+              {% else %}
+                <p>No AI commentary was added to this evidence record.</p>
+              {% endif %}
+              {% if item.visualization_id %}
+                <p>
+                  <a href="{{ url_for(
+                    'core.saved_visualization',
+                    dataset_id=report.dataset_id,
+                    visualization_id=item.visualization_id
+                  ) }}">
+                    Open the supporting manual visualization
+                  </a>
+                </p>
+              {% endif %}
+              {% if item.limitations %}
+                <h4>Limitations</h4>
+                <ul>
+                  {% for limitation in item.limitations %}
+                    <li>{{ limitation }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </section>
+      {% endfor %}
+      {% endif %}
+
+      {% if report.generation_limitations %}
+        <h2>Generation limitations</h2>
+        <ul>
+          {% for limitation in report.generation_limitations %}
+            <li>{{ limitation }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <h2>Source traceability</h2>
+      {% for source in report.sources %}
+        <dl>
+          <dt>Filename</dt>
+          <dd>{{ source.internal_filename }}</dd>
+          <dt>Format</dt>
+          <dd>{{ source.format|upper }}</dd>
+          {% if source.table_name %}
+            <dt>Worksheet</dt>
+            <dd>{{ source.table_name }}</dd>
+          {% endif %}
+          <dt>SHA-256</dt>
+          <dd>{{ source.sha256 }}</dd>
+        </dl>
+      {% endfor %}
+
+      {% if report.report_settings.include_evidence_appendix %}
+        <h2>Evidence appendix</h2>
+        <p>
+          Open an evidence record to inspect the unchanged Python output behind
+          the report stories.
+        </p>
+        {% for item in report.items %}
+          <details id="{{ item.evidence_id }}">
+            <summary>
+              {{ item.evidence_id }} · {{ item.title }}
+            </summary>
+            <dl>
+              <dt>Evidence type</dt>
+              <dd>{{ item.evidence_kind }}</dd>
+              <dt>Metric or measure</dt>
+              <dd>{{ item.metric }}</dd>
+              <dt>Insight or chart type</dt>
+              <dd>{{ item.insight_type }}</dd>
+              <dt>Records analyzed</dt>
+              <dd>{{ item.record_count }}</dd>
+              <dt>Source columns</dt>
+              <dd>
+                {{ item.source_columns|join(", ") if item.source_columns else "None" }}
+              </dd>
+              <dt>Python calculation</dt>
+              <dd>{{ item.calculation_description }}</dd>
+            </dl>
+            <h4>Python-generated facts</h4>
+            <pre>{{ item.facts|tojson(indent=2) }}</pre>
+            {% if item.limitations %}
+              <h4>Limitations</h4>
+              <ul>
+                {% for limitation in item.limitations %}
+                  <li>{{ limitation }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+            {% if item.visualization_id %}
+              <p>
+                <a href="{{ url_for(
+                  'core.saved_visualization',
+                  dataset_id=report.dataset_id,
+                  visualization_id=item.visualization_id
+                ) }}">
+                  Open the supporting manual visualization
+                </a>
+              </p>
+            {% endif %}
+          </details>
+        {% endfor %}
+      {% endif %}
+
+      <p>
+        <a href="{{ url_for(
+          'core.generated_report_json',
+          dataset_id=report.dataset_id,
+          report_id=report.report_id
+        ) }}">
+          View generated report JSON
+        </a>
+      </p>
+      <details>
+        <summary>Generated report artifact</summary>
+        <pre>{{ report_json }}</pre>
+      </details>
+      <p>
+        <a href="{{ url_for(
+          'core.saved_report_configuration',
+          dataset_id=report.dataset_id
+        ) }}">
+          Return to report configuration
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

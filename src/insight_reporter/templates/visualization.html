@@ -62,6 +62,8 @@
       {% endif %}
 
       <dl>
+        <dt>Question or purpose</dt>
+        <dd>{{ artifact.spec.purpose or "Not provided" }}</dd>
         <dt>Chart type</dt>
         <dd>{{ artifact.spec.chart_type }}</dd>
         <dt>Measures</dt>

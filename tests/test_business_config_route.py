@@ -173,3 +173,70 @@ def test_business_objective_is_escaped(client: FlaskClient) -> None:
     assert response.status_code == 200
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
     assert "<script>alert(1)</script>" not in page
+
+
+def test_existing_configuration_adds_source_kpis_without_reselecting_primary(
+    app: Flask,
+    client: FlaskClient,
+) -> None:
+    content = (
+        b"date,region,revenue,cost,units\n"
+        b"2026-01-01,North,100,60,4\n"
+        b"2026-01-02,South,120,70,5\n"
+        b"2026-02-01,North,140,80,6\n"
+        b"2026-02-02,South,160,90,7\n"
+    )
+    uploaded = client.post(
+        "/upload",
+        data={"file": (io.BytesIO(content), "multi-kpi.csv", "text/csv")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    dataset_id = _dataset_id(uploaded.data)
+    client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "business_objective": "Track operational performance.",
+        },
+        follow_redirects=True,
+    )
+
+    add_page = client.get(f"/dataset/{dataset_id}")
+    assert b"Add source KPIs" in add_page.data
+    assert b'name="primary_kpi"' not in add_page.data
+    first_addition = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "source_kpis": ["cost"],
+            "kpi_direction": "lower",
+        },
+        follow_redirects=True,
+    )
+    second_addition = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "source_kpis": ["units"],
+            "kpi_direction": "higher",
+        },
+        follow_redirects=True,
+    )
+
+    assert first_addition.status_code == 200
+    assert second_addition.status_code == 200
+    path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert [metric["name"] for metric in payload["metrics"]] == [
+        "revenue",
+        "cost",
+        "units",
+    ]
+    primary = next(
+        metric
+        for metric in payload["metrics"]
+        if metric["metric_id"] == payload["primary_metric_id"]
+    )
+    assert primary["name"] == "revenue"

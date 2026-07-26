@@ -131,19 +131,30 @@
         </p>
 
         <h2>Editable business configuration</h2>
-        <fieldset>
-          <legend>KPI role</legend>
-          <label>
-            <input type="radio" name="metric_role" value="primary" required
-              {% if form_data.get('metric_role', 'primary') == 'primary' %}checked{% endif %}>
-            Make this the primary KPI
-          </label>
-          <label>
-            <input type="radio" name="metric_role" value="secondary"
-              {% if form_data.get('metric_role') == 'secondary' %}checked{% endif %}>
-            Add this as an additional KPI
-          </label>
-        </fieldset>
+        {% if configuration %}
+          <fieldset>
+            <legend>KPI role</legend>
+            <p>
+              The current primary KPI is <strong>{{ configuration.primary_kpi }}</strong>.
+            </p>
+            <label>
+              <input type="radio" name="metric_role" value="secondary" required
+                {% if form_data.get('metric_role', 'secondary') == 'secondary' %}checked{% endif %}>
+              Add this KPI and keep the current primary
+            </label>
+            <label>
+              <input type="radio" name="metric_role" value="primary"
+                {% if form_data.get('metric_role') == 'primary' %}checked{% endif %}>
+              Add this KPI and make it primary
+            </label>
+          </fieldset>
+        {% else %}
+          <input type="hidden" name="metric_role" value="primary">
+          <p>
+            This is the first KPI, so it will become the primary KPI. You can add more KPIs
+            afterward and change the primary KPI from the saved configuration page.
+          </p>
+        {% endif %}
         <fieldset>
           <legend>KPI direction</legend>
           <label>

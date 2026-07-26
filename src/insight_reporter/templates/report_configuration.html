@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ report.title }} | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      <h1>{{ report.title }}</h1>
+      <p>
+        Report content selection saved and revalidated against its current source,
+        KPI configuration, evidence, and manual visualizations.
+      </p>
+
+      <dl>
+        <dt>Dataset</dt>
+        <dd>{{ report.dataset_id }}</dd>
+        <dt>Business objective</dt>
+        <dd>{{ report.business_objective }}</dd>
+        <dt>Audience</dt>
+        <dd>{{ report.audience }}</dd>
+        <dt>Tone</dt>
+        <dd>{{ report.tone }}</dd>
+        <dt>Detail level</dt>
+        <dd>{{ report.detail_level }}</dd>
+        <dt>Evidence appendix</dt>
+        <dd>{{ "Included" if report.include_evidence_appendix else "Excluded" }}</dd>
+      </dl>
+
+      <h2>Selected KPIs</h2>
+      <ul>
+        {% for metric in selected_metrics %}
+          <li>
+            {{ metric.name }} · {{ metric.metric_type }}
+            · {{ metric.kpi_direction }} is better
+            {% if metric.derived_metric %}
+              · formula <code>{{ metric.derived_metric.formula_label }}</code>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+
+      <h2>Selected deterministic evidence</h2>
+      {% if selected_evidence %}
+        <ol>
+          {% for record in selected_evidence %}
+            <li>
+              <strong>{{ record.id }}</strong>
+              · {{ record.insight_type }}
+              · {{ record.metric }}
+              · rank {{ record.ranking.rank }}
+              <p>{{ record.calculation_description }}</p>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p>No deterministic evidence was selected.</p>
+      {% endif %}
+
+      <h2>Selected manual visualizations</h2>
+      {% if selected_visualizations %}
+        <ul>
+          {% for artifact in selected_visualizations %}
+            <li>
+              <a href="{{ url_for('core.saved_visualization', dataset_id=report.dataset_id, visualization_id=artifact.visualization_id) }}">
+                {{ artifact.spec.title }}
+              </a>
+              · {{ artifact.classification }}
+              · {{ artifact.chart.chart_type }}
+              {% if artifact.spec.purpose %}
+                <p>
+                  <strong>User-provided question:</strong>
+                  {{ artifact.spec.purpose }}
+                </p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No manual visualization was selected.</p>
+      {% endif %}
+
+      <h2>User notes</h2>
+      {% if report.user_notes %}
+        <p><strong>User-provided content:</strong> {{ report.user_notes }}</p>
+      {% else %}
+        <p>No user notes were added.</p>
+      {% endif %}
+
+      <h2>Source traceability</h2>
+      {% for source in report.sources %}
+        <dl>
+          <dt>Filename</dt>
+          <dd>{{ source.internal_filename }}</dd>
+          <dt>Format</dt>
+          <dd>{{ source.format|upper }}</dd>
+          {% if source.table_name %}
+            <dt>Worksheet</dt>
+            <dd>{{ source.table_name }}</dd>
+          {% endif %}
+          <dt>SHA-256</dt>
+          <dd>{{ source.sha256 }}</dd>
+        </dl>
+      {% endfor %}
+
+      <h2>Report-generation readiness</h2>
+      <p>
+        The bounded Milestone 5B.1 synthesis package is ready. It contains
+        {{ report_package.deterministic_evidence|length }} deterministic evidence
+        record(s) and
+        {{ report_package.manual_visualization_evidence|length }} manual
+        visualization evidence record(s).
+      </p>
+      <ul>
+        <li>Raw dataset rows included: No</li>
+        <li>All numerical observations calculated by: Python</li>
+        <li>User notes labelled as: user-provided</li>
+        <li>Causal claims allowed: No</li>
+      </ul>
+      {% if report_package.omissions.omitted_evidence_ids %}
+        <p role="note">
+          Some selected evidence exceeded the bounded package and was omitted:
+          {{ report_package.omissions.omitted_evidence_ids|join(", ") }}.
+        </p>
+      {% endif %}
+      {% if report_package.omissions.omitted_visualization_ids %}
+        <p role="note">
+          Some selected manual visualizations exceeded the bounded package and
+          were omitted:
+          {{ report_package.omissions.omitted_visualization_ids|join(", ") }}.
+        </p>
+      {% endif %}
+      {% if report_package.manual_visualization_evidence %}
+        <h3>Deterministic manual-visualization evidence</h3>
+        {% for evidence in report_package.manual_visualization_evidence %}
+          <section>
+            <h4>{{ evidence.title }} · {{ evidence.id }}</h4>
+            <p>
+              Classification: {{ evidence.classification }} ·
+              filtered records: {{ evidence.filtered_record_count }}
+            </p>
+            {% if evidence.purpose %}
+              <p>
+                <strong>User-provided question:</strong> {{ evidence.purpose }}
+              </p>
+            {% endif %}
+            {% if evidence.observations %}
+              <ul>
+                {% for observation in evidence.observations %}
+                  <li>
+                    {{ observation.type }} · {{ observation.measure }} ·
+                    {{ observation.observation }}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p>No numerical observation was available for this chart type.</p>
+            {% endif %}
+          </section>
+        {% endfor %}
+      {% endif %}
+      <p>
+        <a href="{{ url_for('core.report_generation_package', dataset_id=report.dataset_id) }}">
+          View the bounded report-generation JSON package
+        </a>
+      </p>
+
+      <h2>Generate evidence-grounded report</h2>
+      <p>
+        Ollama synthesizes related evidence into structured findings,
+        interpretations, follow-up questions, and caveats. Python keeps every
+        factual value unchanged and independently verifies each numerical claim
+        against its evidence ID.
+      </p>
+      {% if narration_error %}
+        <p role="alert">
+          <strong>Report generation unavailable:</strong>
+          {{ narration_error }}
+        </p>
+      {% endif %}
+      <form method="post"
+        action="{{ url_for('core.generate_report', dataset_id=report.dataset_id) }}">
+        <button type="submit">
+          Generate report with {{ narration_model }}
+        </button>
+      </form>
+      {% if latest_generated_report %}
+        <p>
+          <a href="{{ url_for(
+            'core.generated_report',
+            dataset_id=report.dataset_id,
+            report_id=latest_generated_report.report_id
+          ) }}">
+            Open latest generated report
+          </a>
+          · version {{ latest_generated_report.version }}
+        </p>
+      {% endif %}
+
+      <details>
+        <summary>Validated report configuration JSON</summary>
+        <pre>{{ report_json }}</pre>
+      </details>
+
+      <p>
+        <a href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">
+          Edit report configuration
+        </a>
+      </p>
+      <p>
+        <a href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">
+          Return to business configuration
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

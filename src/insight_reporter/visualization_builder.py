@@ -45,6 +45,7 @@ _VISUALIZATION_ID = re.compile(r"VIS-[0-9A-F]{16}")
 _PREVIEW_TOKEN = re.compile(r"[0-9a-f]{32}")
 _CHART_FILENAME = re.compile(r"[0-9a-f]{32}\.png")
 _MAX_TITLE_CHARACTERS = 120
+_MAX_PURPOSE_CHARACTERS = 500
 _MAX_LABEL_CHARACTERS = 60
 _MAX_MEASURES = 5
 _MAX_TOP_N = 50
@@ -63,6 +64,7 @@ class VisualizationSpec:
     """User selections after shape validation but before dataset validation."""
 
     title: str
+    purpose: str
     chart_type: str
     measure_selectors: tuple[str, ...]
     x_column: str | None
@@ -85,6 +87,7 @@ class VisualizationSpec:
     def to_dict(self) -> dict[str, object]:
         return {
             "title": self.title,
+            "purpose": self.purpose,
             "chart_type": self.chart_type,
             "measure_selectors": list(self.measure_selectors),
             "x_column": self.x_column,
@@ -210,6 +213,11 @@ def parse_visualization_spec(values: dict[str, object]) -> VisualizationSpec:
     """Parse untrusted form-shaped values into a bounded visualization request."""
 
     title = _required_text(values.get("title"), "Chart title", _MAX_TITLE_CHARACTERS)
+    purpose = _bounded_optional_text(
+        values.get("purpose"),
+        "Visualization purpose",
+        _MAX_PURPOSE_CHARACTERS,
+    )
     chart_type = _choice(values.get("chart_type"), CHART_TYPES, "chart type")
     raw_measures = values.get("measure_selectors")
     if not isinstance(raw_measures, (list, tuple)):
@@ -256,6 +264,7 @@ def parse_visualization_spec(values: dict[str, object]) -> VisualizationSpec:
 
     return VisualizationSpec(
         title=title,
+        purpose=purpose,
         chart_type=chart_type,
         measure_selectors=measure_selectors,
         x_column=_optional_text(values.get("x_column")),
@@ -348,7 +357,7 @@ def build_visualization(
         else "supplementary"
     )
     return VisualizationArtifact(
-        schema_version=2,
+        schema_version=3,
         visualization_id=None,
         dataset_id=configuration.dataset_id,
         classification=classification,
@@ -1146,7 +1155,7 @@ def _load_artifact(
         raise VisualizationError("Saved visualization is unreadable.") from error
     if (
         not isinstance(payload, dict)
-        or payload.get("schema_version") not in {1, 2}
+        or payload.get("schema_version") not in {1, 2, 3}
     ):
         raise VisualizationError("Saved visualization has an invalid shape.")
     if payload.get("dataset_id") != dataset_id or configuration.dataset_id != dataset_id:
@@ -1464,6 +1473,23 @@ def _required_text(value: object, label: str, maximum: int) -> str:
 
 def _optional_text(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _bounded_optional_text(
+    value: object,
+    label: str,
+    maximum: int,
+) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise VisualizationError(f"{label} is invalid.")
+    text = value.strip()
+    if len(text) > maximum:
+        raise VisualizationError(
+            f"{label} must be at most {maximum} characters."
+        )
+    return text
 
 
 def _optional_date(value: object, label: str) -> str | None:
