@@ -11,6 +11,7 @@ from flask.testing import FlaskClient
 from insight_reporter.report_narration import (
     ReportNarrationError,
     generate_narrated_report,
+    regenerate_generated_story,
 )
 
 
@@ -423,6 +424,8 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
         f"/reports/{dataset_id}/configure",
         data={
             "title": "<script>Trusted report</script>",
+            "company_name": "Example Analytics",
+            "report_author": "Local Analyst",
             "business_objective": "Review evidence safely.",
             "audience": "analyst",
             "tone": "technical",
@@ -461,10 +464,12 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
     assert b"How this referenced value was produced" in page.data
     assert b"Every displayed numerical claim" in page.data
     assert b"&lt;script&gt;Trusted report&lt;/script&gt;" in page.data
+    assert b"Example Analytics" in page.data
+    assert b"Local Analyst" in page.data
     assert b"<script>Trusted report</script>" not in page.data
     json_response = client.get(f"{generated.headers['Location']}/json")
     assert json_response.status_code == 200
-    assert json_response.json["schema_version"] == 3
+    assert json_response.json["schema_version"] == 4
     assert json_response.json["version"] == 1
     assert json_response.json["items"][0]["evidence_id"] == evidence_id
     assert (
@@ -473,6 +478,57 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
         ]
         == "python"
     )
+    story_id = json_response.json["stories"][0]["story_id"]
+
+    pdf_response = client.get(
+        f"{generated.headers['Location']}/pdf"
+    )
+    assert pdf_response.status_code == 200
+    assert pdf_response.mimetype == "application/pdf"
+    assert pdf_response.data.startswith(b"%PDF-")
+    assert "attachment" in pdf_response.headers["Content-Disposition"]
+
+    published = client.post(
+        f"{generated.headers['Location']}/presentation",
+        data={
+            "included_story_ids": [story_id],
+            f"story_order_{story_id}": "1",
+        },
+    )
+    assert published.status_code == 303
+    published_json = client.get(
+        f"{generated.headers['Location']}/json"
+    )
+    assert published_json.json["version"] == 2
+    assert published_json.json["stories"][0]["included"] is True
+
+    def fake_regenerate(  # type: ignore[no-untyped-def]
+        report,
+        package,
+        **kwargs,
+    ):
+        return regenerate_generated_story(
+            report,
+            package,
+            story_id=kwargs["story_id"],
+            model=kwargs["model"],
+            host=kwargs["host"],
+            timeout_seconds=kwargs["timeout_seconds"],
+            client=_FakeNarrationClient(),
+        )
+
+    monkeypatch.setattr(
+        "insight_reporter.routes.regenerate_generated_story",
+        fake_regenerate,
+    )
+    regenerated = client.post(
+        f"{generated.headers['Location']}/stories/{story_id}/regenerate"
+    )
+    assert regenerated.status_code == 303
+    regenerated_json = client.get(
+        f"{generated.headers['Location']}/json"
+    )
+    assert regenerated_json.json["version"] == 3
 
     report_files = tuple(
         (
@@ -480,7 +536,7 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
             / dataset_id
         ).glob("V*.json")
     )
-    assert len(report_files) == 1
+    assert len(report_files) == 3
 
     def unavailable(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise ReportNarrationError("Ollama test failure.")
@@ -503,5 +559,5 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
                 / dataset_id
             ).glob("V*.json")
         )
-    ) == 1
+    ) == 3
     assert client.get(generated.headers["Location"]).status_code == 200

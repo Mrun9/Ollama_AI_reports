@@ -20,11 +20,12 @@ _DATASET_ID = re.compile(r"[0-9a-f]{32}")
 _EVIDENCE_ID = re.compile(r"EVD-[0-9A-F]{16}")
 _DATASET_EVIDENCE_METRIC_ID = "DATASET"
 _MAX_TITLE_CHARACTERS = 200
+_MAX_BRANDING_CHARACTERS = 200
 _MAX_OBJECTIVE_CHARACTERS = 2_000
 _MAX_NOTES_CHARACTERS = 5_000
 _MAX_EVIDENCE_SELECTIONS = 500
 _MAX_VISUALIZATION_SELECTIONS = 100
-_REPORT_KEYS = frozenset(
+_REPORT_KEYS_V1 = frozenset(
     {
         "schema_version",
         "dataset_id",
@@ -44,6 +45,10 @@ _REPORT_KEYS = frozenset(
         "selected_visualization_ids",
     }
 )
+_REPORT_KEYS_V2 = _REPORT_KEYS_V1 | {
+    "company_name",
+    "report_author",
+}
 
 
 class ReportConfigurationError(ValueError):
@@ -59,6 +64,8 @@ class ReportConfiguration:
     evidence_sha256: str | None
     visualization_sha256s: dict[str, str]
     title: str
+    company_name: str
+    report_author: str
     business_objective: str
     audience: str
     tone: str
@@ -80,6 +87,8 @@ class ReportConfiguration:
             "evidence_sha256": self.evidence_sha256,
             "visualization_sha256s": self.visualization_sha256s,
             "title": self.title,
+            "company_name": self.company_name,
+            "report_author": self.report_author,
             "business_objective": self.business_objective,
             "audience": self.audience,
             "tone": self.tone,
@@ -109,6 +118,8 @@ def validate_report_configuration(
     selected_metric_ids: list[str],
     selected_evidence_ids: list[str],
     selected_visualization_ids: list[str],
+    company_name: object = "",
+    report_author: object = "",
 ) -> ReportConfiguration:
     """Validate report selections against current, revalidated artifacts."""
 
@@ -118,6 +129,16 @@ def validate_report_configuration(
         title,
         label="Report title",
         maximum=_MAX_TITLE_CHARACTERS,
+    )
+    selected_company_name = _optional_text(
+        company_name,
+        label="Company name",
+        maximum=_MAX_BRANDING_CHARACTERS,
+    )
+    selected_report_author = _optional_text(
+        report_author,
+        label="Report author",
+        maximum=_MAX_BRANDING_CHARACTERS,
     )
     objective = _required_text(
         business_objective,
@@ -250,7 +271,7 @@ def validate_report_configuration(
         )
 
     return ReportConfiguration(
-        schema_version=1,
+        schema_version=2,
         dataset_id=configuration.dataset_id,
         sources=sources,
         business_configuration_sha256=artifact_sha256(
@@ -266,6 +287,8 @@ def validate_report_configuration(
             for visualization_id in ordered_visualization_ids
         },
         title=report_title,
+        company_name=selected_company_name,
+        report_author=selected_report_author,
         business_objective=objective,
         audience=selected_audience,
         tone=selected_tone,
@@ -324,10 +347,20 @@ def load_report_configuration(
         raise ReportConfigurationError(
             "Saved report configuration is unreadable."
         ) from error
+    if not isinstance(payload, dict):
+        raise ReportConfigurationError(
+            "Saved report configuration has an invalid shape."
+        )
+    schema_version = payload.get("schema_version")
+    expected_keys = (
+        _REPORT_KEYS_V1
+        if schema_version == 1
+        else _REPORT_KEYS_V2
+        if schema_version == 2
+        else frozenset()
+    )
     if (
-        not isinstance(payload, dict)
-        or set(payload) != _REPORT_KEYS
-        or payload.get("schema_version") != 1
+        set(payload) != expected_keys
         or payload.get("dataset_id") != configuration.dataset_id
     ):
         raise ReportConfigurationError(
@@ -361,8 +394,19 @@ def load_report_configuration(
         selected_metric_ids=selected_metric_ids,
         selected_evidence_ids=selected_evidence_ids,
         selected_visualization_ids=selected_visualization_ids,
+        company_name=payload.get("company_name", ""),
+        report_author=payload.get("report_author", ""),
     )
-    if candidate.to_dict() != payload:
+    normalized_payload = dict(payload)
+    if schema_version == 1:
+        normalized_payload.update(
+            {
+                "schema_version": 2,
+                "company_name": "",
+                "report_author": "",
+            }
+        )
+    if candidate.to_dict() != normalized_payload:
         raise ReportConfigurationError(
             "Saved report configuration is stale or has been modified."
         )

@@ -6,3 +6,5 @@ ollama==0.6.2
 openpyxl==3.1.5
 # Deterministic evidence charts rendered with the non-interactive Agg backend.
 matplotlib==3.11.1
+# Print-ready report export and PDF verification.
+reportlab==4.5.1

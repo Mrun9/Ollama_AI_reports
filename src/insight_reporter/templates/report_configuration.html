@@ -16,6 +16,14 @@
       <dl>
         <dt>Dataset</dt>
         <dd>{{ report.dataset_id }}</dd>
+        {% if report.company_name %}
+          <dt>Company</dt>
+          <dd>{{ report.company_name }}</dd>
+        {% endif %}
+        {% if report.report_author %}
+          <dt>Report author</dt>
+          <dd>{{ report.report_author }}</dd>
+        {% endif %}
         <dt>Business objective</dt>
         <dd>{{ report.business_objective }}</dd>
         <dt>Audience</dt>

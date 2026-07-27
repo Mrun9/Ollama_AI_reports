@@ -24,6 +24,7 @@ _REPORT_ID = re.compile(r"RPT-[0-9A-F]{16}")
 _PACKAGE_HASH = re.compile(r"[0-9a-f]{64}")
 _EVIDENCE_ID = re.compile(r"(?:EVD|MVE)-[0-9A-F]{16}")
 _STORY_ID = re.compile(r"STY-[0-9A-F]{16}")
+_CHART_FILENAME = re.compile(r"[0-9a-f]{32}\.png")
 _REPORT_FILENAME = re.compile(r"V([0-9]{4})-(RPT-[0-9A-F]{16})\.json")
 _CAUSAL_LANGUAGE = re.compile(
     r"\b(cause|caused|causes|causal|because|drive|drives|driven|"
@@ -126,6 +127,8 @@ class NarrativeStory:
     caveat: str
     narration_source: str
     fact_references: tuple[NarratedFactReference, ...]
+    included: bool
+    display_order: int
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -143,6 +146,8 @@ class NarrativeStory:
                 fact_reference.to_dict()
                 for fact_reference in self.fact_references
             ],
+            "included": self.included,
+            "display_order": self.display_order,
         }
 
 
@@ -160,6 +165,9 @@ class NarratedEvidence:
     record_count: int
     limitations: tuple[str, ...]
     visualization_id: str | None
+    chart_filename: str | None
+    chart_title: str | None
+    chart_alt_text: str | None
     commentary: str
     commentary_source: str
     fact_references: tuple[NarratedFactReference, ...]
@@ -178,6 +186,9 @@ class NarratedEvidence:
             "record_count": self.record_count,
             "limitations": list(self.limitations),
             "visualization_id": self.visualization_id,
+            "chart_filename": self.chart_filename,
+            "chart_title": self.chart_title,
+            "chart_alt_text": self.chart_alt_text,
             "commentary": self.commentary,
             "commentary_source": self.commentary_source,
             "fact_references": [
@@ -267,7 +278,7 @@ def generate_narrated_report(
     if story_packs:
         if client is None:
             client = Client(host=host, timeout=float(timeout_seconds))
-        for story_pack in story_packs:
+        for display_order, story_pack in enumerate(story_packs, start=1):
             draft = _generate_story(
                 story_pack,
                 package=package,
@@ -277,12 +288,17 @@ def generate_narrated_report(
             if draft is None:
                 rejected_story_ids.append(story_pack.story_id)
                 stories.append(_deterministic_story(story_pack))
+                stories[-1] = replace(
+                    stories[-1],
+                    display_order=display_order,
+                )
                 continue
             stories.append(
                 _narrative_story(
                     story_pack,
                     draft=draft,
                     narration_source="ollama",
+                    display_order=display_order,
                 )
             )
             ai_narrated_ids.extend(
@@ -321,7 +337,7 @@ def generate_narrated_report(
             f"{', '.join(dict.fromkeys(rejected_story_ids))}."
         )
     return GeneratedReport(
-        schema_version=3,
+        schema_version=4,
         dataset_id=package.dataset_id,
         report_id=f"RPT-{secrets.token_hex(8).upper()}",
         version=0,
@@ -336,6 +352,166 @@ def generate_narrated_report(
         ai_narrated_evidence_ids=tuple(dict.fromkeys(ai_narrated_ids)),
         deterministic_only_evidence_ids=deterministic_only,
         generation_limitations=tuple(limitations),
+    )
+
+
+def publish_report_presentation(
+    report: GeneratedReport,
+    *,
+    included_story_ids: tuple[str, ...],
+    story_order: tuple[str, ...],
+) -> GeneratedReport:
+    """Create an unsaved immutable revision with validated story presentation."""
+
+    available = {story.story_id: story for story in report.stories}
+    if not available:
+        raise ReportNarrationError(
+            "This report has no synthesis stories to publish."
+        )
+    if (
+        not included_story_ids
+        or len(set(included_story_ids)) != len(included_story_ids)
+        or any(story_id not in available for story_id in included_story_ids)
+    ):
+        raise ReportNarrationError(
+            "Select at least one available report story."
+        )
+    if (
+        len(story_order) != len(available)
+        or len(set(story_order)) != len(story_order)
+        or set(story_order) != set(available)
+    ):
+        raise ReportNarrationError(
+            "Report story order must include every available story once."
+        )
+    included = set(included_story_ids)
+    stories = tuple(
+        replace(
+            available[story_id],
+            included=story_id in included,
+            display_order=index,
+        )
+        for index, story_id in enumerate(story_order, start=1)
+    )
+    return _revised_report(report, stories=stories)
+
+
+def regenerate_generated_story(
+    report: GeneratedReport,
+    package: ReportGenerationPackage,
+    *,
+    story_id: str,
+    model: str,
+    host: str,
+    timeout_seconds: int,
+    client: _ChatClient | None = None,
+) -> GeneratedReport:
+    """Regenerate one stable story while preserving the rest of the report."""
+
+    if report.source_package_sha256 != artifact_sha256(package.to_dict()):
+        raise ReportNarrationError(
+            "The generated report is stale because its package changed."
+        )
+    current_story = next(
+        (
+            story
+            for story in report.stories
+            if story.story_id == story_id
+        ),
+        None,
+    )
+    if current_story is None:
+        raise ReportNarrationError(
+            "The selected report story is unavailable."
+        )
+    story_pack = next(
+        (
+            pack
+            for pack in _story_packs(_package_items(package))
+            if pack.story_id == story_id
+        ),
+        None,
+    )
+    if story_pack is None:
+        raise ReportNarrationError(
+            "The selected story no longer matches current evidence."
+        )
+    if client is None:
+        client = Client(host=host, timeout=float(timeout_seconds))
+    draft = _generate_story(
+        story_pack,
+        package=package,
+        model=model,
+        client=client,
+    )
+    replacement_story = (
+        _narrative_story(
+            story_pack,
+            draft=draft,
+            narration_source="ollama",
+            display_order=current_story.display_order,
+        )
+        if draft is not None
+        else replace(
+            _deterministic_story(story_pack),
+            display_order=current_story.display_order,
+        )
+    )
+    replacement_story = replace(
+        replacement_story,
+        included=current_story.included,
+    )
+    stories = tuple(
+        replacement_story
+        if story.story_id == story_id
+        else story
+        for story in report.stories
+    )
+    return _revised_report(report, stories=stories, model=model)
+
+
+def included_report_stories(
+    report: GeneratedReport,
+) -> tuple[NarrativeStory, ...]:
+    """Return published stories in their validated display order."""
+
+    return tuple(
+        sorted(
+            (story for story in report.stories if story.included),
+            key=lambda story: story.display_order,
+        )
+    )
+
+
+def _revised_report(
+    report: GeneratedReport,
+    *,
+    stories: tuple[NarrativeStory, ...],
+    model: str | None = None,
+) -> GeneratedReport:
+    ai_ids = tuple(
+        dict.fromkeys(
+            evidence_id
+            for story in stories
+            if story.narration_source == "ollama"
+            for evidence_id in story.evidence_ids
+        )
+    )
+    ai_id_set = set(ai_ids)
+    deterministic_only = tuple(
+        item.evidence_id
+        for item in report.items
+        if item.evidence_id not in ai_id_set
+    )
+    return replace(
+        report,
+        schema_version=4,
+        version=0,
+        generated_at=datetime.now(UTC).isoformat(),
+        model=model or report.model,
+        stories=stories,
+        ai_narrated_evidence_ids=ai_ids,
+        deterministic_only_evidence_ids=deterministic_only,
     )
 
 
@@ -390,6 +566,7 @@ def _narrative_story(
     *,
     draft: _StoryDraft,
     narration_source: str,
+    display_order: int,
 ) -> NarrativeStory:
     lead = story_pack.items[0]
     return NarrativeStory(
@@ -406,6 +583,8 @@ def _narrative_story(
         caveat=draft.caveat,
         narration_source=narration_source,
         fact_references=draft.fact_references,
+        included=True,
+        display_order=display_order,
     )
 
 
@@ -441,6 +620,8 @@ def _deterministic_story(story_pack: _StoryPack) -> NarrativeStory:
         ),
         narration_source="deterministic_only",
         fact_references=fact_references,
+        included=True,
+        display_order=0,
     )
 
 
@@ -1054,6 +1235,9 @@ def _package_items(
             )
         insight_type = _text(record.get("insight_type"), "observation")
         metric = _text(record.get("metric"), "dataset")
+        chart_filename, chart_title, chart_alt_text = _chart_metadata(
+            record.get("chart")
+        )
         items.append(
             NarratedEvidence(
                 evidence_id=evidence_id,
@@ -1073,6 +1257,9 @@ def _package_items(
                 record_count=_nonnegative_int(record.get("record_count")),
                 limitations=_string_tuple(record.get("limitations")),
                 visualization_id=None,
+                chart_filename=chart_filename,
+                chart_title=chart_title,
+                chart_alt_text=chart_alt_text,
                 commentary="",
                 commentary_source="deterministic_only",
                 fact_references=(),
@@ -1100,12 +1287,42 @@ def _package_items(
                 record_count=evidence.filtered_record_count,
                 limitations=evidence.limitations,
                 visualization_id=evidence.visualization_id,
+                chart_filename=None,
+                chart_title=evidence.title,
+                chart_alt_text=(
+                    f"{evidence.chart_type.replace('_', ' ')} chart for "
+                    f"{evidence.title}"
+                ),
                 commentary="",
                 commentary_source="deterministic_only",
                 fact_references=(),
             )
         )
     return tuple(items)
+
+
+def _chart_metadata(
+    value: object,
+) -> tuple[str | None, str | None, str | None]:
+    if value is None:
+        return None, None, None
+    if not isinstance(value, dict):
+        raise ReportNarrationError(
+            "Report evidence chart metadata is invalid."
+        )
+    filename = value.get("filename")
+    if (
+        not isinstance(filename, str)
+        or _CHART_FILENAME.fullmatch(filename) is None
+    ):
+        raise ReportNarrationError(
+            "Report evidence chart filename is invalid."
+        )
+    return (
+        filename,
+        _optional_bounded_text(value.get("title"), maximum=300),
+        _optional_bounded_text(value.get("alt_text"), maximum=500),
+    )
 
 
 def _model_descriptor(
@@ -1219,7 +1436,7 @@ def _parse_report(path: Path) -> GeneratedReport:
         raise ReportNarrationError("Generated report is unreadable.") from error
     if (
         not isinstance(payload, dict)
-        or payload.get("schema_version") not in {1, 2, 3}
+        or payload.get("schema_version") not in {1, 2, 3, 4}
     ):
         raise ReportNarrationError(
             "Generated report has an unsupported schema."
@@ -1248,10 +1465,14 @@ def _parse_report(path: Path) -> GeneratedReport:
             "Generated report contains duplicate evidence IDs."
         )
     stories = tuple(
-        _parse_story(story, item_by_id=item_by_id)
-        for story in raw_stories
+        _parse_story(
+            story,
+            item_by_id=item_by_id,
+            default_display_order=index,
+        )
+        for index, story in enumerate(raw_stories, start=1)
     )
-    if payload.get("schema_version") == 3 and items and not stories:
+    if payload.get("schema_version") in {3, 4} and items and not stories:
         raise ReportNarrationError(
             "Generated report synthesis stories are missing."
         )
@@ -1259,13 +1480,20 @@ def _parse_report(path: Path) -> GeneratedReport:
         raise ReportNarrationError(
             "Generated report contains duplicate story IDs."
         )
+    if (
+        any(story.display_order < 1 for story in stories)
+        or len({story.display_order for story in stories}) != len(stories)
+    ):
+        raise ReportNarrationError(
+            "Generated report story order is invalid."
+        )
     ai_narrated_ids = _string_tuple(
         payload.get("ai_narrated_evidence_ids")
     )
     deterministic_only_ids = _string_tuple(
         payload.get("deterministic_only_evidence_ids")
     )
-    if payload.get("schema_version") == 3:
+    if payload.get("schema_version") in {3, 4}:
         expected_ai_ids = {
             evidence_id
             for story in stories
@@ -1308,6 +1536,7 @@ def _parse_story(
     value: object,
     *,
     item_by_id: dict[str, NarratedEvidence],
+    default_display_order: int,
 ) -> NarrativeStory:
     story = _dict(value)
     story_id = _text(story.get("story_id"), "")
@@ -1363,6 +1592,20 @@ def _parse_story(
         raise ReportNarrationError(
             "Generated report story source is invalid."
         )
+    included = story.get("included", True)
+    display_order = story.get(
+        "display_order",
+        default_display_order,
+    )
+    if (
+        not isinstance(included, bool)
+        or isinstance(display_order, bool)
+        or not isinstance(display_order, int)
+        or display_order < 1
+    ):
+        raise ReportNarrationError(
+            "Generated report story presentation is invalid."
+        )
     lead = story_pack.items[0]
     if (
         story.get("section") != lead.section
@@ -1399,6 +1642,8 @@ def _parse_story(
         ),
         narration_source=narration_source,
         fact_references=fact_references,
+        included=included,
+        display_order=display_order,
     )
 
 
@@ -1474,6 +1719,14 @@ def _parse_item(value: object) -> NarratedEvidence:
         raise ReportNarrationError(
             "Generated report visualization ID is invalid."
         )
+    chart_filename = item.get("chart_filename")
+    if chart_filename is not None and (
+        not isinstance(chart_filename, str)
+        or _CHART_FILENAME.fullmatch(chart_filename) is None
+    ):
+        raise ReportNarrationError(
+            "Generated report chart filename is invalid."
+        )
     facts = _json_value(item.get("facts"))
     raw_fact_references = item.get("fact_references", [])
     if not isinstance(raw_fact_references, list):
@@ -1514,6 +1767,15 @@ def _parse_item(value: object) -> NarratedEvidence:
         record_count=_nonnegative_int(item.get("record_count")),
         limitations=_string_tuple(item.get("limitations")),
         visualization_id=visualization_id,
+        chart_filename=chart_filename,
+        chart_title=_optional_bounded_text(
+            item.get("chart_title"),
+            maximum=300,
+        ),
+        chart_alt_text=_optional_bounded_text(
+            item.get("chart_alt_text"),
+            maximum=500,
+        ),
         commentary=commentary,
         commentary_source=source,
         fact_references=fact_references,
@@ -1615,6 +1877,25 @@ def _validate_identity(dataset_id: object, report_id: object) -> None:
 
 def _text(value: object, default: str) -> str:
     return value if isinstance(value, str) and value else default
+
+
+def _optional_bounded_text(
+    value: object,
+    *,
+    maximum: int,
+) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ReportNarrationError(
+            "Generated report text metadata is invalid."
+        )
+    normalized = " ".join(value.split())
+    if not normalized or len(normalized) > maximum:
+        raise ReportNarrationError(
+            "Generated report text metadata has an invalid length."
+        )
+    return normalized
 
 
 def _string_tuple(value: object) -> tuple[str, ...]:

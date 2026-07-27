@@ -17,14 +17,28 @@
       .finding { font-size: 1.08rem; }
       .story-source { color: #555; font-size: 0.92rem; }
       .claim-list { padding-left: 1.3rem; }
+      .report-chart { display: block; max-height: 32rem; max-width: 100%; margin: 1rem auto; }
+      .publishing-controls { background: #f4f7fb; padding: 1rem; }
+      @media print {
+        body { margin: 0; }
+        .publishing-controls, .screen-only { display: none; }
+        article { break-inside: avoid; }
+        details { display: block; }
+      }
     </style>
   </head>
   <body>
     <main>
       <h1>{{ report.report_settings.title }}</h1>
+      {% if report.report_settings.company_name %}
+        <p><strong>{{ report.report_settings.company_name }}</strong></p>
+      {% endif %}
       <p>
         Generated report version {{ report.version }} ·
         {{ report.generated_at }} · local model {{ report.model }}
+        {% if report.report_settings.report_author %}
+          · author {{ report.report_settings.report_author }}
+        {% endif %}
       </p>
 
       <h2>Executive summary</h2>
@@ -32,13 +46,13 @@
         <span class="source-label">User-provided business objective:</span>
         {{ report.report_settings.business_objective }}
       </p>
-      {% if report.stories %}
+      {% if published_stories %}
         <p>
           The highest-priority findings synthesize related evidence below.
           Every displayed numerical claim is independently resolved from
           Python evidence.
         </p>
-        {% for story in report.stories[:3] %}
+        {% for story in published_stories[:3] %}
           <article class="story">
             <h3>{{ story.headline }}</h3>
             <p class="finding">
@@ -80,6 +94,49 @@
         </p>
       {% endif %}
 
+      {% if report.stories %}
+        <section class="publishing-controls">
+          <h2>Report publishing controls</h2>
+          <p>
+            Include, exclude, or reorder stories. Saving creates another
+            immutable report version and does not call Ollama.
+          </p>
+          <form method="post" action="{{ url_for(
+            'core.publish_generated_report',
+            dataset_id=report.dataset_id,
+            report_id=report.report_id
+          ) }}">
+            {% for story in report.stories|sort(attribute="display_order") %}
+              <p>
+                <label>
+                  <input type="checkbox" name="included_story_ids"
+                    value="{{ story.story_id }}"
+                    {% if story.included %}checked{% endif %}>
+                  Include {{ story.headline }}
+                </label>
+                <label>
+                  Display order
+                  <input type="number"
+                    name="story_order_{{ story.story_id }}"
+                    min="1" max="{{ report.stories|length }}"
+                    value="{{ story.display_order }}" required>
+                </label>
+              </p>
+            {% endfor %}
+            <button type="submit">Save report presentation</button>
+          </form>
+          <p>
+            <a href="{{ url_for(
+              'core.generated_report_pdf',
+              dataset_id=report.dataset_id,
+              report_id=report.report_id
+            ) }}">
+              Download print-ready PDF
+            </a>
+          </p>
+        </section>
+      {% endif %}
+
       <h2>KPI overview</h2>
       {% if report.kpis %}
         <ul>
@@ -110,6 +167,14 @@
                   {{ "AI-synthesized from verified Python evidence" if story.narration_source == "ollama" else "Deterministic fallback summary" }}
                   · {{ story.story_id }}
                 </p>
+                <form class="screen-only" method="post" action="{{ url_for(
+                  'core.regenerate_report_story',
+                  dataset_id=report.dataset_id,
+                  report_id=report.report_id,
+                  story_id=story.story_id
+                ) }}">
+                  <button type="submit">Regenerate only this story</button>
+                </form>
                 <p class="finding">
                   <span class="source-label">Observation:</span>
                   {{ story.finding }}
@@ -170,6 +235,38 @@
                     {% endif %}{{ "," if not loop.last }}
                   {% endfor %}
                 </p>
+                {% for evidence_id in story.evidence_ids %}
+                  {% set evidence_item = item_by_id.get(evidence_id) %}
+                  {% if evidence_item and evidence_item.chart_filename %}
+                    <figure>
+                      <img class="report-chart"
+                        src="{{ url_for(
+                          'core.evidence_chart',
+                          dataset_id=report.dataset_id,
+                          evidence_id=evidence_id
+                        ) }}"
+                        alt="{{ evidence_item.chart_alt_text or evidence_item.title }}">
+                      <figcaption>
+                        {{ evidence_item.chart_title or evidence_item.title }}
+                        · {{ evidence_id }}
+                      </figcaption>
+                    </figure>
+                  {% elif evidence_item and evidence_item.visualization_id %}
+                    <figure>
+                      <img class="report-chart"
+                        src="{{ url_for(
+                          'core.saved_visualization_chart',
+                          dataset_id=report.dataset_id,
+                          visualization_id=evidence_item.visualization_id
+                        ) }}"
+                        alt="{{ evidence_item.chart_alt_text or evidence_item.title }}">
+                      <figcaption>
+                        {{ evidence_item.chart_title or evidence_item.title }}
+                        · {{ evidence_id }}
+                      </figcaption>
+                    </figure>
+                  {% endif %}
+                {% endfor %}
               </article>
             {% endfor %}
           </section>

@@ -13,6 +13,7 @@ dependencies = [
     "ollama>=0.6.2,<0.7",
     "openpyxl>=3.1.5,<4",
     "matplotlib>=3.11,<4",
+    "reportlab>=4.4,<5",
 ]
 
 [tool.setuptools.packages.find]

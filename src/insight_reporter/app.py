@@ -8,6 +8,7 @@ from insight_reporter.config import DefaultConfig
 from insight_reporter.logging_config import configure_logging
 from insight_reporter.routes import core
 
+
 def create_app(test_config: dict[str, object] | None = None) -> Flask:
     """Create a configured application instance.
 

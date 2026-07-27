@@ -1,5 +1,6 @@
 """Milestone 5A report-selection correctness and staleness tests."""
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -151,7 +152,7 @@ def test_report_selection_is_ordered_traceable_and_round_trips(
     )
 
     assert loaded == report
-    assert loaded.schema_version == 1
+    assert loaded.schema_version == 2
     assert loaded.sources == tuple(
         source.to_dict() for source in configuration.sources
     )
@@ -170,6 +171,33 @@ def test_report_selection_is_ordered_traceable_and_round_trips(
         loaded.selected_evidence_ids,
         key=lambda evidence_id: selected_ranks[evidence_id],
     )
+
+
+def test_previous_report_configuration_loads_with_empty_branding(
+    tmp_path: Path,
+) -> None:
+    configuration, evidence, visualizations = _assets(tmp_path)
+    report = _validated_report(configuration, evidence, visualizations)
+    path = save_report_configuration(
+        report,
+        report_configuration_dir=tmp_path / "reports",
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["schema_version"] = 1
+    payload.pop("company_name")
+    payload.pop("report_author")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_report_configuration(
+        path,
+        configuration=configuration,
+        evidence_payload=evidence,
+        visualizations=visualizations,
+    )
+
+    assert loaded.schema_version == 2
+    assert loaded.company_name == ""
+    assert loaded.report_author == ""
 
 
 def test_kpi_only_report_works_without_evidence_or_visualizations(

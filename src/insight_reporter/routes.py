@@ -1,5 +1,6 @@
 """Local health and secure multi-format dataset routes."""
 
+import io
 import json
 import re
 from dataclasses import asdict, replace
@@ -13,6 +14,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     send_from_directory,
     url_for,
 )
@@ -109,13 +111,22 @@ from insight_reporter.report_generation_package import (
     save_report_generation_package,
 )
 from insight_reporter.report_narration import (
+    GeneratedReport,
     NarratedEvidence,
     NarrativeStory,
     ReportNarrationError,
     generate_narrated_report,
+    included_report_stories,
     latest_generated_report,
     load_generated_report,
+    publish_report_presentation,
+    regenerate_generated_story,
     save_generated_report,
+)
+from insight_reporter.report_pdf import (
+    ReportPdfError,
+    build_report_pdf,
+    report_pdf_filename,
 )
 from insight_reporter.visualization_builder import (
     AGGREGATIONS,
@@ -853,6 +864,8 @@ def configure_report(dataset_id: str):  # type: ignore[no-untyped-def]
             evidence_payload=evidence,
             visualizations=visualizations,
             title=request.form.get("title", ""),
+            company_name=request.form.get("company_name", ""),
+            report_author=request.form.get("report_author", ""),
             business_objective=request.form.get(
                 "business_objective", ""
             ),
@@ -1049,7 +1062,7 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, _visualizations, package = (
+        _configuration, _evidence, visualizations, package = (
             _current_report_package(dataset_id, profile)
         )
         draft = generate_narrated_report(
@@ -1167,17 +1180,206 @@ def generated_report(
         VisualizationError,
     ) as error:
         abort(422, description=str(error))
+    published_stories = included_report_stories(report)
     return render_template(
         "generated_report.html",
         report=report,
-        story_sections=_generated_story_sections(report.stories),
+        published_stories=published_stories,
+        story_sections=_generated_story_sections(published_stories),
         sections=_generated_report_sections(report.items),
+        item_by_id={
+            item.evidence_id: item for item in report.items
+        },
         report_json=json.dumps(
             report.to_dict(),
             ensure_ascii=False,
             indent=2,
             sort_keys=True,
         ),
+    )
+
+
+@core.post(
+    "/reports/<dataset_id>/generated/<report_id>/presentation"
+)
+def publish_generated_report(
+    dataset_id: str,
+    report_id: str,
+):  # type: ignore[no-untyped-def]
+    """Save story inclusion and ordering as a new immutable report version."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        _configuration, _evidence, _visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+        report = load_generated_report(
+            dataset_id,
+            report_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+            expected_package_sha256=artifact_sha256(package.to_dict()),
+        )
+        included_story_ids = tuple(
+            request.form.getlist("included_story_ids")
+        )
+        positions: list[tuple[int, str]] = []
+        for story in report.stories:
+            raw_position = request.form.get(
+                f"story_order_{story.story_id}",
+                "",
+            )
+            try:
+                position = int(raw_position)
+            except (TypeError, ValueError) as error:
+                raise ReportNarrationError(
+                    "Every report story requires a numeric display order."
+                ) from error
+            positions.append((position, story.story_id))
+        if (
+            any(position < 1 for position, _story_id in positions)
+            or len({position for position, _story_id in positions})
+            != len(positions)
+        ):
+            raise ReportNarrationError(
+                "Report story display positions must be unique positive "
+                "numbers."
+            )
+        revised = publish_report_presentation(
+            report,
+            included_story_ids=included_story_ids,
+            story_order=tuple(
+                story_id
+                for _position, story_id in sorted(positions)
+            ),
+        )
+        published, _path = save_generated_report(
+            revised,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        ReportNarrationError,
+        VisualizationError,
+    ) as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for(
+            "core.generated_report",
+            dataset_id=dataset_id,
+            report_id=published.report_id,
+        ),
+        code=303,
+    )
+
+
+@core.post(
+    "/reports/<dataset_id>/generated/<report_id>/stories/<story_id>/regenerate"
+)
+def regenerate_report_story(
+    dataset_id: str,
+    report_id: str,
+    story_id: str,
+):  # type: ignore[no-untyped-def]
+    """Regenerate only one story and append a new immutable version."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        _configuration, _evidence, _visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+        report = load_generated_report(
+            dataset_id,
+            report_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+            expected_package_sha256=artifact_sha256(package.to_dict()),
+        )
+        revised = regenerate_generated_story(
+            report,
+            package,
+            story_id=story_id,
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=int(
+                current_app.config["OLLAMA_TIMEOUT_SECONDS"]
+            ),
+        )
+        regenerated, _path = save_generated_report(
+            revised,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        ReportNarrationError,
+        VisualizationError,
+    ) as error:
+        abort(503, description=str(error))
+    return redirect(
+        url_for(
+            "core.generated_report",
+            dataset_id=dataset_id,
+            report_id=regenerated.report_id,
+        ),
+        code=303,
+    )
+
+
+@core.get("/reports/<dataset_id>/generated/<report_id>/pdf")
+def generated_report_pdf(
+    dataset_id: str,
+    report_id: str,
+):  # type: ignore[no-untyped-def]
+    """Download one source-bound report as a print-ready PDF."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        _configuration, _evidence, visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+        report = load_generated_report(
+            dataset_id,
+            report_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+            expected_package_sha256=artifact_sha256(package.to_dict()),
+        )
+        rendered = build_report_pdf(
+            report,
+            chart_paths=_generated_report_chart_paths(
+                report,
+                visualizations=visualizations,
+            ),
+        )
+    except (
+        BusinessConfigurationError,
+        EvidenceError,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        ReportNarrationError,
+        ReportPdfError,
+        VisualizationError,
+    ) as error:
+        abort(422, description=str(error))
+    return send_file(
+        io.BytesIO(rendered),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=report_pdf_filename(report),
+        max_age=0,
     )
 
 
@@ -2066,6 +2268,32 @@ def _current_report_package(
     return configuration, evidence, visualizations, package
 
 
+def _generated_report_chart_paths(
+    report: GeneratedReport,
+    *,
+    visualizations: tuple[VisualizationArtifact, ...],
+) -> dict[str, Path]:
+    chart_dir = Path(current_app.config["CHART_DIR"])
+    visualization_by_id = {
+        artifact.visualization_id: artifact
+        for artifact in visualizations
+        if artifact.visualization_id is not None
+    }
+    chart_paths: dict[str, Path] = {}
+    for item in report.items:
+        filename = item.chart_filename
+        if filename is None and item.visualization_id is not None:
+            artifact = visualization_by_id.get(item.visualization_id)
+            if artifact is not None:
+                filename = artifact_chart_filename(artifact)
+        if filename is None:
+            continue
+        chart_path = chart_dir / filename
+        if chart_path.is_file():
+            chart_paths[item.evidence_id] = chart_path
+    return chart_paths
+
+
 def _generated_report_sections(
     items: tuple[NarratedEvidence, ...],
 ) -> tuple[tuple[str, tuple[NarratedEvidence, ...]], ...]:
@@ -2150,6 +2378,8 @@ def _default_report_form(
 ) -> MultiDict[str, str]:
     values = MultiDict[str, str]()
     values["title"] = f"{configuration.primary_metric.name} insight report"
+    values["company_name"] = ""
+    values["report_author"] = ""
     values["business_objective"] = configuration.business_objective
     values["audience"] = "management"
     values["tone"] = "professional"
@@ -2184,6 +2414,8 @@ def _report_form_from_configuration(
 ) -> MultiDict[str, str]:
     values = MultiDict[str, str]()
     values["title"] = report.title
+    values["company_name"] = report.company_name
+    values["report_author"] = report.report_author
     values["business_objective"] = report.business_objective
     values["audience"] = report.audience
     values["tone"] = report.tone

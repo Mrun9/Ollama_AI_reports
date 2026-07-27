@@ -40,6 +40,16 @@
             value="{{ form_data.get('title', '') }}">
         </p>
         <p>
+          <label for="company-name">Optional company name</label>
+          <input id="company-name" name="company_name" maxlength="200"
+            value="{{ form_data.get('company_name', '') }}">
+        </p>
+        <p>
+          <label for="report-author">Optional report author</label>
+          <input id="report-author" name="report_author" maxlength="200"
+            value="{{ form_data.get('report_author', '') }}">
+        </p>
+        <p>
           <label for="report-objective">Business objective</label>
           <textarea id="report-objective" name="business_objective"
             maxlength="2000" required>{{ form_data.get('business_objective', '') }}</textarea>

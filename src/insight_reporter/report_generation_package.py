@@ -149,6 +149,8 @@ def build_report_generation_package(
         ),
         report_settings={
             "title": report.title,
+            "company_name": report.company_name,
+            "report_author": report.report_author,
             "business_objective": report.business_objective,
             "audience": report.audience,
             "tone": report.tone,

@@ -5,14 +5,15 @@ evidence-grounded reports. Python performs deterministic calculations, and a loc
 provides optional configuration suggestions and evidence-grounded narrative wording from verified
 Python facts.
 
-The project currently implements **Milestone 5B.1: Multi-evidence report synthesis**. It profiles one
+The project currently implements **Milestone 5C: Final report composition and export**. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
 or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
 every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
 evidence; lets users configure, review, and save validated KPI or supplementary charts; and creates
 a source-bound selection of the trusted KPIs, evidence, and charts. It then builds a bounded,
 evidence-only JSON package and uses local Ollama for structured stories whose numerical claims are
-validated against Python facts.
+validated against Python facts. Published reports support story selection and ordering, embedded
+charts, print-ready HTML, and verified PDF downloads.
 
 ## Current capabilities
 
@@ -124,6 +125,14 @@ validated against Python facts.
 - Stable `STY-...` story packs containing up to three related evidence records for one metric
 - Structured headline, observation, interpretation, follow-up, and caveat fields
 - Deterministic fallback stories when an individual model response fails validation
+- Report-wide executive summary assembled from the highest-priority included stories
+- User-controlled story inclusion and ordering without another Ollama call
+- Single-story regeneration without changing the remaining report
+- Presentation changes and story regeneration saved as new immutable report versions
+- Automatic and manual charts embedded directly in the generated HTML report
+- Print CSS and downloadable PDF with the same included stories, claims, charts, sources, and
+  optional evidence appendix
+- Optional company name and report-author branding
 - A bounded catalogue of exact Python-verified display values, qualitative labels, and allowed
   fact-reference paths in model prompts
 - Structured responses restricted to the exact supplied `STY-...`, `EVD-...`, and `MVE-...` scope
@@ -199,6 +208,10 @@ Select **Generate report with llama3.2:latest** to create an immutable HTML repo
 Related evidence is grouped into concise report stories. Python independently resolves every
 displayed numerical claim, while Ollama interpretation is separately labelled. Regenerating creates
 a new version and does not replace the previous valid report.
+On the generated report page, use **Report publishing controls** to include, exclude, or reorder
+stories. Saving those choices appends a version without calling Ollama. Each story also has a
+targeted regeneration button. Use **Download print-ready PDF** to export the current published
+selection with its embedded charts and evidence appendix.
 
 After the first configuration is saved, return to the dataset profile and select
 **Suggest additional source KPIs** to request another set from Ollama. Already configured KPI names
@@ -273,6 +286,7 @@ GET   /reports/<dataset_id>/package
 GET   /reports/<dataset_id>/generated
 GET   /reports/<dataset_id>/generated/<report_id>
 GET   /reports/<dataset_id>/generated/<report_id>/json
+GET   /reports/<dataset_id>/generated/<report_id>/pdf
 GET   /health
 POST  /upload
 POST  /dataset/<dataset_id>/sheet
@@ -291,6 +305,8 @@ POST  /visualizations/<dataset_id>/preview/<token>/save
 POST  /visualizations/<dataset_id>/<visualization_id>/regenerate
 POST  /reports/<dataset_id>/configure
 POST  /reports/<dataset_id>/generate
+POST  /reports/<dataset_id>/generated/<report_id>/presentation
+POST  /reports/<dataset_id>/generated/<report_id>/stories/<story_id>/regenerate
 ```
 
 ## Derived KPI rules
@@ -452,6 +468,10 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
   overwrite an existing valid report.
 - Generated reports are immutable versioned artifacts and reopen only while their source-package
   fingerprint matches the current configuration and evidence.
+- Story presentation revisions retain all stories in the JSON artifact, marking excluded stories
+  explicitly so they can be restored later.
+- HTML and PDF use the same included story ordering and exact fact references. Missing chart files
+  are omitted rather than producing broken images.
 - HTML values are escaped, user notes remain labelled as user-provided, and model wording remains
   labelled as AI-written interpretation.
 
@@ -567,7 +587,7 @@ This standalone check is optional and separate from the Flask workflow.
   code.
 - AI confidence is advisory and not a calibrated probability.
 - Suggestions depend on the semantic ability of the selected local model and require human review.
-- No PDF or DOCX export yet
+- No DOCX export yet
 - Generated synthesis remains intentionally bounded to related evidence packs rather than
   unconstrained long-form model prose
 - A report configuration currently belongs to one dataset scope

@@ -15,8 +15,11 @@ from insight_reporter.report_generation_package import (
 from insight_reporter.report_narration import (
     ReportNarrationError,
     generate_narrated_report,
+    included_report_stories,
     latest_generated_report,
     load_generated_report,
+    publish_report_presentation,
+    regenerate_generated_story,
     save_generated_report,
 )
 
@@ -163,7 +166,7 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
         story.narration_source == "ollama"
         for story in report.stories
     )
-    assert report.schema_version == 3
+    assert report.schema_version == 4
     assert report.items[0].facts == {
         "highest_segment": "North",
         "value": 123.45,
@@ -233,6 +236,86 @@ def test_lower_priority_evidence_remains_in_the_appendix() -> None:
         "EVD-000000000000000B",
         "EVD-000000000000000C",
     }
+
+
+def test_story_presentation_creates_a_reordered_immutable_revision() -> None:
+    report = generate_narrated_report(
+        _package(record_count=4),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+    first_story, second_story = report.stories
+
+    revised = publish_report_presentation(
+        report,
+        included_story_ids=(second_story.story_id,),
+        story_order=(second_story.story_id, first_story.story_id),
+    )
+
+    assert revised.report_id == report.report_id
+    assert revised.version == 0
+    assert revised.stories[0].story_id == second_story.story_id
+    assert revised.stories[0].display_order == 1
+    assert revised.stories[0].included is True
+    assert revised.stories[1].included is False
+    assert included_report_stories(revised) == (revised.stories[0],)
+
+
+def test_one_story_can_be_regenerated_without_changing_others() -> None:
+    package = _package(record_count=4)
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+    target = report.stories[0]
+    untouched = report.stories[1]
+
+    revised = regenerate_generated_story(
+        report,
+        package,
+        story_id=target.story_id,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(
+            commentary="The regenerated evidence supports focused review."
+        ),
+    )
+
+    assert revised.report_id == report.report_id
+    assert revised.version == 0
+    assert revised.stories[0].finding == (
+        "The regenerated evidence supports focused review."
+    )
+    assert revised.stories[1] == untouched
+
+
+def test_deterministic_chart_metadata_is_retained_for_publishing() -> None:
+    package = _package(record_count=1)
+    record = dict(package.deterministic_evidence[0])
+    record["chart"] = {
+        "filename": "a" * 32 + ".png",
+        "title": "Revenue by segment",
+        "alt_text": "Bar chart comparing revenue by segment",
+    }
+    package = replace(package, deterministic_evidence=(record,))
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+
+    assert report.items[0].chart_filename == "a" * 32 + ".png"
+    assert report.items[0].chart_title == "Revenue by segment"
+    assert report.items[0].chart_alt_text.startswith("Bar chart")
 
 
 def test_exact_referenced_number_is_allowed_in_commentary() -> None:
