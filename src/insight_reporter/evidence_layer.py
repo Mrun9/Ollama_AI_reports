@@ -403,6 +403,8 @@ def _supporting_data(
         return _dict_rows(values)
     if insight.type == "segment_ranking":
         return _dict_rows(observation.get("ranking"))
+    if insight.type == "segment_benchmark_performance":
+        return _dict_rows(observation.get("segment_performance"))
     if insight.type == "segment_contribution":
         return _dict_rows(observation.get("contributions"))
     if insight.type == "iqr_anomaly_detection" and metric_configuration is not None:
@@ -550,6 +552,12 @@ def _calculation_description(insight: Insight) -> str:
             f"{observation.get('category_column', 'the configured category')}, applied "
             "the configured aggregation, then sorted values from highest to lowest."
         ),
+        "segment_benchmark_performance": (
+            f"Grouped valid {insight.metric} values by "
+            f"{observation.get('category_column', 'the configured category')}, "
+            "compared every row with the confirmed target, and ranked segments "
+            "by the percentage of rows that missed that target."
+        ),
         "segment_contribution": (
             f"Calculated each segment's change in {insight.metric} between the two "
             "comparison periods and divided it by the overall change when non-zero."
@@ -604,18 +612,19 @@ def _ranking(insight: Insight) -> EvidenceRanking:
     )
     relevance = {
         "period_change": 1.0,
-        "trend": 0.95,
+        "segment_benchmark_performance": 1.0,
+        "benchmark_breach": 0.98,
         "segment_contribution": 0.95,
         "segment_ranking": 0.9,
-        "benchmark_breach": 0.9,
-        "iqr_anomaly_detection": 0.8,
-        "numeric_correlation": 0.75,
-        "missing_data_warning": 0.7,
-        "insufficient_data_warning": 0.4,
-        "analysis_skipped": 0.25,
+        "trend": 0.85,
+        "iqr_anomaly_detection": 0.7,
+        "numeric_correlation": 0.6,
+        "missing_data_warning": 0.55,
+        "insufficient_data_warning": 0.3,
+        "analysis_skipped": 0.15,
     }.get(insight.type, 0.5)
     impact = _impact_score(insight)
-    combined = (0.5 * impact) + (0.3 * confidence) + (0.2 * relevance)
+    combined = (0.5 * impact) + (0.2 * confidence) + (0.3 * relevance)
     return EvidenceRanking(
         impact=_score(impact),
         confidence=_score(confidence),
@@ -665,6 +674,14 @@ def _impact_score(insight: Insight) -> float:
                 and (number := _number(item.get("contribution_percentage"))) is not None
             ]
         return _bounded(max(values, default=0.0), scale=100)
+    if insight.type == "segment_benchmark_performance":
+        worst = observation.get("worst_segment")
+        return _bounded(
+            _number(worst.get("breach_percentage"))
+            if isinstance(worst, dict)
+            else None,
+            scale=100,
+        )
     if insight.type == "iqr_anomaly_detection":
         count = _number(observation.get("anomaly_count")) or 0
         return min(1.0, count / max(insight.record_count, 1))
@@ -696,6 +713,8 @@ def _chart_type_for(
         return "time_trend"
     if insight.type == "segment_ranking":
         return "category_comparison"
+    if insight.type == "segment_benchmark_performance":
+        return "segment_target_performance"
     if insight.type == "segment_contribution":
         return "segment_contribution"
     if insight.type == "iqr_anomaly_detection":
@@ -783,6 +802,39 @@ def _generate_chart(
             )
             axis.set_ylabel("Absolute change")
             data_columns = ("segment", "absolute_change", "contribution_percentage")
+            record_count = len(points)
+        elif chart_type == "segment_target_performance":
+            points = [
+                (
+                    str(row.get("segment", "")),
+                    _number(row.get("breach_percentage")),
+                )
+                for row in supporting_data[:20]
+            ]
+            points = [
+                (label, value)
+                for label, value in points
+                if value is not None
+            ]
+            if not points:
+                return _close_empty(figure, plt)
+            points.reverse()
+            axis.barh(
+                [_safe_label(label) for label, _ in points],
+                [value for _, value in points],
+                color="#d95f02",
+            )
+            axis.set_xlabel("Records missing target (%)")
+            axis.set_xlim(0, 100)
+            data_columns = (
+                "segment",
+                "target",
+                "average_value",
+                "average_gap_to_target",
+                "breach_count",
+                "record_count",
+                "breach_percentage",
+            )
             record_count = len(points)
         elif chart_type == "distribution_iqr_outliers":
             values = [
@@ -882,6 +934,7 @@ def _chart_title(chart_type: str) -> str:
         "time_trend": "Time trend",
         "category_comparison": "Category comparison",
         "segment_contribution": "Segment contribution",
+        "segment_target_performance": "Segment target performance",
         "distribution_iqr_outliers": "Distribution and IQR outliers",
         "missing_data_overview": "Missing-data overview",
     }[chart_type]

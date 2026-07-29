@@ -30,6 +30,7 @@ class _StoryClient:
             prompt = kwargs["messages"][1]["content"]
             report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
             story = report_payload["stories"][0]
+            fact = story["available_fact_references"][0]
             qualifiers = (
                 "Primary",
                 "Secondary",
@@ -43,12 +44,20 @@ class _StoryClient:
                         {
                             "points": [
                                 {
-                                    "text": (
+                                    "finding": (
                                         f"{qualifier} revenue finding is "
-                                        "relevant to the objective."
+                                        f"{fact['display_value']} for North."
+                                    ),
+                                    "business_implication": (
+                                        "This revenue result is relevant to "
+                                        "the objective."
+                                    ),
+                                    "recommended_action": (
+                                        "Review the North result and monitor "
+                                        "the next validated period."
                                     ),
                                     "story_ids": [story["story_id"]],
-                                    "fact_references": [],
+                                    "fact_references": [fact["reference"]],
                                 }
                                 for qualifier in qualifiers
                             ]
@@ -197,8 +206,13 @@ def test_pdf_contains_published_stories_evidence_and_chart(
     assert "Executive summary" in extracted
     assert "AI-generated and Python-validated 5-point summary" in extracted
     assert "Primary revenue finding" in extracted
+    assert "What happened:" in extracted
+    assert "Why it matters:" in extracted
+    assert "Recommended action:" in extracted
+    assert "Verified business context:" in extracted
     assert "Primary revenue pattern merits review" in extracted
     assert "123.45" in extracted
+    assert "AI generation diagnostics" in extracted
     assert "Source traceability" in extracted
     assert "Evidence appendix" in extracted
     assert any(page.images for page in reader.pages)

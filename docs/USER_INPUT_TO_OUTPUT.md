@@ -254,6 +254,8 @@ This is the main analytical stage and the source of report facts.
 - change and volatility signals;
 - concentration or distribution observations;
 - comparisons involving derived KPIs.
+- per-region or per-segment target attainment, including the worst segment,
+  average target gap, and breach percentage.
 
 Each finding includes structured values and provenance instead of only prose.
 
@@ -357,6 +359,11 @@ The report package is the safe boundary between analytics and narration.
 4. It excludes raw dataset rows and unnecessary columns.
 5. It records fingerprints/provenance needed to detect stale downstream output.
 
+Selected category values are not copied from arbitrary raw rows. Product,
+region, channel, or similar names become eligible only when the user configured
+that category and a deterministic insight or validated chart retained the
+value as evidence.
+
 **Output**
 
 - `report_packages/<dataset_id>.json`.
@@ -375,26 +382,39 @@ This stage changes structured evidence into readable report prose.
 
 **Transformation**
 
-1. `report_narration.build_narration_prompt()` creates the request.
-2. The local Ollama model returns structured report sections.
+1. `report_narration.generate_narrated_report()` groups the highest-priority
+   evidence into bounded story packs and creates the structured requests.
+2. The local Ollama model returns structured report stories.
 3. The narration validator checks schema, evidence references, unsupported claims, numeric grounding, and usable text.
 4. Retry/repair logic can request a corrected response when the first output is malformed.
 5. The internal `report_narration._generate_executive_summary()` path
-   requests exactly five prioritized findings from the validated stories and
-   their Python fact catalog. If that output fails validation,
+   requests exactly five prioritized management findings from the validated
+   stories and their Python fact catalog. Each point must say what happened,
+   why it matters, and what management should review next. It must quote an
+   exact selected value and can name only supplied periods, quarters, regions,
+   segments, or benchmark conditions. If that output fails validation,
    `_deterministic_executive_summary()` supplies an explicitly labelled
    fallback.
-6. `GeneratedReport` validation assembles the final versioned artifact.
+   When cited evidence contains verified business context, the finding must
+   name at least one exact product, region, segment, chart category, cohort, or
+   period. Python rejects generic wording that ignores all available context.
+6. `GeneratedReport` records AI-generation diagnostics: accepted stories,
+   deterministic fallbacks, rejected story packs, summary provenance, and
+   active grounding safeguards.
+7. Saved-report validation rechecks the complete artifact before HTML, JSON,
+   or PDF rendering.
 
 **Output**
 
 - A generated report JSON artifact with:
    - title and objective;
-   - exactly five executive-summary findings;
+   - exactly five structured executive-summary findings, implications, and
+     actions;
    - detailed sections;
    - evidence and chart references;
    - limitations/provenance;
    - schema and version metadata.
+   - AI-generation diagnostics.
 
 The five-point summary is not a second independent analysis. It is a concise synthesis of the validated findings already grounded in the report package.
 

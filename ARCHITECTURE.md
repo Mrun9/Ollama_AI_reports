@@ -77,8 +77,8 @@ redirect.
 
 | Module | Responsibility |
 | --- | --- |
-| `insight_engine.py` | Python-only trends, segments, anomalies, correlations, and benchmarks |
-| `evidence_layer.py` | Converts insights into ranked evidence records and charts |
+| `insight_engine.py` | Python-only period changes, segment target performance, anomalies, correlations, and benchmarks |
+| `evidence_layer.py` | Prioritizes management-relevant insights and converts them into evidence records and charts |
 | `visualization_builder.py` | Validates, calculates, renders, and saves manual charts |
 | `manual_visualization_evidence.py` | Produces deterministic evidence for manual charts |
 | `dataset_context.py` | Builds safe field tokens shown beside configuration forms |
@@ -89,7 +89,7 @@ redirect.
 | --- | --- |
 | `report_configuration.py` | Validates the user's selected KPIs, evidence, and charts |
 | `report_generation_package.py` | Builds the exact bounded input contract for narration |
-| `report_narration.py` | Groups evidence, validates stories and the five-point executive summary, and versions report JSON |
+| `report_narration.py` | Validates grounded stories, verified product/region/period context, structured management summaries, AI diagnostics, and versioned report JSON |
 | `report_pdf.py` | Renders the validated report artifact as a PDF |
 
 ## Runtime artifacts

@@ -184,13 +184,33 @@ def build_report_pdf(
                 styles["SummaryHeading"],
             )
         )
-        flowables.extend(
-            Paragraph(
-                _markup(f"• {point.text}"),
-                styles["Body"],
+        for point in summary_points:
+            flowables.append(
+                Paragraph(
+                    _markup(f"• What happened: {point.text}"),
+                    styles["Body"],
+                )
             )
-            for point in summary_points
-        )
+            if point.business_implication:
+                flowables.append(
+                    Paragraph(
+                        _markup(
+                            "Why it matters: "
+                            f"{point.business_implication}"
+                        ),
+                        styles["Body"],
+                    )
+                )
+            if point.recommended_action:
+                flowables.append(
+                    Paragraph(
+                        _markup(
+                            "Recommended action: "
+                            f"{point.recommended_action}"
+                        ),
+                        styles["Body"],
+                    )
+                )
     else:
         for story in stories[:3]:
             flowables.extend(
@@ -261,6 +281,37 @@ def build_report_pdf(
                     )
                     for limitation in report.generation_limitations
                 ],
+            ]
+        )
+
+    if report.generation_diagnostics:
+        diagnostics = report.generation_diagnostics
+        summary_source = _plain_text(
+            diagnostics.get("executive_summary_source", "")
+        ).replace("_", " ")
+        flowables.extend(
+            [
+                Paragraph("AI generation diagnostics", styles["Heading1"]),
+                Paragraph(
+                    _markup(
+                        "Validated story packs: "
+                        f"{diagnostics.get('story_pack_count', 0)}; "
+                        "AI stories accepted: "
+                        f"{diagnostics.get('ai_story_count', 0)}; "
+                        "deterministic fallbacks: "
+                        f"{diagnostics.get('fallback_story_count', 0)}."
+                    ),
+                    styles["Body"],
+                ),
+                Paragraph(
+                    _markup(
+                        f"Executive summary source: {summary_source}. "
+                        "Safeguards require exact Python-number grounding, "
+                        "verified period or segment context, and no unsupported "
+                        "causal claims."
+                    ),
+                    styles["Body"],
+                ),
             ]
         )
 
@@ -393,6 +444,22 @@ def _story_flowables(
         Paragraph(
             _markup(f"What we found: {story.finding}"),
             styles["Finding"],
+        ),
+        *(
+            [
+                Paragraph(
+                    _markup(
+                        "Verified business context: "
+                        + ", ".join(
+                            context["value"]
+                            for context in story.business_context
+                        )
+                    ),
+                    styles["Body"],
+                )
+            ]
+            if story.business_context
+            else []
         ),
         Paragraph(
             _markup(f"What it may mean: {story.interpretation}"),

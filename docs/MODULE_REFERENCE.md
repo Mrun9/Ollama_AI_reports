@@ -343,6 +343,9 @@ Analysis functions:
 - `_add_period_change` compares adjacent valid periods.
 - `_add_trend` calculates a linear direction over valid periods.
 - `_add_segment_ranking` compares category aggregates.
+- `_add_segment_benchmark_performance` identifies the best and worst
+  target-attainment segments and calculates per-segment average values, gaps,
+  breach counts, and breach percentages.
 - `_add_segment_contribution` reconciles segment changes to the total change.
 - `_add_anomalies` applies Tukey’s IQR rule.
 - `_add_correlations` calculates Pearson associations.
@@ -382,9 +385,11 @@ Important internals:
   build reviewer-readable context.
 - `_calculation_description` explains how each insight was produced.
 - `_evidence_id` creates stable evidence identities.
-- `_ranking`, `_impact_score`, and `_assign_ranks` prioritize evidence.
+- `_ranking`, `_impact_score`, and `_assign_ranks` prioritize evidence;
+  material target gaps, period changes, and segment findings receive greater
+  management relevance than associations and technical warnings.
 - `_chart_type_for` and `_generate_chart` choose and render deterministic
-  chart types.
+  chart types, including segment target-performance bars.
 
 Primary test: `tests/test_evidence_layer.py`.
 
@@ -502,8 +507,12 @@ Core contracts:
 
 - `NarratedFactReference` points to one exact Python fact and formatted value.
 - `NarrativeStory` contains the validated story fields and story provenance.
-- `ExecutiveSummaryPoint` contains one of the five prioritized summary
-  statements, its supporting story IDs, facts, and narration source.
+  Its Python-derived `business_context` records path-labelled product, region,
+  segment, category, cohort, or period values already present in deterministic
+  evidence.
+- `ExecutiveSummaryPoint` separates one management finding into `text`,
+  `business_implication`, and `recommended_action`, with supporting story IDs,
+  exact facts, and narration source.
 - `NarratedEvidence` is the report-facing copy of one evidence record.
 - `GeneratedReport` is the immutable, versioned report artifact.
 
@@ -538,7 +547,16 @@ Generation internals:
 - `_generate_story`, `_story_response_schema`, and `_parse_story_response`
   implement structured generation and validation-aware retries.
 - `_generate_executive_summary`, `_summary_response_schema`, and
-  `_parse_summary_response` do the same for exactly five prioritized points.
+  `_parse_summary_response` do the same for exactly five prioritized,
+  actionable management points. Each point must name its metric, quote an
+  exact selected fact, and include a concrete review, comparison, validation,
+  investigation, or monitoring action.
+- `_story_context_descriptors` supplies path-labelled context so a model can
+  distinguish the current quarter from the previous quarter or the worst
+  region from another segment without inventing either.
+- `_story_business_context_descriptors` selects the bounded subset useful to
+  business readers. `_require_business_context` rejects a management finding
+  that omits every available verified name.
 - `_resolve_story_fact_references` and
   `_resolve_summary_fact_references` independently map model-selected
   references back to Python values.
@@ -546,6 +564,9 @@ Generation internals:
   quantitative number words, and causal wording.
 - `_deterministic_story` and `_deterministic_executive_summary` provide
   explicitly labelled safe fallbacks.
+- `_parse_generation_diagnostics` revalidates accepted-story counts, fallback
+  counts, rejected story IDs, summary provenance, and the grounding policy
+  whenever a saved report is reopened.
 - `_parse_report`, `_parse_story`, `_parse_item`, and the `_parse_saved_*`
   functions revalidate every field when reopening JSON.
 

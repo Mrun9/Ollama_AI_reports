@@ -128,6 +128,7 @@ def test_all_initial_chart_types_are_secure_and_use_supporting_data(
         "time_trend",
         "category_comparison",
         "segment_contribution",
+        "segment_target_performance",
         "distribution_iqr_outliers",
         "missing_data_overview",
     }
@@ -141,6 +142,25 @@ def test_all_initial_chart_types_are_secure_and_use_supporting_data(
         assert len(chart.alt_text) <= 60
         record = next(item for item in evidence.records if item.chart == chart)
         assert set(chart.data_columns).issubset(record.supporting_data[0])
+
+
+def test_management_evidence_outranks_correlation(
+    tmp_path: Path,
+) -> None:
+    view, profile, configuration, insights = _evidence_fixture(tmp_path)
+    evidence = generate_evidence(
+        view,
+        profile=profile,
+        configuration=configuration,
+        insight_report=insights,
+        chart_dir=tmp_path / "charts",
+    )
+    by_type = {record.insight_type: record for record in evidence.records}
+
+    assert (
+        by_type["segment_benchmark_performance"].ranking.rank
+        < by_type["numeric_correlation"].ranking.rank
+    )
 
 
 def test_supporting_values_reproduce_period_correlation_and_outliers(

@@ -215,6 +215,12 @@ def generate_insights(
                 category_column=category_column,
                 configuration=metric_configuration,
             )
+            _add_segment_benchmark_performance(
+                collector,
+                rows=rows,
+                category_column=category_column,
+                configuration=metric_configuration,
+            )
             if temporal is not None:
                 _add_segment_contribution(
                     collector,
@@ -403,7 +409,14 @@ def _prepare_temporal_context(
         return None
 
     distinct_months = {_period_label(value, "month") for _, value, _ in parsed}
-    granularity = "month" if len(distinct_months) >= 2 else "day"
+    if len(distinct_months) >= 24:
+        granularity = "year"
+    elif len(distinct_months) >= 6:
+        granularity = "quarter"
+    elif len(distinct_months) >= 2:
+        granularity = "month"
+    else:
+        granularity = "day"
     mutable_groups: dict[str, list[tuple[_Row, float]]] = {}
     for row, parsed_date, number in parsed:
         period = _period_label(parsed_date, granularity)
@@ -767,6 +780,89 @@ def _add_segment_contribution(
     )
 
 
+def _add_segment_benchmark_performance(
+    collector: _Collector,
+    *,
+    rows: tuple[_Row, ...],
+    category_column: str,
+    configuration: BusinessConfiguration,
+) -> None:
+    """Compare confirmed row-level target attainment by business segment."""
+
+    target = configuration.target_or_benchmark
+    if target is None:
+        return
+    groups: dict[str, list[float]] = {}
+    for row in rows:
+        segment = row.values[category_column].strip()
+        value = _metric_value(row, configuration)
+        if segment and not _is_missing(segment) and value is not None:
+            groups.setdefault(segment, []).append(value)
+    eligible = {
+        segment: values
+        for segment, values in groups.items()
+        if len(values) >= _MIN_SEGMENT_RECORDS
+    }
+    if len(eligible) < 2:
+        return
+
+    performance: list[dict[str, object]] = []
+    for segment, values in eligible.items():
+        breaches = [
+            value
+            for value in values
+            if (
+                value < target
+                if configuration.kpi_direction == "higher"
+                else value > target
+            )
+        ]
+        average_value = math.fsum(values) / len(values)
+        performance.append(
+            {
+                "segment": segment,
+                "target": _clean(target),
+                "average_value": _clean(average_value),
+                "average_gap_to_target": _clean(average_value - target),
+                "breach_count": len(breaches),
+                "record_count": len(values),
+                "breach_percentage": _clean(
+                    (len(breaches) / len(values)) * 100
+                ),
+            }
+        )
+    performance.sort(
+        key=lambda item: (
+            -float(item["breach_percentage"]),
+            str(item["segment"]).casefold(),
+        )
+    )
+    collector.add(
+        insight_type="segment_benchmark_performance",
+        metric=configuration.primary_kpi,
+        observation={
+            "category_column": category_column,
+            "target": _clean(target),
+            "kpi_direction": configuration.kpi_direction,
+            "worst_segment": performance[0],
+            "best_segment": performance[-1],
+            "segment_performance": performance,
+        },
+        source_columns=_source_columns(
+            configuration,
+            category_column,
+        ),
+        record_count=sum(len(values) for values in eligible.values()),
+        confidence=_count_confidence(
+            min(len(values) for values in eligible.values())
+        ),
+        limitations=(
+            "Target attainment is evaluated per valid row within each segment.",
+            "Segments with fewer than two valid KPI records are excluded.",
+        ),
+    )
+
+
 def _add_anomalies(
     collector: _Collector,
     *,
@@ -1082,7 +1178,14 @@ def _period_label(value: datetime, granularity: str) -> str:
     normalized = value
     if value.tzinfo is not None and value.utcoffset() is not None:
         normalized = value.astimezone(UTC)
-    return normalized.strftime("%Y-%m" if granularity == "month" else "%Y-%m-%d")
+    if granularity == "year":
+        return normalized.strftime("%Y")
+    if granularity == "quarter":
+        quarter = ((normalized.month - 1) // 3) + 1
+        return f"{normalized.year}-Q{quarter}"
+    if granularity == "month":
+        return normalized.strftime("%Y-%m")
+    return normalized.strftime("%Y-%m-%d")
 
 
 def _direction(value: float) -> str:

@@ -271,6 +271,42 @@ find. A user can reopen a dataset, continue its workflow, inspect every saved
 report revision, and export an exact historical version without overwriting
 anything.
 
+### Milestone 6B — Management-focused insights and AI diagnostics
+
+**Problem:** The original five-point summary could be technically valid but
+too generic for management. It did not require a concrete value, period,
+segment, business implication, or next action, and row-level target breaches
+could not identify which region or segment needed attention.
+
+**Implemented:**
+
+- Management-focused prioritization that raises target gaps, recent changes,
+  and segment differences above associations and technical warnings.
+- Quarter-level grouping for medium-length time series and year-level grouping
+  for longer series, so changes can be reported in business-friendly periods.
+- Per-segment target performance with average value, average gap, breach count,
+  breach percentage, and explicit best/worst segment identification.
+- A dedicated segment target-performance chart.
+- Exactly five structured management points, each separating **what happened**,
+  **why it matters**, and a **recommended action**.
+- Required exact Python-calculated values plus verified period, quarter,
+  region, segment, direction, and benchmark context. Unsupported contexts,
+  rounded values, invented calculations, and causal explanations remain
+  rejected.
+- Python-derived `business_context` attached to every story when selected
+  evidence contains a product, region, segment, cohort, channel, chart
+  category, or period. The management summary must name at least one of these
+  exact values whenever one is available.
+- Versioned AI diagnostics recording accepted stories, deterministic
+  fallbacks, rejected story packs, summary provenance, and active validation
+  safeguards.
+- The same structured summary and diagnostics in HTML, JSON, and PDF exports.
+
+**Result:** The report now answers questions such as “how much did revenue
+change in which quarter?” and “which region is missing its target most often?”
+using verified values, then states why the result deserves attention and what
+management should review next.
+
 ## Scope decisions and planned work
 
 - **Single-dataset scope is intentional.** Multi-file joins are not planned for
@@ -284,13 +320,13 @@ anything.
   should happen once the workflow is stable.
 - **Milestone 6A — Persistent workspace and report history:** implemented.
 - **Milestone 6B — More precise insight prioritization and AI diagnostics:**
-  next.
+  implemented.
 - **Milestone 6C — Period/cohort comparisons within one dataset:** planned;
   this deepens analysis without adding cross-dataset joins.
 - **Milestone 6D — Report presentation improvements:** planned after the
   remaining functionality, while retaining HTML, JSON, and PDF exports.
 
-The project currently implements **Milestone 6A: Persistent workspace and report history**. It profiles one
+The project currently implements **Milestone 6B: Management-focused insights and AI diagnostics**. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
 or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
 every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
@@ -656,7 +692,7 @@ New users should begin with the worked examples and decision guide in
   used by its Python calculation. Correlations include sufficient statistics that reproduce the
   Pearson coefficient.
 - Impact, confidence, and relevance use documented Python scoring rules on a zero-to-one scale.
-  The combined score is `0.5 × impact + 0.3 × confidence + 0.2 × relevance`; rank ties use the
+  The combined score is `0.5 × impact + 0.2 × confidence + 0.3 × relevance`; rank ties use the
   stable evidence ID.
 - Time trends visualize period/value evidence; category comparisons visualize segment rankings;
   contribution charts visualize segment changes; box plots visualize the exact IQR input values;
@@ -729,8 +765,11 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
   validated chart specification and supporting data.
 - The package is bounded to 50 evidence records, 12 supporting rows per deterministic evidence
   record, and 20 manual visualizations. Any omitted selected IDs are listed explicitly.
-- Raw dataset rows, internal row numbers, identifier columns, and free-text source values are not
-  included in the report-generation package.
+- Raw dataset rows, internal row numbers, identifier columns, and free-text
+  source values are not included in the report-generation package. Values from
+  configured category columns may enter only through bounded deterministic
+  evidence, allowing reports to name verified products, regions, or segments
+  without exposing arbitrary rows.
 - The package declares that all numbers come from Python, causal claims are prohibited, and unknown
   evidence or visualization IDs are prohibited.
 - `GET /reports/<dataset_id>/package` exposes the exact current package for review after the saved
@@ -747,19 +786,27 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 - Qualitative facts omit numeric leaves, while each evidence descriptor exposes at most five
   Python-calculated fact references with an exact display value and label.
 - The model receives qualitative labels, calculation descriptions, limitations, report objective,
-  audience, tone, and detail level. All supplied text remains untrusted data.
+  audience, tone, detail level, and path-labelled verified context such as a
+  quarter or region. All supplied text remains untrusted data.
+- Each story separately records bounded `business_context` descriptors derived
+  by Python from deterministic evidence. HTML, JSON, and PDF show these names,
+  and a generated management finding is rejected when it ignores available
+  business context.
 - The JSON schema requires one headline, finding, interpretation, follow-up, caveat, and bounded
   fact-reference list for the exact story ID.
 - A story may select up to six facts across its related evidence records. The prompt asks Ollama to
   quote the most useful verified values naturally in its finding and interpretation. Python checks
-  every digit-based value and rejects rounding, calculations, invented values, dates, evidence IDs,
-  unsupported units, and causal language. Ordinary phrases such as “one area to review” are allowed,
+  every digit-based value and rejects rounding, calculations, invented values, unverified dates,
+  evidence IDs, unsupported units, and causal language. Ordinary phrases such as “one area to review” are allowed,
   while spelled-out quantitative claims remain blocked. Percentage signs are allowed only for
   percentage-labelled facts; correlations remain associations.
 - Report narration uses a moderately creative default temperature of `0.35`. It is configurable
   without changing Python calculations or the exact values available to the model.
 - Story findings are prompted to name the metric and state the observed direction, relationship, or
   comparison directly; interpretation and suggested action remain separate fields.
+- Each executive-summary point has a management finding, business
+  implication, and recommended action. It must select and quote at least one
+  exact Python fact, name its metric, and use only supplied context labels.
 - Story confidence is conservatively derived from the linked evidence confidence. High, medium,
   and low describe record support under deterministic rules; they are not model certainty scores
   or prediction probabilities.
@@ -772,6 +819,10 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 - With no selected evidence, a KPI-only report is generated without calling Ollama.
 - An invalid model story is replaced by a deterministic summary. Other stories and every Python
   fact remain in the generated report.
+- Generation diagnostics state how many story packs passed AI validation, how
+  many used deterministic fallback wording, whether the executive summary was
+  AI-generated or assembled deterministically, and which safeguards were
+  active.
 - Connection or persistence failures occur before saving a new version and never delete or
   overwrite an existing valid report.
 - Generated reports are immutable versioned artifacts and reopen only while their source-package
@@ -788,7 +839,8 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 - Existing source-column KPIs use sum aggregation for period and segment calculations. Confirmed
   derived KPIs use their validated row-result aggregation or explicit aggregate formula.
 - Every configured KPI is analyzed independently and every insight includes its stable metric ID.
-- Calendar months are used when data spans multiple months; otherwise calendar days are used.
+- Calendar years are used for at least 24 distinct months, calendar quarters
+  for 6–23 months, calendar months for 2–5 months, and calendar days otherwise.
 - Period change requires two comparison periods with at least two valid KPI records each.
 - Trend requires at least three eligible periods and is descriptive, not causal.
 - Segment rankings exclude segments with fewer than two valid KPI records.
@@ -800,6 +852,9 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
   labelled as associations.
 - Benchmark breaches are evaluated per non-missing KPI row according to whether higher or lower is
   configured as better.
+- When a target and category are configured, target breaches are also grouped
+  by segment so the report can name the best and worst target-attainment
+  segments and quantify their average gap and breach percentage.
 - Missing configured dates cause temporal analysis to be skipped; dates are never imputed.
 
 ## Test and lint

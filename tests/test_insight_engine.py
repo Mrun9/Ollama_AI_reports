@@ -92,6 +92,37 @@ def test_period_percentage_and_trend_match_manual_values(tmp_path: Path) -> None
     assert trend.observation["direction"] == "increasing"
 
 
+def test_six_months_are_compared_as_management_quarters(
+    tmp_path: Path,
+) -> None:
+    path, profile, configuration = _configured_dataset(
+        tmp_path,
+        (
+            "date,region,revenue\n"
+            "2026-01-02,North,10\n"
+            "2026-02-02,North,20\n"
+            "2026-03-02,North,30\n"
+            "2026-04-02,North,40\n"
+            "2026-05-02,North,50\n"
+            "2026-06-02,North,60\n"
+        ),
+    )
+
+    report = generate_insights(
+        path,
+        profile=profile,
+        configuration=configuration,
+    )
+    period = _one(report, "period_change")
+
+    assert period.observation["period_granularity"] == "quarter"
+    assert period.observation["previous_period"] == "2026-Q1"
+    assert period.observation["previous_value"] == 60
+    assert period.observation["current_period"] == "2026-Q2"
+    assert period.observation["current_value"] == 150
+    assert period.observation["percentage_change"] == 150
+
+
 def test_segment_ranking_and_contributions_are_exact(tmp_path: Path) -> None:
     path, profile, configuration = _main_dataset(tmp_path)
 
@@ -110,6 +141,39 @@ def test_segment_ranking_and_contributions_are_exact(tmp_path: Path) -> None:
     assert by_segment["A"]["contribution_percentage"] == 50
     assert by_segment["B"]["absolute_change"] == 20
     assert by_segment["B"]["contribution_percentage"] == 50
+
+
+def test_segment_target_performance_identifies_management_priority(
+    tmp_path: Path,
+) -> None:
+    path, profile, configuration = _main_dataset(tmp_path)
+
+    report = generate_insights(
+        path,
+        profile=profile,
+        configuration=configuration,
+    )
+    target_performance = _one(
+        report,
+        "segment_benchmark_performance",
+    ).observation
+
+    assert target_performance["category_column"] == "segment"
+    assert target_performance["target"] == 20
+    assert target_performance["kpi_direction"] == "higher"
+    assert target_performance["worst_segment"] == {
+        "segment": "B",
+        "target": 20,
+        "average_value": pytest.approx(35 / 3),
+        "average_gap_to_target": pytest.approx(-25 / 3),
+        "breach_count": 5,
+        "record_count": 6,
+        "breach_percentage": pytest.approx(250 / 3),
+    }
+    assert target_performance["best_segment"]["segment"] == "A"
+    assert target_performance["best_segment"]["breach_percentage"] == pytest.approx(
+        100 / 3
+    )
 
 
 def test_correlation_is_association_and_constant_column_is_skipped(tmp_path: Path) -> None:

@@ -191,6 +191,7 @@ def build_report_generation_package(
             "raw_dataset_rows_included": False,
             "identifiers_included": False,
             "free_text_source_columns_included": False,
+            "verified_categorical_evidence_values_included": True,
             "user_notes_label": "user_provided",
             "all_numbers_calculated_by": "python",
             "causal_claims_allowed": False,

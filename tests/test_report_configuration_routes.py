@@ -23,6 +23,13 @@ class _FakeNarrationClient:
             prompt = kwargs["messages"][1]["content"]
             report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
             story = report_payload["stories"][0]
+            fact = story["available_fact_references"][0]
+            business_context = story.get("verified_business_context", [])
+            context = (
+                business_context[0]["value"]
+                if business_context
+                else "the verified scope"
+            )
             qualifiers = (
                 "Primary",
                 "Secondary",
@@ -36,13 +43,22 @@ class _FakeNarrationClient:
                         {
                             "points": [
                                 {
-                                    "text": (
+                                    "finding": (
                                         f"{qualifier} finding for "
-                                        f"{story['metric']} is relevant to "
-                                        "the configured objective."
+                                        f"{story['metric']} is "
+                                        f"{fact['display_value']} for "
+                                        f"{context}."
+                                    ),
+                                    "business_implication": (
+                                        f"This {story['metric']} result is "
+                                        "relevant to the objective."
+                                    ),
+                                    "recommended_action": (
+                                        "Review this result and monitor the "
+                                        "next validated period."
                                     ),
                                     "story_ids": [story["story_id"]],
-                                    "fact_references": [],
+                                    "fact_references": [fact["reference"]],
                                 }
                                 for qualifier in qualifiers
                             ]
@@ -277,6 +293,12 @@ def test_report_configuration_selects_and_escapes_current_assets(
     assert package["schema_version"] == 1
     assert package["model_input_policy"]["raw_dataset_rows_included"] is False
     assert package["model_input_policy"]["all_numbers_calculated_by"] == "python"
+    assert (
+        package["model_input_policy"][
+            "verified_categorical_evidence_values_included"
+        ]
+        is True
+    )
     assert package["deterministic_evidence"][0]["id"] == evidence_id
     assert package["deterministic_evidence"][0]["metric_id"] == "DATASET"
     assert isinstance(
@@ -497,14 +519,26 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
     assert b"not a prediction probability" in page.data
     assert b"AI-generated and Python-validated" in page.data
     assert b"Primary finding for" in page.data
+    assert b"What happened:" in page.data
+    assert b"Why it matters:" in page.data
+    assert b"Recommended action:" in page.data
+    assert b"AI generation diagnostics" in page.data
     assert b"&lt;script&gt;Trusted report&lt;/script&gt;" in page.data
     assert b"Example Analytics" in page.data
     assert b"Local Analyst" in page.data
     assert b"<script>Trusted report</script>" not in page.data
     json_response = client.get(f"{generated.headers['Location']}/json")
     assert json_response.status_code == 200
-    assert json_response.json["schema_version"] == 6
+    assert json_response.json["schema_version"] == 8
     assert len(json_response.json["executive_summary"]) == 5
+    assert json_response.json["executive_summary"][0]["business_implication"]
+    assert json_response.json["executive_summary"][0]["recommended_action"]
+    assert (
+        json_response.json["generation_diagnostics"][
+            "executive_summary_source"
+        ]
+        == "ollama"
+    )
     assert json_response.json["version"] == 1
     assert json_response.json["items"][0]["evidence_id"] == evidence_id
     assert (

@@ -60,15 +60,10 @@ class FakeClient:
                     "content": json.dumps(
                         {
                             "points": [
-                                {
-                                    "text": (
-                                        f"{qualifiers[index]} finding for "
-                                        f"{story['metric']} is relevant to "
-                                        "the configured objective."
-                                    ),
-                                    "story_ids": [story["story_id"]],
-                                    "fact_references": [],
-                                }
+                                _management_point(
+                                    story,
+                                    qualifier=qualifiers[index],
+                                )
                                 for index, story in enumerate(
                                     stories[index % len(stories)]
                                     for index in range(5)
@@ -107,6 +102,36 @@ class FakeClient:
                 )
             }
         }
+
+
+def _management_point(
+    story: dict[str, object],
+    *,
+    qualifier: str,
+) -> dict[str, object]:
+    facts = story["available_fact_references"]
+    fact = facts[0]
+    business_context = story.get("verified_business_context", [])
+    context = (
+        business_context[0]["value"]
+        if business_context
+        else "the verified scope"
+    )
+    return {
+        "finding": (
+            f"{qualifier} {story['metric']} result is "
+            f"{fact['display_value']} for {context}."
+        ),
+        "business_implication": (
+            f"This {story['metric']} result is relevant to the "
+            "configured business objective."
+        ),
+        "recommended_action": (
+            f"Review the {context} result and monitor the next validated period."
+        ),
+        "story_ids": [story["story_id"]],
+        "fact_references": [fact["reference"]],
+    }
 
 
 def _package(*, record_count: int = 5) -> ReportGenerationPackage:
@@ -204,7 +229,7 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
         story.narration_source == "ollama"
         for story in report.stories
     )
-    assert report.schema_version == 6
+    assert report.schema_version == 8
     assert len(report.executive_summary) == 5
     assert all(
         point.narration_source == "ollama"
@@ -213,6 +238,11 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
     assert report.items[0].facts == {
         "highest_segment": "North",
         "value": 123.45,
+    }
+    assert report.stories[0].business_context[0] == {
+        "metric": "revenue",
+        "path": "facts.highest_segment",
+        "value": "North",
     }
     assert report.stories[0].fact_references[0].value == 123.45
     assert (
@@ -231,10 +261,29 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
     assert '"value":null' not in first_prompt
     assert "supporting_data" not in first_prompt
     assert "available_fact_references" in first_prompt
+    assert "verified_business_context" in first_prompt
     assert client.calls[0]["think"] is False
     assert client.calls[0]["options"]["num_ctx"] == 4_096
     assert client.calls[0]["options"]["temperature"] == 0.35
     assert report.report_settings["narration_temperature"] == 0.35
+    assert report.generation_diagnostics == {
+        "schema_version": 1,
+        "story_pack_count": 2,
+        "ai_story_count": 2,
+        "fallback_story_count": 0,
+        "rejected_story_ids": [],
+        "executive_summary_source": "ollama",
+        "validation_policy": {
+            "exact_numeric_grounding": True,
+            "verified_context_only": True,
+            "causal_claims_allowed": False,
+            "management_summary_fields": [
+                "finding",
+                "business_implication",
+                "recommended_action",
+            ],
+        },
+    }
     assert report.stories[0].confidence == "medium"
     assert "not a prediction probability" in (
         report.stories[0].confidence_explanation
@@ -251,6 +300,9 @@ def test_executive_summary_accepts_only_selected_exact_values() -> None:
             report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
             story = report_payload["stories"][0]
             reference = story["available_fact_references"][0]["reference"]
+            display_value = story["available_fact_references"][0][
+                "display_value"
+            ]
             qualifiers = (
                 "Primary",
                 "Secondary",
@@ -264,19 +316,25 @@ def test_executive_summary_accepts_only_selected_exact_values() -> None:
                         {
                             "points": [
                                 {
-                                    "text": (
+                                    "finding": (
                                         "Primary revenue finding is 123.45 "
-                                        "and merits review."
+                                        "for North and merits review."
                                         if index == 0
                                         else (
                                             f"{qualifier} revenue finding "
-                                            "merits review."
+                                            f"is {display_value} for North."
                                         )
                                     ),
-                                    "story_ids": [story["story_id"]],
-                                    "fact_references": (
-                                        [reference] if index == 0 else []
+                                    "business_implication": (
+                                        "This revenue result is relevant to "
+                                        "the configured objective."
                                     ),
+                                    "recommended_action": (
+                                        "Review the North result and monitor "
+                                        "the next validated period."
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": [reference],
                                 }
                                 for index, qualifier in enumerate(qualifiers)
                             ]
@@ -294,13 +352,195 @@ def test_executive_summary_accepts_only_selected_exact_values() -> None:
     )
 
     assert report.executive_summary[0].text == (
-        "Primary revenue finding is 123.45 and merits review."
+        "Primary revenue finding is 123.45 for North and merits review."
     )
+    assert report.executive_summary[0].business_implication
+    assert report.executive_summary[0].recommended_action.startswith("Review")
     assert report.executive_summary[0].fact_references[0].value == 123.45
     assert all(
         point.narration_source == "ollama"
         for point in report.executive_summary
     )
+
+
+def test_executive_summary_retries_when_business_context_is_ignored() -> None:
+    class ContextRetryClient(FakeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.summary_calls = 0
+
+        def chat(self, **kwargs: object) -> object:
+            if "points" not in kwargs["format"]["properties"]:
+                return super().chat(**kwargs)
+            self.summary_calls += 1
+            if self.summary_calls > 1:
+                return super().chat(**kwargs)
+            self.calls.append(kwargs)
+            prompt = kwargs["messages"][1]["content"]
+            report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
+            story = report_payload["stories"][0]
+            fact = story["available_fact_references"][0]
+            qualifiers = (
+                "Primary",
+                "Secondary",
+                "Additional",
+                "Related",
+                "Supporting",
+            )
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "points": [
+                                {
+                                    "finding": (
+                                        f"{qualifier} revenue result is "
+                                        f"{fact['display_value']}."
+                                    ),
+                                    "business_implication": (
+                                        "The revenue result is relevant to "
+                                        "the configured objective."
+                                    ),
+                                    "recommended_action": (
+                                        "Review the result and monitor the "
+                                        "next validated period."
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": [fact["reference"]],
+                                }
+                                for qualifier in qualifiers
+                            ]
+                        }
+                    )
+                }
+            }
+
+    client = ContextRetryClient()
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=client,
+    )
+
+    assert client.summary_calls == 2
+    assert all(
+        "North" in point.text for point in report.executive_summary
+    )
+
+
+def test_product_names_are_retained_as_verified_business_context() -> None:
+    package = _package(record_count=1)
+    record = dict(package.deterministic_evidence[0])
+    record["observation"] = {
+        "category_column": "product",
+        "top_segment": {
+            "segment": "Widget Pro",
+            "value": 175,
+            "record_count": 8,
+        },
+        "bottom_segment": {
+            "segment": "Widget Basic",
+            "value": 80,
+            "record_count": 6,
+        },
+    }
+    package = replace(package, deterministic_evidence=(record,))
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+
+    assert [
+        context["value"] for context in report.stories[0].business_context
+    ] == ["Widget Pro", "Widget Basic"]
+    assert all(
+        "Widget Pro" in point.text for point in report.executive_summary
+    )
+
+
+def test_executive_summary_accepts_verified_quarter_and_region_context() -> None:
+    package = _package(record_count=1)
+    record = dict(package.deterministic_evidence[0])
+    record["insight_type"] = "period_change"
+    record["observation"] = {
+        "previous_period": "2026-Q1",
+        "current_period": "2026-Q2",
+        "current_value": 125,
+        "percentage_change": 25,
+        "direction": "increasing",
+        "region": "North",
+    }
+    package = replace(package, deterministic_evidence=(record,))
+
+    class ContextSummaryClient(FakeClient):
+        def chat(self, **kwargs: object) -> object:
+            if "points" not in kwargs["format"]["properties"]:
+                return super().chat(**kwargs)
+            self.calls.append(kwargs)
+            prompt = kwargs["messages"][1]["content"]
+            report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
+            story = report_payload["stories"][0]
+            percentage_fact = next(
+                fact
+                for fact in story["available_fact_references"]
+                if "percentage change" in fact["label"]
+            )
+            qualifiers = (
+                "Primary",
+                "Secondary",
+                "Additional",
+                "Related",
+                "Supporting",
+            )
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "points": [
+                                {
+                                    "finding": (
+                                        f"{qualifier} revenue increased by "
+                                        f"{percentage_fact['display_value']}% "
+                                        "in 2026-Q2 for North."
+                                    ),
+                                    "business_implication": (
+                                        "The revenue movement is material to "
+                                        "the configured objective."
+                                    ),
+                                    "recommended_action": (
+                                        "Compare North with the next validated "
+                                        "quarter and monitor whether it persists."
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": [
+                                        percentage_fact["reference"]
+                                    ],
+                                }
+                                for qualifier in qualifiers
+                            ]
+                        }
+                    )
+                }
+            }
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=ContextSummaryClient(),
+    )
+
+    assert [
+        context["value"] for context in report.stories[0].business_context
+    ] == ["2026-Q1", "2026-Q2", "North"]
+    assert "25% in 2026-Q2 for North" in report.executive_summary[0].text
 
 
 def test_invalid_executive_summary_falls_back_to_validated_stories() -> None:
@@ -318,8 +558,15 @@ def test_invalid_executive_summary_falls_back_to_validated_stories() -> None:
                         {
                             "points": [
                                 {
-                                    "text": (
+                                    "finding": (
                                         f"Revenue invented result {999 + index}."
+                                    ),
+                                    "business_implication": (
+                                        "This revenue result merits review."
+                                    ),
+                                    "recommended_action": (
+                                        "Review the result and monitor the "
+                                        "next period."
                                     ),
                                     "story_ids": [story["story_id"]],
                                     "fact_references": [],
@@ -348,6 +595,119 @@ def test_invalid_executive_summary_falls_back_to_validated_stories() -> None:
         "five-point executive summary" in limitation
         for limitation in report.generation_limitations
     )
+
+
+def test_deterministic_summary_caps_facts_and_loads_older_oversized_fallback(
+    tmp_path: Path,
+) -> None:
+    package = _package(record_count=1)
+    record = dict(package.deterministic_evidence[0])
+    record["observation"] = {
+        "highest_segment": "North",
+        "current_value": 150,
+        "previous_value": 120,
+        "absolute_change": 30,
+        "percentage_change": 25,
+        "target": 140,
+    }
+    package = replace(package, deterministic_evidence=(record,))
+
+    class ManyFactsFallbackClient(FakeClient):
+        def chat(self, **kwargs: object) -> object:
+            properties = kwargs["format"]["properties"]
+            if "points" in properties:
+                self.calls.append(kwargs)
+                prompt = kwargs["messages"][1]["content"]
+                report_payload = json.loads(
+                    prompt.split("\n", maxsplit=1)[1]
+                )
+                story = report_payload["stories"][0]
+                return {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "points": [
+                                    {
+                                        "finding": (
+                                            "Revenue invented result "
+                                            f"{900 + index}."
+                                        ),
+                                        "business_implication": (
+                                            "The revenue result merits review."
+                                        ),
+                                        "recommended_action": (
+                                            "Review the result and monitor "
+                                            "the next period."
+                                        ),
+                                        "story_ids": [story["story_id"]],
+                                        "fact_references": [],
+                                    }
+                                    for index in range(5)
+                                ]
+                            }
+                        )
+                    }
+                }
+            self.calls.append(kwargs)
+            references = properties["fact_references"]["items"]["enum"]
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "story_id": properties["story_id"]["enum"][0],
+                            "headline": "North revenue merits review",
+                            "finding": (
+                                "Revenue performance for North is ready for "
+                                "descriptive review."
+                            ),
+                            "interpretation": (
+                                "The result is relevant to the objective."
+                            ),
+                            "follow_up": (
+                                "Review North and monitor the next period."
+                            ),
+                            "caveat": "The analysis remains descriptive.",
+                            "fact_references": references,
+                        }
+                    )
+                }
+            }
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=ManyFactsFallbackClient(),
+    )
+
+    assert len(report.stories[0].fact_references) == 5
+    assert max(
+        len(point.fact_references)
+        for point in report.executive_summary
+    ) == 3
+    saved, path = save_generated_report(
+        report,
+        generated_report_dir=tmp_path,
+    )
+    assert load_generated_report(
+        saved.dataset_id,
+        saved.report_id,
+        generated_report_dir=tmp_path,
+    ).version == 1
+
+    legacy_payload = json.loads(path.read_text(encoding="utf-8"))
+    legacy_payload["executive_summary"][0]["fact_references"].extend(
+        legacy_payload["stories"][0]["fact_references"][3:5]
+    )
+    path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+    compatible = load_generated_report(
+        saved.dataset_id,
+        saved.report_id,
+        generated_report_dir=tmp_path,
+    )
+    assert len(compatible.executive_summary[0].fact_references) == 5
 
 
 def test_story_ids_are_stable_for_the_same_evidence_pack() -> None:
@@ -1069,3 +1429,53 @@ def test_older_report_without_executive_summary_remains_publishable(
         saved.report_id,
         generated_report_dir=tmp_path,
     ).executive_summary == ()
+
+
+def test_schema_six_management_summary_remains_publishable(
+    tmp_path: Path,
+) -> None:
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+    saved, path = save_generated_report(
+        report,
+        generated_report_dir=tmp_path,
+    )
+    legacy_payload = json.loads(path.read_text(encoding="utf-8"))
+    legacy_payload["schema_version"] = 6
+    legacy_payload.pop("generation_diagnostics")
+    for point in legacy_payload["executive_summary"]:
+        point.pop("business_implication")
+        point.pop("recommended_action")
+    path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+    legacy = load_generated_report(
+        saved.dataset_id,
+        saved.report_id,
+        generated_report_dir=tmp_path,
+    )
+    revised = publish_report_presentation(
+        legacy,
+        included_story_ids=tuple(
+            story.story_id for story in legacy.stories
+        ),
+        story_order=tuple(
+            story.story_id for story in legacy.stories
+        ),
+    )
+    saved_revision, _path = save_generated_report(
+        revised,
+        generated_report_dir=tmp_path,
+    )
+
+    assert saved_revision.schema_version == 6
+    assert saved_revision.generation_diagnostics == {}
+    assert load_generated_report(
+        saved.dataset_id,
+        saved.report_id,
+        generated_report_dir=tmp_path,
+    ).schema_version == 6

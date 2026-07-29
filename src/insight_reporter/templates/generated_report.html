@@ -92,7 +92,21 @@
           <ol class="summary-list">
             {% for point in published_summary_points %}
               <li>
-                {{ point.text }}
+                <p>
+                  <strong>What happened:</strong> {{ point.text }}
+                </p>
+                {% if point.business_implication %}
+                  <p>
+                    <strong>Why it matters:</strong>
+                    {{ point.business_implication }}
+                  </p>
+                {% endif %}
+                {% if point.recommended_action %}
+                  <p>
+                    <strong>Recommended action:</strong>
+                    {{ point.recommended_action }}
+                  </p>
+                {% endif %}
                 {% for fact_reference in point.fact_references %}
                   {% if report.report_settings.include_evidence_appendix %}
                     <a href="#{{ fact_reference.evidence_id }}">
@@ -219,6 +233,16 @@
                   <span class="source-label">What we found:</span>
                   {{ story.finding }}
                 </p>
+                {% if story.business_context %}
+                  <p>
+                    <span class="source-label">
+                      Verified business context:
+                    </span>
+                    {% for context in story.business_context %}
+                      {{ context.value }}{{ "," if not loop.last }}
+                    {% endfor %}
+                  </p>
+                {% endif %}
                 <p>
                   <span class="source-label">What it may mean:</span>
                   {{ story.interpretation }}
@@ -404,6 +428,36 @@
             <li>{{ limitation }}</li>
           {% endfor %}
         </ul>
+      {% endif %}
+
+      {% if report.generation_diagnostics %}
+        <details>
+          <summary><strong>AI generation diagnostics</strong></summary>
+          <dl>
+            <dt>Validated story packs</dt>
+            <dd>{{ report.generation_diagnostics.story_pack_count }}</dd>
+            <dt>AI stories accepted</dt>
+            <dd>{{ report.generation_diagnostics.ai_story_count }}</dd>
+            <dt>Deterministic fallbacks</dt>
+            <dd>{{ report.generation_diagnostics.fallback_story_count }}</dd>
+            <dt>Executive summary source</dt>
+            <dd>
+              {{ report.generation_diagnostics.executive_summary_source
+                 |replace("_", " ")|title }}
+            </dd>
+            <dt>Validation safeguards</dt>
+            <dd>
+              Exact Python-number grounding, verified period/segment context
+              only, and no unsupported causal claims.
+            </dd>
+          </dl>
+          {% if report.generation_diagnostics.rejected_story_ids %}
+            <p>
+              Replaced story packs:
+              {{ report.generation_diagnostics.rejected_story_ids|join(", ") }}
+            </p>
+          {% endif %}
+        </details>
       {% endif %}
 
       <h2>Source traceability</h2>
