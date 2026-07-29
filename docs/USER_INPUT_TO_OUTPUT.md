@@ -1,0 +1,585 @@
+# User Input to Output
+
+This document follows one report from the first uploaded file to the final HTML, JSON, and PDF outputs. It explains where user input enters the system, how it is validated and transformed, which artifacts are written, and how later stages trace their results back to earlier evidence.
+
+For the responsibilities and public API of each Python file, see [MODULE_REFERENCE.md](MODULE_REFERENCE.md). For the higher-level design and artifact graph, see [../ARCHITECTURE.md](../ARCHITECTURE.md).
+
+## Core mental model
+
+The application is a local, artifact-driven pipeline:
+
+1. A user uploads one dataset.
+2. The application gives that upload a `dataset_id`.
+3. A durable workspace record gives the randomized ID a safe human-readable
+   identity.
+4. Every configuration, insight, chart, report package, and generated report is stored under that same identity.
+5. Each stage reads validated output from earlier stages instead of passing a large in-memory object through every page.
+6. AI is used only at bounded stages. Python code validates its structured responses before they can become application artifacts.
+7. Deterministic evidence remains the source of truth for report numbers.
+
+There is no application database. The filesystem is the persistence layer, and `dataset_id` is the key that connects the artifacts.
+Consequently, `instance/` is now durable project data rather than a disposable
+cache. It must be included in backups if workspace recovery is required.
+
+```mermaid
+flowchart LR
+    A[Upload form] --> B[Stored dataset and workspace]
+    B --> C[Dataset profile]
+    C --> D[Business configuration]
+    D --> E[Deterministic insights]
+    E --> F[Evidence and charts]
+    F --> G[Report configuration]
+    G --> H[Report package]
+    H --> I[AI narration]
+    I --> J[Validated report artifact]
+    J --> K[HTML report]
+    J --> L[JSON report]
+    J --> M[PDF report]
+    J --> N[Persistent report history]
+
+    C -. optional AI suggestions .-> D
+    D -. optional derived KPI formula .-> E
+    B -. manual visualization request .-> F
+```
+
+## Artifact identity and storage
+
+The default data directory is controlled by the application configuration. Within it, each artifact type has its own directory.
+
+| Artifact | Typical storage location | Written by | Read by |
+| --- | --- | --- | --- |
+| Uploaded dataset | `uploads/<dataset_id>.<extension>` | Dataset ingestion | Profiling, insights, visualizations |
+| Workspace identity | `workspaces/<dataset_id>.json` | Upload and rename routes | Workspace index and detail |
+| Workbook selection | `uploads/<dataset_id>.selection.json` | Sheet-selection route | Dataset loader |
+| Business configuration | `configurations/<dataset_id>.json` | Configuration routes | Insights and downstream report stages |
+| Insight set | `insights/<dataset_id>.json` | Insight generation | Evidence layer and report configuration |
+| Evidence set | `evidence/<dataset_id>.json` | Evidence generation | Report package builder |
+| Generated chart | Chart output directory | Evidence and visualization builders | Browser, report renderer, PDF builder |
+| Manual visualization specification | Manual visualization artifact directory | Manual visualization confirmation | Manual evidence and report selection |
+| Report configuration | `report_configurations/<dataset_id>.json` | Report configuration route | Package builder |
+| Report package | `report_packages/<dataset_id>.json` | Report package builder | Narration generator |
+| Generated report | `generated_reports/<dataset_id>/V####-<report_id>.json` | Report generation | HTML, JSON, PDF, publishing |
+| Historical report charts | `generated_report_assets/<dataset_id>/V####-<report_id>/` | Report version save | Historical HTML and PDF |
+| Published-report state | Generated-report metadata/artifact state | Publishing routes | Published report view |
+
+Exact roots are initialized in `src/insight_reporter/app.py`; callers should
+use the Flask configuration keys rather than hard-coding these examples.
+
+## End-to-end request flow
+
+### 1. Upload
+
+**Browser input**
+
+- A file selected in the upload form.
+- Supported paths currently include CSV, JSON, and Excel workbooks.
+
+**Route**
+
+- `GET /` renders the upload page.
+- `POST /upload` receives the multipart form submission.
+
+**Transformation**
+
+1. The route checks that a file was supplied.
+2. `dataset_ingestion.ingest_dataset()` validates the filename and extension.
+3. The upload is stored with an application-generated `dataset_id`.
+4. The ingestor inspects enough metadata to determine the source format and whether an Excel sheet must still be selected.
+5. A `DatasetUploadResult` describes the accepted upload.
+6. `workspace_history.create_workspace_record()` stores a safe display name,
+   original filename, internal identity, format, source fingerprint, size, and
+   creation time under `workspaces/`.
+
+**Output**
+
+- A stored source file.
+- A versioned workspace metadata artifact.
+- A redirect to sheet selection for a multi-sheet workbook, or directly to the dataset workflow for an immediately loadable source.
+
+The uploaded filename is presentation metadata. Later code should locate the dataset through the `dataset_id`, not trust a browser-supplied path.
+
+### 2. Excel sheet selection
+
+This stage exists only when an uploaded workbook has more than one usable sheet.
+
+**Browser input**
+
+- The chosen worksheet name.
+
+**Transformation**
+
+1. The workbook sheet names are read safely.
+2. The submitted sheet name is checked against that list.
+3. The selection is written as a small JSON sidecar.
+
+**Output**
+
+- `<dataset_id>.selection.json`.
+- A redirect into the normal profiling workflow.
+
+From this point onward, `dataset_view.load_dataset_view()` applies the saved selection whenever it reads the workbook.
+
+### 3. Dataset loading and profiling
+
+`DatasetView` is the shared, format-independent representation used by downstream modules.
+
+**Input**
+
+- Stored CSV, JSON, or selected Excel sheet.
+
+**Transformation**
+
+1. `dataset_view.load_dataset_view()` resolves the stored file.
+2. The source-specific reader loads it into a tabular structure.
+3. Column names and source metadata are normalized.
+4. `dataset_profile.profile_dataset()` computes deterministic metadata such as:
+   - row and column counts;
+   - inferred column types;
+   - missing-value counts;
+   - uniqueness/cardinality information;
+   - numeric summaries;
+   - categorical summaries;
+   - date-like ranges where available.
+
+**Output**
+
+- A `DatasetView` for computation.
+- A `DatasetProfile` for display and AI context.
+- A profile page containing a safe preview and configuration entry points.
+
+Profiling is deterministic: the same stored dataset and selected sheet produce the same profile.
+
+### 4. Optional AI-assisted source suggestions
+
+This stage helps the user configure the dataset; it does not silently apply business meaning.
+
+**Browser input**
+
+- A request to generate suggestions.
+
+**AI input**
+
+- Dataset profile metadata.
+- Column names, inferred types, and bounded sample information.
+- The schema expected from the local Ollama model.
+
+**Transformation**
+
+1. `configuration_suggestions.build_profile_summary()` creates bounded,
+   row-free model context.
+2. `configuration_suggestions.generate_configuration_suggestions()` builds
+   the request and asks Ollama for JSON constrained by
+   `build_suggestion_response_schema()`.
+3. `configuration_suggestions.parse_suggestion_response()` parses the
+   untrusted JSON and revalidates every suggestion and referenced column.
+4. Valid suggestions are placed into temporary navigation state so they can survive the redirect.
+
+**Output**
+
+- Suggested dimensions, measures, time columns, and related configuration fields shown to the user.
+- No saved business configuration until the user reviews and submits the form.
+
+If Ollama is unavailable or returns invalid JSON, the application reports the failure and keeps the manual configuration path usable.
+
+### 5. Business configuration
+
+This stage turns raw columns into explicitly approved business semantics.
+
+**Browser input**
+
+- Business objective.
+- Selected dimensions.
+- Selected measures.
+- Optional time column.
+- Optional existing/source KPI choices.
+- Optional derived KPI definitions.
+
+**Transformation**
+
+1. The route reads `request.form`.
+2. Submitted columns are checked against the current dataset.
+3. Names, aggregation choices, and KPI definitions are normalized.
+4. `business_config.BusinessConfiguration` and its nested value objects validate the complete configuration.
+5. The validated configuration is serialized to JSON.
+
+**Output**
+
+- `configurations/<dataset_id>.json`.
+
+This file is the semantic contract for the rest of the pipeline. Insight generation should never guess which columns are meaningful after this point.
+
+### 6. Optional derived KPI formula
+
+A derived KPI lets the user define a metric calculated from existing columns or approved KPIs.
+
+**Browser input**
+
+- KPI name and description.
+- Formula text.
+- Display/format metadata where supported.
+
+**Transformation**
+
+1. `formula_engine.tokenize_formula()` recognizes permitted tokens.
+2. `formula_engine.parse_formula()` builds an expression tree.
+3. Validation rejects unknown identifiers, unsafe syntax, invalid arity, and unsupported operations.
+4. `formula_engine.evaluate_formula()` computes a bounded preview using approved values.
+5. The confirmation route converts the previewed definition into a saved `DerivedKPI`.
+
+**Output**
+
+- A derived KPI embedded in the business configuration.
+- Later calculations can evaluate it through the shared formula engine.
+
+Formulas are parsed by application code; they are not passed to Python `eval`.
+
+### 7. Deterministic insight generation
+
+This is the main analytical stage and the source of report facts.
+
+**Input**
+
+- `DatasetView`.
+- Saved `BusinessConfiguration`.
+- Optional derived KPI registry.
+
+**Transformation**
+
+`insight_engine.generate_insights()` applies deterministic analytical templates that fit the approved columns and data types. Depending on the configuration, it can produce findings such as:
+
+- aggregate KPI values;
+- dimension rankings;
+- contribution/share findings;
+- time trends;
+- change and volatility signals;
+- concentration or distribution observations;
+- comparisons involving derived KPIs.
+
+Each finding includes structured values and provenance instead of only prose.
+
+**Output**
+
+- `insights/<dataset_id>.json`.
+- An insight page that lets the user inspect the calculated results.
+
+AI does not calculate these values. This boundary is important: narration can change wording, but the numerical evidence is reproducible.
+
+### 8. Evidence and chart generation
+
+The evidence layer converts insights into report-ready factual units.
+
+**Input**
+
+- Insight set.
+- Dataset and configuration metadata.
+
+**Transformation**
+
+1. `evidence_layer.generate_evidence()` selects a suitable evidence representation for each supported insight.
+2. Table or chart-ready values are normalized.
+3. Chart assets are rendered where a visualization is appropriate.
+4. Provenance connects each evidence item to its originating insight and source columns.
+
+**Output**
+
+- `evidence/<dataset_id>.json`.
+- Chart files.
+- Evidence records that can be selected for the final report.
+
+An evidence item is more than an image: it is a structured claim, its supporting values, and optional visual presentation.
+
+### 9. Optional manual visualization
+
+The manual builder covers questions that are useful to the user but are not automatically selected by the insight templates.
+
+**Browser input**
+
+- Chart type.
+- Dimension/category field.
+- Measure/value field.
+- Aggregation.
+- Optional filters, grouping, sorting, limits, and display choices.
+
+**Transformation**
+
+1. `visualization_builder.parse_visualization_spec()` validates and bounds the submitted form values.
+2. `visualization_builder.build_visualization()` resolves the selected fields, applies the requested aggregation and transformations, and renders a draft chart.
+3. The preview is rendered without yet making it report evidence.
+4. On confirmation, the specification and its generated chart are persisted.
+5. `manual_visualization_evidence.generate_manual_visualization_evidence()` converts the confirmed chart into evidence with provenance.
+
+**Output**
+
+- A saved visualization specification.
+- A chart asset.
+- A manual evidence item available during report selection.
+
+### 10. Report configuration
+
+This is the editorial selection stage: the user decides what the report should contain.
+
+**Browser input**
+
+- Report title and objective.
+- Selected insight/evidence identifiers.
+- Ordering and report options.
+
+**Transformation**
+
+1. `report_configuration` checks that every selected identifier exists for the same dataset.
+2. Selections are normalized and deduplicated.
+3. Required report fields and selection limits are validated.
+4. The configuration is saved.
+
+**Output**
+
+- `report_configurations/<dataset_id>.json`.
+
+The browser never submits authoritative evidence values here. It submits identifiers; the server reloads the corresponding stored evidence.
+
+### 11. Report package construction
+
+The report package is the safe boundary between analytics and narration.
+
+**Input**
+
+- Dataset profile summary.
+- Business objective and configuration.
+- Selected deterministic insights and evidence.
+- Report configuration.
+
+**Transformation**
+
+1. `report_generation_package.build_report_generation_package()` reloads selected artifacts.
+2. It verifies dataset identity and artifact compatibility.
+3. It compacts the selected deterministic and manual evidence into the exact
+   bounded input contract required by narration.
+4. It excludes raw dataset rows and unnecessary columns.
+5. It records fingerprints/provenance needed to detect stale downstream output.
+
+**Output**
+
+- `report_packages/<dataset_id>.json`.
+
+The report package is the only analytical context the narration layer should need. This makes prompts smaller and limits the chance that the model invents facts from raw data.
+
+### 12. AI report narration and five-point summary
+
+This stage changes structured evidence into readable report prose.
+
+**AI input**
+
+- The bounded report package.
+- A strict JSON output schema.
+- Instructions to use only supplied evidence and preserve exact numerical meaning.
+
+**Transformation**
+
+1. `report_narration.build_narration_prompt()` creates the request.
+2. The local Ollama model returns structured report sections.
+3. The narration validator checks schema, evidence references, unsupported claims, numeric grounding, and usable text.
+4. Retry/repair logic can request a corrected response when the first output is malformed.
+5. The internal `report_narration._generate_executive_summary()` path
+   requests exactly five prioritized findings from the validated stories and
+   their Python fact catalog. If that output fails validation,
+   `_deterministic_executive_summary()` supplies an explicitly labelled
+   fallback.
+6. `GeneratedReport` validation assembles the final versioned artifact.
+
+**Output**
+
+- A generated report JSON artifact with:
+   - title and objective;
+   - exactly five executive-summary findings;
+   - detailed sections;
+   - evidence and chart references;
+   - limitations/provenance;
+   - schema and version metadata.
+
+The five-point summary is not a second independent analysis. It is a concise synthesis of the validated findings already grounded in the report package.
+
+### 13. Versioning, regeneration, and publishing
+
+Generated reports are treated as immutable versions.
+
+**Regeneration**
+
+- Reuses the approved report configuration and current compatible upstream artifacts.
+- Creates a new report version instead of overwriting the earlier one.
+- Allows comparison and recovery if a later narration is weaker.
+
+**Publishing**
+
+- Marks a chosen generated version as the version intended for presentation.
+- Does not modify the underlying insight or evidence calculations.
+
+When an upstream artifact changes, fingerprints help the application determine that a downstream package or report must be rebuilt.
+
+**Persistent history**
+
+- `GET /workspaces` scans retained source files and downstream artifacts to
+  reconstruct every workspace's stage and last activity.
+- New uploads use their saved `WorkspaceRecord`; uploads from before 6A appear
+  through a safe fallback name, and renaming one materializes current
+  workspace metadata.
+- `GET /reports/<dataset_id>/history` validates and lists every generated
+  report JSON file, separating report IDs (generation runs) from versions
+  (immutable revisions).
+- Exact-version routes include the version in the path and call
+  `load_generated_report_version()`.
+- Historical HTML is read-only: it cannot publish presentation changes or
+  regenerate a story.
+- Historical JSON and PDF are generated from that exact saved report object,
+  not from whichever report is latest today.
+- Every newly saved report version atomically snapshots its referenced charts.
+  If chart retention fails, the new report JSON is rolled back rather than
+  leaving an incomplete history entry.
+- A saved report is labelled current when its `source_package_sha256` matches
+  the currently rebuildable report package. A mismatch labels it as a
+  historical snapshot but does not erase or hide it.
+
+### 14. Final rendering and export
+
+All final formats read from the same validated generated-report artifact.
+
+**HTML**
+
+- The report route loads the selected report version.
+- Jinja templates render summary cards, report sections, evidence, charts, and provenance.
+
+**JSON**
+
+- The JSON route returns the structured artifact for inspection, integration, or debugging.
+
+**PDF**
+
+- `report_pdf.build_report_pdf()` converts the report model into a downloadable document.
+- It uses the same five-point summary, sections, evidence, and charts as the HTML view.
+- PDF export remains a core project output and should be kept when the later UI redesign is implemented.
+
+This shared-source approach prevents three independently generated versions of the report from disagreeing.
+
+## One input traced through the pipeline
+
+Suppose the user uploads sales data, selects `region` as a dimension and `revenue` as a measure, and enters the objective:
+
+> Identify the regions driving revenue and the most important changes over time.
+
+The value evolves as follows:
+
+| Stage | Representation |
+| --- | --- |
+| Browser form | Plain text objective and selected column names |
+| Business configuration | Validated JSON containing the objective, `region`, `revenue`, and optional date field |
+| Insight generation | Structured facts such as regional totals, shares, rankings, and time changes |
+| Evidence layer | Evidence records with exact values, source insight IDs, and chart data |
+| Report configuration | User-selected evidence IDs and desired order |
+| Report package | Bounded story packs pairing the objective with only the selected evidence |
+| AI narration | Prose that explains the evidence without recalculating it |
+| Generated report | Validated sections plus a five-point executive summary |
+| HTML/PDF | Presentation formats rendered from that same generated report |
+
+At no stage should the objective itself alter a numeric result. It guides selection and explanation; the dataset, configuration, and deterministic analytics produce the values.
+
+## Browser state and the POST/Redirect/GET pattern
+
+Most editable steps follow this sequence:
+
+1. A `GET` route renders the current saved state.
+2. A `POST` route validates submitted form data.
+3. On error, a bounded error or form-state payload is stored in navigation state.
+4. The route redirects.
+5. The next `GET` consumes that state and renders feedback.
+
+`navigation_state.py` centralizes this short-lived state. It prevents large payloads, model responses, and sensitive internal details from being placed directly in query parameters.
+
+Saved project artifacts and navigation state serve different purposes:
+
+- **Artifacts** are durable, reusable pipeline outputs.
+- **Navigation state** is temporary browser-flow context such as a validation error or an AI suggestion awaiting review.
+
+## Validation and trust boundaries
+
+| Boundary | What is untrusted | Protection |
+| --- | --- | --- |
+| File upload | Filename, extension, file contents | Extension checks, generated identity, bounded readers, format validation |
+| Workspace metadata | Original filename, display name, persisted JSON | Path-component removal, length/control-character bounds, schema and identity validation |
+| Form submission | Column names, IDs, formulas, selections | Server-side dataset lookup and schema validation |
+| Formula input | Expression text | Tokenizer/parser, approved functions/operators, no `eval` |
+| AI configuration response | Model-produced JSON | Schema and column validation; user confirmation required |
+| Manual visualization request | Fields, filters, aggregation, limits | Specification validation against the dataset |
+| Report selection | Browser-submitted evidence IDs | Reloaded from server-side artifacts for the same dataset |
+| AI narration response | Structure, claims, numbers, references | JSON parsing, schema validation, grounding checks, retry/repair |
+| Final export | Report version identifier | Server-side resolution of an existing validated artifact |
+| Historical report route | Dataset ID, report ID, version | Exact path construction, filename patterns, full report revalidation, read-only rendering |
+
+## Freshness and invalidation
+
+Downstream artifacts depend on upstream content:
+
+```text
+dataset
+  -> business configuration
+    -> insights
+      -> evidence
+        -> report configuration
+          -> report package
+            -> generated report
+              -> HTML / JSON / PDF
+```
+
+If the dataset or configuration changes, the old insights may no longer be valid. If selected evidence changes, an existing report package and generated narration may be stale. Fingerprints stored with artifacts make these relationships checkable.
+
+A maintainer adding a new stage should:
+
+1. define its exact upstream inputs;
+2. store their identifiers or fingerprints;
+3. validate them when the artifact is loaded;
+4. refuse or rebuild stale output rather than silently mixing versions.
+
+## Failure behavior
+
+The intended failure model is conservative:
+
+- Invalid uploads do not create a usable dataset workflow.
+- Invalid form input returns the user to the relevant editor with a specific error.
+- A bad formula cannot be confirmed.
+- An unavailable Ollama service does not corrupt deterministic artifacts.
+- Invalid AI JSON is rejected or retried; it is not rendered as a trusted report.
+- Missing or stale evidence blocks packaging or generation.
+- A PDF failure does not change the saved generated-report artifact.
+- Unreadable workspace metadata falls back to safe source-derived identity and
+  does not make the retained dataset disappear.
+- A malformed generated-report artifact is rejected instead of being listed
+  as trusted history.
+
+The application log should contain technical diagnostics, while the browser receives a safe and actionable message.
+
+## Troubleshooting map
+
+| Symptom | Inspect first | Then inspect |
+| --- | --- | --- |
+| Upload rejected | `dataset_ingestion.py` and upload limits | Route error handling and application logs |
+| Uploaded dataset absent from workspace list | Retained source filename and ID | `workspace_history.py` discovery and workspace metadata |
+| Workspace shows a legacy warning | `workspaces/<dataset_id>.json` | Retained source identity and metadata schema |
+| Wrong Excel data appears | Workbook selection sidecar | `dataset_view.py` sheet loading |
+| Column absent from configuration | `dataset_profile.py` type inference | Source-suggestion validation |
+| Derived KPI cannot save | `formula_engine.py` parse/validation result | `derived_metrics.py` definition validation |
+| Insight numbers look wrong | Saved business configuration | `insight_engine.py` calculation and source rows |
+| Chart disagrees with insight | Evidence JSON values | Evidence chart transformation |
+| Manual chart is unavailable in report setup | Saved visualization specification | `manual_visualization_evidence.py` conversion |
+| Report selection disappears | Report configuration validation | Evidence identity/fingerprint compatibility |
+| AI report fails to generate | Ollama availability and returned JSON | Narration validation/retry logs |
+| Five-point summary is vague | Selected evidence quality and ordering | Executive-summary prompt/validator |
+| HTML and PDF differ | Generated report version loaded by each route | `report_pdf.py` rendering support |
+| Old report appears after editing configuration | Upstream/downstream fingerprints | Package and report regeneration path |
+| Historical version will not open | Exact `V####-<report_id>.json` artifact | `load_generated_report_version()` identity/schema validation |
+
+## Current product boundaries
+
+- The supported workflow intentionally analyzes one uploaded dataset at a time.
+- Multi-file joins and cross-dataset analysis are deferred because they substantially expand identity, schema matching, validation, and testing requirements.
+- PDF export is part of the finished workflow, not a temporary feature.
+- The final UI redesign is intentionally scheduled after the remaining functional milestones, so visual work targets a stable workflow.
+
+These boundaries should be reconsidered explicitly rather than eroded through isolated route or template changes.

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Report History | AI Insight Reporter</title>
+    <style>
+      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
+      main { max-width: 960px; margin: 0 auto; }
+      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
+      dl { display: grid; grid-template-columns: 11rem 1fr; gap: 0.35rem 1rem; }
+      dt { font-weight: 700; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      .current { color: #176b35; font-weight: 700; }
+      .historical { color: #754b00; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>
+        <a href="{{ url_for(
+          'core.workspace_detail',
+          dataset_id=dataset_id
+        ) }}">
+          Return to workspace
+        </a>
+      </p>
+      <h1>Report history</h1>
+      <p>
+        {{ reports|length }} immutable version(s) across
+        {{ report_run_count }} generation run(s). Older versions are opened
+        read-only and are never replaced.
+      </p>
+      {% if current_package_sha256 is none and reports %}
+        <p class="historical">
+          The current report package cannot be rebuilt, so freshness cannot be
+          compared. Saved report snapshots remain available.
+        </p>
+      {% endif %}
+
+      {% if reports %}
+        {% for report in reports %}
+          <article>
+            <h2>{{ report.report_settings.title }} · version {{ report.version }}</h2>
+            <dl>
+              <dt>Report ID</dt>
+              <dd>{{ report.report_id }}</dd>
+              <dt>Generated</dt>
+              <dd>{{ report.generated_at }}</dd>
+              <dt>Model</dt>
+              <dd>{{ report.model }}</dd>
+              <dt>Stories</dt>
+              <dd>{{ report.stories|length }}</dd>
+              <dt>Summary points</dt>
+              <dd>{{ report.executive_summary|length }}</dd>
+              <dt>Package status</dt>
+              <dd>
+                {% if current_package_sha256 == report.source_package_sha256 %}
+                  <span class="current">Matches current report package</span>
+                {% elif current_package_sha256 %}
+                  <span class="historical">Historical package snapshot</span>
+                {% else %}
+                  <span class="historical">Freshness unavailable</span>
+                {% endif %}
+              </dd>
+            </dl>
+            <p>
+              <a href="{{ url_for(
+                'core.generated_report_version',
+                dataset_id=dataset_id,
+                report_id=report.report_id,
+                version=report.version
+              ) }}">
+                Open this exact version
+              </a>
+              ·
+              <a href="{{ url_for(
+                'core.generated_report_version_json',
+                dataset_id=dataset_id,
+                report_id=report.report_id,
+                version=report.version
+              ) }}">
+                JSON
+              </a>
+              ·
+              <a href="{{ url_for(
+                'core.generated_report_version_pdf',
+                dataset_id=dataset_id,
+                report_id=report.report_id,
+                version=report.version
+              ) }}">
+                PDF
+              </a>
+            </p>
+          </article>
+        {% endfor %}
+      {% else %}
+        <p>No generated reports have been saved for this workspace.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>

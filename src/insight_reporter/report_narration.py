@@ -7,6 +7,7 @@ import json
 import math
 import re
 import secrets
+import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -835,6 +836,167 @@ def load_generated_report(
             "Generated report is stale because its report package changed."
         )
     return report
+
+
+def load_generated_report_version(
+    dataset_id: str,
+    report_id: str,
+    version: int,
+    *,
+    generated_report_dir: Path,
+    expected_package_sha256: str | None = None,
+) -> GeneratedReport:
+    """Load one exact immutable version and optionally bind it to a package."""
+
+    _validate_identity(dataset_id, report_id)
+    if (
+        not isinstance(version, int)
+        or isinstance(version, bool)
+        or not 1 <= version <= 9_999
+    ):
+        raise ReportNarrationError("Generated report version is invalid.")
+    path = (
+        generated_report_dir
+        / dataset_id
+        / f"V{version:04d}-{report_id}.json"
+    )
+    if not path.is_file():
+        raise ReportNarrationError("Generated report version is unavailable.")
+    report = _parse_report(path)
+    if (
+        report.dataset_id != dataset_id
+        or report.report_id != report_id
+        or report.version != version
+    ):
+        raise ReportNarrationError(
+            "Generated report version identity is invalid."
+        )
+    if (
+        expected_package_sha256 is not None
+        and report.source_package_sha256 != expected_package_sha256
+    ):
+        raise ReportNarrationError(
+            "Generated report is stale because its report package changed."
+        )
+    return report
+
+
+def list_generated_report_versions(
+    dataset_id: str,
+    *,
+    generated_report_dir: Path,
+) -> tuple[GeneratedReport, ...]:
+    """Return every validated immutable report version, newest first."""
+
+    if _DATASET_ID.fullmatch(dataset_id) is None:
+        raise ReportNarrationError("Report dataset ID is invalid.")
+    dataset_dir = generated_report_dir / dataset_id
+    if not dataset_dir.is_dir():
+        return ()
+    reports: list[GeneratedReport] = []
+    for path in dataset_dir.iterdir():
+        match = _REPORT_FILENAME.fullmatch(path.name)
+        if not path.is_file() or match is None:
+            continue
+        version = int(match.group(1))
+        report_id = match.group(2)
+        report = _parse_report(path)
+        if (
+            report.dataset_id != dataset_id
+            or report.report_id != report_id
+            or report.version != version
+        ):
+            raise ReportNarrationError(
+                "Generated report history contains an invalid identity."
+            )
+        reports.append(report)
+    return tuple(
+        sorted(
+            reports,
+            key=lambda report: (report.version, report.report_id),
+            reverse=True,
+        )
+    )
+
+
+def snapshot_generated_report_charts(
+    report: GeneratedReport,
+    chart_paths: Mapping[str, Path],
+    *,
+    generated_report_asset_dir: Path,
+) -> Path:
+    """Atomically retain the charts used by one immutable report version."""
+
+    _validate_identity(report.dataset_id, report.report_id)
+    if not 1 <= report.version <= 9_999:
+        raise ReportNarrationError(
+            "Save the generated report before snapshotting its charts."
+        )
+    evidence_ids = {item.evidence_id for item in report.items}
+    if any(
+        evidence_id not in evidence_ids
+        or _EVIDENCE_ID.fullmatch(evidence_id) is None
+        for evidence_id in chart_paths
+    ):
+        raise ReportNarrationError("Generated report chart identity is invalid.")
+    dataset_dir = generated_report_asset_dir / report.dataset_id
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    final_dir = dataset_dir / (
+        f"V{report.version:04d}-{report.report_id}"
+    )
+    temporary_dir = dataset_dir / (
+        f".V{report.version:04d}-{report.report_id}."
+        f"{secrets.token_hex(8)}.part"
+    )
+    if final_dir.exists():
+        raise ReportNarrationError(
+            "Generated report chart snapshot already exists."
+        )
+    try:
+        temporary_dir.mkdir()
+        for evidence_id, source_path in chart_paths.items():
+            if not source_path.is_file():
+                raise ReportNarrationError(
+                    "A generated report chart is unavailable."
+                )
+            shutil.copyfile(
+                source_path,
+                temporary_dir / f"{evidence_id}.png",
+            )
+        temporary_dir.replace(final_dir)
+    except Exception as error:
+        shutil.rmtree(temporary_dir, ignore_errors=True)
+        if isinstance(error, ReportNarrationError):
+            raise
+        raise ReportNarrationError(
+            "Generated report charts could not be retained."
+        ) from error
+    return final_dir
+
+
+def generated_report_chart_snapshots(
+    report: GeneratedReport,
+    *,
+    generated_report_asset_dir: Path,
+) -> dict[str, Path]:
+    """Resolve chart snapshots belonging to one exact report version."""
+
+    _validate_identity(report.dataset_id, report.report_id)
+    if not 1 <= report.version <= 9_999:
+        raise ReportNarrationError("Generated report version is invalid.")
+    version_dir = (
+        generated_report_asset_dir
+        / report.dataset_id
+        / f"V{report.version:04d}-{report.report_id}"
+    )
+    if not version_dir.is_dir():
+        return {}
+    paths: dict[str, Path] = {}
+    for item in report.items:
+        path = version_dir / f"{item.evidence_id}.png"
+        if path.is_file():
+            paths[item.evidence_id] = path
+    return paths
 
 
 def latest_generated_report(

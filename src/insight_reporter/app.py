@@ -10,6 +10,7 @@ from insight_reporter.routes import core
 
 _ARTIFACT_DIRECTORIES = (
     ("UPLOAD_DIR", "uploads"),
+    ("WORKSPACE_DIR", "workspaces"),
     ("CONFIGURATION_DIR", "configurations"),
     ("INSIGHT_DIR", "insights"),
     ("EVIDENCE_DIR", "evidence"),
@@ -18,6 +19,7 @@ _ARTIFACT_DIRECTORIES = (
     ("REPORT_CONFIGURATION_DIR", "report_configurations"),
     ("REPORT_PACKAGE_DIR", "report_packages"),
     ("GENERATED_REPORT_DIR", "generated_reports"),
+    ("GENERATED_REPORT_ASSET_DIR", "generated_report_assets"),
     ("VISUALIZATION_PREVIEW_DIR", "visualization_previews"),
     ("NAVIGATION_STATE_DIR", "navigation_state"),
 )

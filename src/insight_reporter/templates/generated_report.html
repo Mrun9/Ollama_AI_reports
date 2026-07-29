@@ -47,6 +47,20 @@
           · author {{ report.report_settings.report_author }}
         {% endif %}
       </p>
+      <p class="screen-only">
+        <a href="{{ url_for(
+          'core.generated_report_history',
+          dataset_id=report.dataset_id
+        ) }}">
+          Open report history
+        </a>
+      </p>
+      {% if historical_snapshot %}
+        <p class="warning">
+          This is a read-only historical snapshot. It may not match the
+          workspace's current configuration or evidence.
+        </p>
+      {% endif %}
 
       <h2>Executive summary</h2>
       <p>
@@ -118,7 +132,7 @@
         </p>
       {% endif %}
 
-      {% if report.stories %}
+      {% if report.stories and not historical_snapshot %}
         <section class="publishing-controls">
           <h2>Report publishing controls</h2>
           <p>
@@ -191,14 +205,16 @@
                   {{ "AI-synthesized from verified Python evidence" if story.narration_source == "ollama" else "Deterministic fallback summary" }}
                   · {{ story.story_id }}
                 </p>
-                <form class="screen-only" method="post" action="{{ url_for(
-                  'core.regenerate_report_story',
-                  dataset_id=report.dataset_id,
-                  report_id=report.report_id,
-                  story_id=story.story_id
-                ) }}">
-                  <button type="submit">Regenerate only this story</button>
-                </form>
+                {% if not historical_snapshot %}
+                  <form class="screen-only" method="post" action="{{ url_for(
+                    'core.regenerate_report_story',
+                    dataset_id=report.dataset_id,
+                    report_id=report.report_id,
+                    story_id=story.story_id
+                  ) }}">
+                    <button type="submit">Regenerate only this story</button>
+                  </form>
+                {% endif %}
                 <p class="finding">
                   <span class="source-label">What we found:</span>
                   {{ story.finding }}
@@ -267,28 +283,10 @@
                 </p>
                 {% for evidence_id in story.evidence_ids %}
                   {% set evidence_item = item_by_id.get(evidence_id) %}
-                  {% if evidence_item and evidence_item.chart_filename %}
+                  {% if evidence_item and chart_url_by_id.get(evidence_id) %}
                     <figure>
                       <img class="report-chart"
-                        src="{{ url_for(
-                          'core.evidence_chart',
-                          dataset_id=report.dataset_id,
-                          evidence_id=evidence_id
-                        ) }}"
-                        alt="{{ evidence_item.chart_alt_text or evidence_item.title }}">
-                      <figcaption>
-                        {{ evidence_item.chart_title or evidence_item.title }}
-                        · {{ evidence_id }}
-                      </figcaption>
-                    </figure>
-                  {% elif evidence_item and evidence_item.visualization_id %}
-                    <figure>
-                      <img class="report-chart"
-                        src="{{ url_for(
-                          'core.saved_visualization_chart',
-                          dataset_id=report.dataset_id,
-                          visualization_id=evidence_item.visualization_id
-                        ) }}"
+                        src="{{ chart_url_by_id[evidence_id] }}"
                         alt="{{ evidence_item.chart_alt_text or evidence_item.title }}">
                       <figcaption>
                         {{ evidence_item.chart_title or evidence_item.title }}
@@ -482,12 +480,12 @@
       {% endif %}
 
       <p>
-        <a href="{{ url_for(
-          'core.generated_report_json',
-          dataset_id=report.dataset_id,
-          report_id=report.report_id
-        ) }}">
+        <a href="{{ report_json_url }}">
           View generated report JSON
+        </a>
+        ·
+        <a href="{{ report_pdf_url }}">
+          Download this version as PDF
         </a>
       </p>
       <details>

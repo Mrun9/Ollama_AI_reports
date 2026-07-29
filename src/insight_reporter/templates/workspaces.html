@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workspaces | AI Insight Reporter</title>
+    <style>
+      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
+      main { max-width: 960px; margin: 0 auto; }
+      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
+      dl { display: grid; grid-template-columns: 10rem 1fr; gap: 0.35rem 1rem; }
+      dt { font-weight: 700; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      .warning { color: #754b00; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Persistent workspaces</h1>
+      <p>
+        Reopen any locally retained dataset and continue from its latest
+        completed workflow stage.
+      </p>
+      <p><a href="{{ url_for('core.upload_form') }}">Upload a new dataset</a></p>
+
+      {% if workspaces %}
+        {% for workspace in workspaces %}
+          <article>
+            <h2>
+              <a href="{{ url_for(
+                'core.workspace_detail',
+                dataset_id=workspace.record.dataset_id
+              ) }}">
+                {{ workspace.record.name }}
+              </a>
+            </h2>
+            <dl>
+              <dt>Original file</dt>
+              <dd>{{ workspace.record.original_filename }}</dd>
+              <dt>Format</dt>
+              <dd>{{ workspace.record.source_format|upper }}</dd>
+              <dt>Current stage</dt>
+              <dd>{{ workspace.stage_label }}</dd>
+              <dt>Created</dt>
+              <dd>{{ workspace.record.created_at }}</dd>
+              <dt>Last activity</dt>
+              <dd>{{ workspace.last_activity_at }}</dd>
+              <dt>Report history</dt>
+              <dd>
+                {{ workspace.report_version_count }} saved version(s) across
+                {{ workspace.report_run_count }} generation run(s)
+              </dd>
+            </dl>
+            {% if workspace.metadata_warning %}
+              <p class="warning">{{ workspace.metadata_warning }}</p>
+            {% endif %}
+          </article>
+        {% endfor %}
+      {% else %}
+        <p>No retained workspaces are available yet.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>

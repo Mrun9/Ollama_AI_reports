@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ workspace.record.name }} | AI Insight Reporter</title>
+    <style>
+      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
+      main { max-width: 880px; margin: 0 auto; }
+      dl { display: grid; grid-template-columns: 11rem 1fr; gap: 0.4rem 1rem; }
+      dt { font-weight: 700; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      .warning { color: #754b00; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="{{ url_for('core.workspace_history') }}">All workspaces</a></p>
+      <h1>{{ workspace.record.name }}</h1>
+
+      {% if workspace.metadata_warning %}
+        <p class="warning">{{ workspace.metadata_warning }}</p>
+      {% endif %}
+      <form method="post" action="{{ url_for(
+        'core.update_workspace_name',
+        dataset_id=workspace.record.dataset_id
+      ) }}">
+        <label for="name">Workspace name</label>
+        <input id="name" name="name" type="text" maxlength="120"
+          value="{{ workspace.record.name }}" required>
+        <button type="submit">Save name</button>
+      </form>
+
+      <h2>Workspace status</h2>
+      <dl>
+        <dt>Dataset ID</dt>
+        <dd>{{ workspace.record.dataset_id }}</dd>
+        <dt>Original file</dt>
+        <dd>{{ workspace.record.original_filename }}</dd>
+        <dt>Retained source</dt>
+        <dd>{{ workspace.record.internal_filename }}</dd>
+        <dt>Format</dt>
+        <dd>{{ workspace.record.source_format|upper }}</dd>
+        <dt>Size</dt>
+        <dd>{{ workspace.record.size_bytes }} bytes</dd>
+        <dt>Current stage</dt>
+        <dd>{{ workspace.stage_label }}</dd>
+        <dt>Created</dt>
+        <dd>{{ workspace.record.created_at }}</dd>
+        <dt>Last activity</dt>
+        <dd>{{ workspace.last_activity_at }}</dd>
+        <dt>Report versions</dt>
+        <dd>{{ workspace.report_version_count }}</dd>
+        <dt>Report generation runs</dt>
+        <dd>{{ workspace.report_run_count }}</dd>
+      </dl>
+
+      <p><a href="{{ resume_url }}">Resume from {{ workspace.stage_label }}</a></p>
+      <p>
+        <a href="{{ url_for(
+          'core.dataset_profile',
+          dataset_id=workspace.record.dataset_id
+        ) }}">
+          Open dataset profile
+        </a>
+      </p>
+      {% if workspace.report_version_count %}
+        <p>
+          <a href="{{ url_for(
+            'core.generated_report_history',
+            dataset_id=workspace.record.dataset_id
+          ) }}">
+            Open complete report history
+          </a>
+        </p>
+      {% endif %}
+    </main>
+  </body>
+</html>

@@ -24,7 +24,7 @@ from flask import (
     url_for,
 )
 from werkzeug.datastructures import MultiDict
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from insight_reporter.business_config import (
     BusinessConfiguration,
@@ -121,13 +121,17 @@ from insight_reporter.report_narration import (
     NarrativeStory,
     ReportNarrationError,
     generate_narrated_report,
+    generated_report_chart_snapshots,
     included_executive_summary_points,
     included_report_stories,
     latest_generated_report,
+    list_generated_report_versions,
     load_generated_report,
+    load_generated_report_version,
     publish_report_presentation,
     regenerate_generated_story,
     save_generated_report,
+    snapshot_generated_report_charts,
 )
 from insight_reporter.report_pdf import (
     ReportPdfError,
@@ -154,8 +158,81 @@ from insight_reporter.visualization_builder import (
     save_visualization,
     spec_to_form,
 )
+from insight_reporter.workspace_history import (
+    WorkspaceDirectories,
+    WorkspaceHistoryError,
+    WorkspaceSummary,
+    create_workspace_record,
+    get_workspace_summary,
+    list_workspace_summaries,
+    rename_workspace,
+)
 
 core = Blueprint("core", __name__)
+
+
+# Persistent workspaces and history
+
+
+@core.get("/workspaces")
+def workspace_history():  # type: ignore[no-untyped-def]
+    """List every retained local dataset and its derived workflow stage."""
+
+    try:
+        workspaces = list_workspace_summaries(
+            directories=_workspace_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    return render_template(
+        "workspaces.html",
+        workspaces=workspaces,
+    )
+
+
+@core.get("/workspaces/<dataset_id>")
+def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Display one persistent workspace and its available artifacts."""
+
+    try:
+        workspace = get_workspace_summary(
+            dataset_id,
+            directories=_workspace_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    if workspace is None:
+        abort(404)
+    return render_template(
+        "workspace.html",
+        workspace=workspace,
+        resume_url=_workspace_resume_url(workspace),
+    )
+
+
+@core.post("/workspaces/<dataset_id>/name")
+def update_workspace_name(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Persist a new human-readable name without changing dataset identity."""
+
+    try:
+        workspace = get_workspace_summary(
+            dataset_id,
+            directories=_workspace_directories(),
+        )
+        if workspace is None:
+            abort(404)
+        rename_workspace(
+            dataset_id,
+            request.form.get("name"),
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+            fallback_record=workspace.record,
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
 
 
 # Dataset ingestion, profiling, and KPI configuration
@@ -203,9 +280,10 @@ def upload_dataset():  # type: ignore[no-untyped-def]
             },
         )
 
+    uploaded_file = request.files["file"]
     try:
         result = ingest_dataset(
-            uploaded_files[0],
+            uploaded_file,
             upload_dir=Path(current_app.config["UPLOAD_DIR"]),
             max_bytes=int(current_app.config["MAX_UPLOAD_BYTES"]),
             max_rows=int(current_app.config["MAX_CSV_ROWS"]),
@@ -216,6 +294,26 @@ def upload_dataset():  # type: ignore[no-untyped-def]
         return _redirect_with_state(
             "core.upload_form",
             {"view": "upload", "error": str(error), "status_code": error.status_code},
+        )
+
+    try:
+        create_workspace_record(
+            result,
+            original_filename=uploaded_file.filename,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        (
+            Path(current_app.config["UPLOAD_DIR"])
+            / result.internal_filename
+        ).unlink(missing_ok=True)
+        current_app.logger.error(
+            "Workspace metadata could not be created: id=%s",
+            result.internal_filename,
+        )
+        return _redirect_with_state(
+            "core.upload_form",
+            {"view": "upload", "error": str(error), "status_code": 500},
         )
 
     current_app.logger.info(
@@ -1095,11 +1193,9 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
                 "saved. Try Generate report again; if this persists, use a "
                 "more capable local model."
             )
-        generated, _path = save_generated_report(
+        generated, _path = _save_generated_report_with_charts(
             draft,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            visualizations=visualizations,
         )
     except (
         BusinessConfigurationError,
@@ -1133,6 +1229,29 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
             report_id=generated.report_id,
         ),
         code=303,
+    )
+
+
+@core.get("/reports/<dataset_id>/history")
+def generated_report_history(dataset_id: str):  # type: ignore[no-untyped-def]
+    """List every immutable report version retained for one dataset."""
+
+    try:
+        reports = list_generated_report_versions(
+            dataset_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except ReportNarrationError as error:
+        abort(422, description=str(error))
+    current_package_sha256 = _current_package_sha256(dataset_id)
+    return render_template(
+        "report_history.html",
+        dataset_id=dataset_id,
+        reports=reports,
+        current_package_sha256=current_package_sha256,
+        report_run_count=len({report.report_id for report in reports}),
     )
 
 
@@ -1202,23 +1321,57 @@ def generated_report(
         VisualizationError,
     ) as error:
         abort(422, description=str(error))
-    published_stories = included_report_stories(report)
-    published_summary_points = included_executive_summary_points(report)
-    return render_template(
-        "generated_report.html",
-        report=report,
-        published_stories=published_stories,
-        published_summary_points=published_summary_points,
-        story_sections=_generated_story_sections(published_stories),
-        sections=_generated_report_sections(report.items),
-        item_by_id={
-            item.evidence_id: item for item in report.items
-        },
-        report_json=json.dumps(
-            report.to_dict(),
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
+    return _render_generated_report(
+        report,
+        historical_snapshot=False,
+        report_pdf_url=url_for(
+            "core.generated_report_pdf",
+            dataset_id=dataset_id,
+            report_id=report_id,
+        ),
+        report_json_url=url_for(
+            "core.generated_report_json",
+            dataset_id=dataset_id,
+            report_id=report_id,
+        ),
+    )
+
+
+@core.get(
+    "/reports/<dataset_id>/generated/<report_id>/versions/<int:version>"
+)
+def generated_report_version(
+    dataset_id: str,
+    report_id: str,
+    version: int,
+):  # type: ignore[no-untyped-def]
+    """Render one exact historical report snapshot without mutating it."""
+
+    try:
+        report = load_generated_report_version(
+            dataset_id,
+            report_id,
+            version,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except ReportNarrationError as error:
+        abort(422, description=str(error))
+    return _render_generated_report(
+        report,
+        historical_snapshot=True,
+        report_pdf_url=url_for(
+            "core.generated_report_version_pdf",
+            dataset_id=dataset_id,
+            report_id=report_id,
+            version=version,
+        ),
+        report_json_url=url_for(
+            "core.generated_report_version_json",
+            dataset_id=dataset_id,
+            report_id=report_id,
+            version=version,
         ),
     )
 
@@ -1278,11 +1431,9 @@ def publish_generated_report(
                 for _position, story_id in sorted(positions)
             ),
         )
-        published, _path = save_generated_report(
+        published, _path = _save_generated_report_with_charts(
             revised,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            visualizations=_visualizations,
         )
     except (
         BusinessConfigurationError,
@@ -1339,11 +1490,9 @@ def regenerate_report_story(
                 current_app.config["OLLAMA_REPORT_TEMPERATURE"]
             ),
         )
-        regenerated, _path = save_generated_report(
+        regenerated, _path = _save_generated_report_with_charts(
             revised,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            visualizations=_visualizations,
         )
     except (
         BusinessConfigurationError,
@@ -1440,6 +1589,99 @@ def generated_report_json(
     ) as error:
         abort(422, description=str(error))
     return jsonify(report.to_dict())
+
+
+@core.get(
+    "/reports/<dataset_id>/generated/<report_id>/versions/<int:version>/pdf"
+)
+def generated_report_version_pdf(
+    dataset_id: str,
+    report_id: str,
+    version: int,
+):  # type: ignore[no-untyped-def]
+    """Download a PDF rendered from one exact historical report version."""
+
+    try:
+        report = load_generated_report_version(
+            dataset_id,
+            report_id,
+            version,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+        rendered = build_report_pdf(
+            report,
+            chart_paths=_historical_report_chart_paths(report),
+        )
+    except (ReportNarrationError, ReportPdfError) as error:
+        abort(422, description=str(error))
+    return send_file(
+        io.BytesIO(rendered),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=report_pdf_filename(report),
+        max_age=0,
+    )
+
+
+@core.get(
+    "/reports/<dataset_id>/generated/<report_id>/versions/<int:version>/json"
+)
+def generated_report_version_json(
+    dataset_id: str,
+    report_id: str,
+    version: int,
+):  # type: ignore[no-untyped-def]
+    """Return one exact historical generated-report artifact as JSON."""
+
+    try:
+        report = load_generated_report_version(
+            dataset_id,
+            report_id,
+            version,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except ReportNarrationError as error:
+        abort(422, description=str(error))
+    return jsonify(report.to_dict())
+
+
+@core.get(
+    "/reports/<dataset_id>/generated/<report_id>/versions/"
+    "<int:version>/charts/<evidence_id>"
+)
+def generated_report_version_chart(
+    dataset_id: str,
+    report_id: str,
+    version: int,
+    evidence_id: str,
+):  # type: ignore[no-untyped-def]
+    """Serve a still-retained chart referenced by one historical report."""
+
+    try:
+        report = load_generated_report_version(
+            dataset_id,
+            report_id,
+            version,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except ReportNarrationError as error:
+        abort(422, description=str(error))
+    chart_paths = _historical_report_chart_paths(report)
+    path = chart_paths.get(evidence_id)
+    if path is None:
+        abort(404)
+    return send_from_directory(
+        path.parent,
+        path.name,
+        mimetype="image/png",
+        max_age=0,
+    )
 
 
 # Manual visualization workflow
@@ -1927,6 +2169,39 @@ def request_too_large(_error: RequestEntityTooLarge):  # type: ignore[no-untyped
 # Shared request and rendering helpers
 
 
+def _workspace_directories() -> WorkspaceDirectories:
+    return WorkspaceDirectories(
+        upload_dir=Path(current_app.config["UPLOAD_DIR"]),
+        workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
+        insight_dir=Path(current_app.config["INSIGHT_DIR"]),
+        evidence_dir=Path(current_app.config["EVIDENCE_DIR"]),
+        visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        report_configuration_dir=Path(
+            current_app.config["REPORT_CONFIGURATION_DIR"]
+        ),
+        report_package_dir=Path(current_app.config["REPORT_PACKAGE_DIR"]),
+        generated_report_dir=Path(
+            current_app.config["GENERATED_REPORT_DIR"]
+        ),
+    )
+
+
+def _workspace_resume_url(workspace: WorkspaceSummary) -> str:
+    dataset_id = workspace.record.dataset_id
+    endpoint_by_stage = {
+        "report_generated": "core.generated_report_history",
+        "report_configured": "core.saved_report_configuration",
+        "insights_generated": "core.saved_insights",
+        "kpis_configured": "core.saved_configuration",
+        "uploaded": "core.dataset_profile",
+    }
+    return url_for(
+        endpoint_by_stage[workspace.stage],
+        dataset_id=dataset_id,
+    )
+
+
 def _dataset_path(dataset_id: str) -> Path:
     if re.fullmatch(r"[0-9a-f]{32}", dataset_id) is None:
         abort(404)
@@ -2304,6 +2579,89 @@ def _current_report_package(
     return configuration, evidence, visualizations, package
 
 
+def _current_package_sha256(dataset_id: str) -> str | None:
+    """Return the current report-package fingerprint when it is rebuildable."""
+
+    try:
+        profile = _load_profile(dataset_id)
+        _configuration, _evidence, _visualizations, package = (
+            _current_report_package(dataset_id, profile)
+        )
+    except (
+        BusinessConfigurationError,
+        DatasetProfileError,
+        DatasetValidationError,
+        DatasetViewError,
+        EvidenceError,
+        HTTPException,
+        ReportConfigurationError,
+        ReportGenerationPackageError,
+        VisualizationError,
+    ):
+        return None
+    return artifact_sha256(package.to_dict())
+
+
+def _render_generated_report(
+    report: GeneratedReport,
+    *,
+    historical_snapshot: bool,
+    report_pdf_url: str,
+    report_json_url: str,
+):  # type: ignore[no-untyped-def]
+    published_stories = included_report_stories(report)
+    published_summary_points = included_executive_summary_points(report)
+    chart_url_by_id: dict[str, str] = {}
+    historical_chart_ids = (
+        set(_historical_report_chart_paths(report))
+        if historical_snapshot
+        else set()
+    )
+    for item in report.items:
+        if historical_snapshot:
+            if item.evidence_id in historical_chart_ids:
+                chart_url_by_id[item.evidence_id] = url_for(
+                    "core.generated_report_version_chart",
+                    dataset_id=report.dataset_id,
+                    report_id=report.report_id,
+                    version=report.version,
+                    evidence_id=item.evidence_id,
+                )
+        elif item.chart_filename is not None:
+            chart_url_by_id[item.evidence_id] = url_for(
+                "core.evidence_chart",
+                dataset_id=report.dataset_id,
+                evidence_id=item.evidence_id,
+            )
+        elif item.visualization_id is not None:
+            chart_url_by_id[item.evidence_id] = url_for(
+                "core.saved_visualization_chart",
+                dataset_id=report.dataset_id,
+                visualization_id=item.visualization_id,
+            )
+    return render_template(
+        "generated_report.html",
+        report=report,
+        historical_snapshot=historical_snapshot,
+        report_pdf_url=report_pdf_url,
+        report_json_url=report_json_url,
+        chart_url_by_id=chart_url_by_id,
+        published_stories=published_stories,
+        published_summary_points=published_summary_points,
+        story_sections=_generated_story_sections(published_stories),
+        sections=_generated_report_sections(report.items),
+        item_by_id={
+            item.evidence_id: item for item in report.items
+        },
+        report_json=json.dumps(
+            report.to_dict(),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+    )
+
+
 def _generated_report_chart_paths(
     report: GeneratedReport,
     *,
@@ -2328,6 +2686,58 @@ def _generated_report_chart_paths(
         if chart_path.is_file():
             chart_paths[item.evidence_id] = chart_path
     return chart_paths
+
+
+def _save_generated_report_with_charts(
+    report: GeneratedReport,
+    *,
+    visualizations: tuple[VisualizationArtifact, ...],
+) -> tuple[GeneratedReport, Path]:
+    """Save one report and roll it back if its chart snapshot cannot persist."""
+
+    saved, report_path = save_generated_report(
+        report,
+        generated_report_dir=Path(
+            current_app.config["GENERATED_REPORT_DIR"]
+        ),
+    )
+    try:
+        snapshot_generated_report_charts(
+            saved,
+            _generated_report_chart_paths(
+                saved,
+                visualizations=visualizations,
+            ),
+            generated_report_asset_dir=Path(
+                current_app.config["GENERATED_REPORT_ASSET_DIR"]
+            ),
+        )
+    except ReportNarrationError:
+        report_path.unlink(missing_ok=True)
+        raise
+    return saved, report_path
+
+
+def _historical_report_chart_paths(
+    report: GeneratedReport,
+) -> dict[str, Path]:
+    """Resolve only chart filenames retained inside an immutable report."""
+
+    snapshots = generated_report_chart_snapshots(
+        report,
+        generated_report_asset_dir=Path(
+            current_app.config["GENERATED_REPORT_ASSET_DIR"]
+        ),
+    )
+    if snapshots:
+        return snapshots
+    chart_dir = Path(current_app.config["CHART_DIR"])
+    return {
+        item.evidence_id: chart_dir / item.chart_filename
+        for item in report.items
+        if item.chart_filename is not None
+        and (chart_dir / item.chart_filename).is_file()
+    }
 
 
 def _generated_report_sections(

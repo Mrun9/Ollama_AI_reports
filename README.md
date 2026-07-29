@@ -10,7 +10,287 @@ contains the end-to-end request flow, module responsibilities, runtime artifact
 map, trust boundaries, and the correct file to edit for common changes. The
 sections below are the detailed behavior and safety reference.
 
-The project currently implements **Milestone 5C: Final report composition and export**. It profiles one
+## Documentation map
+
+The documentation is organised for two audiences: someone presenting the
+project and someone continuing its development.
+
+| Document | Use it for |
+| --- | --- |
+| This README | Project story, milestone history, setup, current behaviour, and limitations |
+| [Project Architecture](ARCHITECTURE.md) | Short technical orientation and module map |
+| [Module and Function Reference](docs/MODULE_REFERENCE.md) | Responsibilities, public APIs, important internal functions, and related tests |
+| [User Input and Artifact Flow](docs/USER_INPUT_TO_OUTPUT.md) | How browser input becomes validated files, evidence, AI narration, HTML, JSON, and PDF |
+| [Derived KPI Formula Guide](FORMULA_GUIDE.md) | Formula syntax, calculation levels, examples, and troubleshooting |
+
+## The project story: how each milestone changed the system
+
+The project did not begin as an unrestricted “ask AI about a spreadsheet”
+application. Its central design decision was the opposite: **Python calculates
+facts; Ollama may suggest configuration or write prose only after those facts
+exist**. Each milestone added one layer while preserving that boundary.
+
+### Milestone 1 — Secure single-CSV ingestion
+
+**Problem:** Before analysing data, the application needed a safe and
+repeatable way to accept an untrusted file.
+
+**Implemented:**
+
+- A Flask application factory and localhost-only server defaults.
+- A bounded upload route with randomized internal filenames.
+- Strict CSV decoding, row-width checks, duplicate-header rejection, size and
+  shape limits, and cleanup of rejected uploads.
+- A SHA-256 source fingerprint and an escaped preview.
+
+**Result:** The application could retain one CSV without trusting its filename,
+MIME type, contents, or browser-supplied metadata. This established the
+dataset ID used by every later artifact.
+
+### Milestone 2 — Deterministic profiling and business configuration
+
+**Problem:** Raw columns needed understandable types and statistics before a
+user could define a KPI.
+
+**Implemented:**
+
+- Numeric, categorical, date/time, boolean, identifier, free-text, and empty
+  column classification.
+- Missingness, uniqueness, numeric statistics, and date ranges.
+- Candidate KPI, date, and category fields.
+- A reviewed business configuration containing the KPI direction, dimensions,
+  optional benchmark, and business objective.
+
+**Result:** The system could explain the dataset and save a validated analysis
+intent without using a language model.
+
+### Milestone 2.5 — AI-assisted configuration
+
+**Problem:** Users might not know which columns or settings make useful KPIs,
+but the model must not silently configure the analysis.
+
+**Implemented:**
+
+- Optional local Ollama suggestions constrained by JSON Schema.
+- Compact profile metadata instead of raw dataset rows.
+- Python rejection of unknown columns, duplicate suggestions, extra fields,
+  and invented targets.
+- A review-and-edit screen before any suggestion becomes configuration.
+
+**Result:** AI became an adviser, not the owner of the analysis. Manual
+configuration continued to work when Ollama was unavailable.
+
+### Milestone 3A — Deterministic insight generation
+
+**Problem:** A configured KPI was not useful until the application could
+calculate reproducible findings.
+
+**Implemented:**
+
+- Missing-data and insufficient-data warnings.
+- Period change and linear trend calculations.
+- Segment rankings and segment contributions.
+- Tukey IQR anomaly detection.
+- Pearson correlations labelled as associations.
+- Benchmark-breach counts and percentages.
+- Stable insight JSON saved under `instance/insights/`.
+
+**Result:** Every numerical observation came from Python and could be tested
+without Ollama.
+
+### Milestone 3.5 — Optional derived KPIs
+
+**Problem:** Important business measures are often formulas rather than source
+columns.
+
+**Implemented:**
+
+- Optional Ollama-derived KPI suggestions.
+- A manual derived-KPI editor.
+- Restricted arithmetic and ratio definitions.
+- Python previews for valid values, missing inputs, zero division, and
+  non-finite results.
+- User confirmation before a derived KPI enters the KPI registry.
+
+**Result:** The application could analyse calculated business measures while
+keeping formula execution deterministic.
+
+### Milestone 3.7 — Multi-format ingestion and formula engine
+
+**Problem:** The original CSV-specific path and two-column formulas were too
+limited for realistic single-dataset work.
+
+**Implemented:**
+
+- One `DatasetView` abstraction for CSV, flat JSON, and one selected XLSX
+  worksheet.
+- Safe JSON and XLSX validation, including rejection of formulas, macros,
+  external links, unsafe archives, and unsupported nested data.
+- A one-to-five KPI registry with source and derived KPIs.
+- A restricted parser supporting multi-column row formulas and aggregate
+  formulas such as `SUM([profit]) / SUM([revenue])`.
+
+**Result:** Downstream profiling, insights, evidence, and charts stopped caring
+which supported file format supplied the rows.
+
+### Milestone 4A — Evidence records and automatic charts
+
+**Problem:** An insight value alone was not enough for a reviewer to understand
+or verify a finding.
+
+**Implemented:**
+
+- One stable evidence record per deterministic insight.
+- Calculation descriptions, source columns, filters, periods, record counts,
+  supporting rows, limitations, and source fingerprints.
+- Deterministic relevance, confidence, impact, combined score, and rank.
+- Automatic charts appropriate to time, category, distribution, contribution,
+  missingness, and association findings.
+
+**Result:** Findings became traceable objects rather than isolated sentences.
+The later AI boundary could now refer to evidence IDs and exact fact paths.
+
+### Milestone 4B — Manual visualization builder
+
+**Problem:** Automatic evidence charts cannot answer every user question.
+
+**Implemented:**
+
+- Preview, validate, save, reopen, edit, and regenerate flows.
+- Time series, category bars, scatter plots, histograms, and box plots.
+- Filters, aggregation, grouping, sorting, Top-N, scales, and multiple
+  compatible measures.
+- KPI-backed and supplementary chart classifications.
+- Deterministic evidence derived from the values actually displayed.
+
+**Result:** Users could add report-ready charts without allowing the model to
+write plotting code or calculate chart values.
+
+### Milestone 5A.1 — Report selection and bounded package
+
+**Problem:** Not every KPI, evidence record, or chart should be sent to report
+generation.
+
+**Implemented:**
+
+- A report-configuration form for title, objective, audience, tone, detail,
+  notes, KPI selection, evidence selection, and chart selection.
+- Validation that evidence belongs to selected KPIs and charts remain
+  reproducible.
+- Fingerprints binding the report selection to its configuration, evidence,
+  source, and visualization definitions.
+- A bounded, inspectable JSON package with no raw rows or row identifiers.
+
+**Result:** The exact future model input became reviewable before Ollama was
+called.
+
+### Milestone 5B.1 — Evidence-grounded multi-story narration
+
+**Problem:** Report prose needed to combine related evidence without inventing
+facts or changing calculated values.
+
+**Implemented:**
+
+- Stable story packs grouping related evidence for one metric.
+- Structured headline, finding, interpretation, next-step, caveat, and fact
+  reference fields.
+- Exact-value validation for every number in model prose.
+- Rejection and retry of unknown facts, rounded numbers, duplicate references,
+  invalid scope, unsupported units, and causal wording.
+- Deterministic fallback stories when an individual response remains invalid.
+
+**Result:** Ollama could write useful narrative while Python retained control of
+scope, provenance, and numerical truth.
+
+### Milestone 5C — Final composition and export
+
+**Problem:** Validated stories still needed to become a publishable artifact.
+
+**Implemented:**
+
+- Immutable, versioned generated-report JSON.
+- HTML report composition with story sections, KPI overview, evidence links,
+  charts, limitations, source traceability, and an optional appendix.
+- Story inclusion and ordering controls.
+- Single-story regeneration without replacing other valid stories.
+- Print-ready **PDF export**, retained as a core output alongside HTML and JSON.
+
+**Result:** The full path from dataset upload to a downloadable,
+evidence-grounded report was complete.
+
+### Milestone 5C hardening — Precision, executive summary, and maintainability
+
+**Problem:** Early model responses could be vague or fail validation silently,
+and the growing codebase had become difficult to explain.
+
+**Implemented:**
+
+- Validation-aware story retries and explicit zero-AI failure handling.
+- More precise story instructions separating finding, interpretation, action,
+  and caveat.
+- Exactly five prioritized executive-summary points, each scoped to validated
+  stories and Python facts.
+- Evidence-strength confidence labels and explanations.
+- Removal of the obsolete CSV-only ingestion implementation and unused legacy
+  insight reader.
+- A project architecture guide and the detailed developer references linked
+  above.
+
+**Result:** New reports communicate the most important findings more clearly,
+and invalid AI output is visible rather than being mistaken for successful
+generation.
+
+### Milestone 6A — Persistent workspace and report history
+
+**Problem:** Runtime artifacts survived locally, but users had no reliable
+index for finding an earlier dataset, understanding how far its workflow had
+progressed, or reopening an exact report revision.
+
+**Implemented:**
+
+- Versioned workspace metadata created for every new upload, including a safe
+  human-readable name, original filename, internal dataset identity, format,
+  source fingerprint, size, and creation time.
+- A `/workspaces` index reconstructed from retained source and downstream
+  artifacts rather than an application database.
+- A workspace detail page with rename support, current workflow stage, last
+  activity, report-run counts, and a stage-aware resume action.
+- Compatibility entries for datasets uploaded before Milestone 6A; renaming
+  one materializes its safe versioned workspace metadata.
+- A complete report-history page that distinguishes independent generation
+  runs from immutable revisions.
+- Version-specific chart snapshots so regenerating upstream evidence cannot
+  remove visuals from an already saved report.
+- Exact-version HTML, JSON, and PDF routes. Historical reports can be reopened
+  even when their source package no longer matches the current configuration.
+- Current-package fingerprint labels that distinguish current reports from
+  historical snapshots.
+
+**Result:** Closing the application no longer makes earlier work difficult to
+find. A user can reopen a dataset, continue its workflow, inspect every saved
+report revision, and export an exact historical version without overwriting
+anything.
+
+## Scope decisions and planned work
+
+- **Single-dataset scope is intentional.** Multi-file joins are not planned for
+  this project because safe key selection, join cardinality, and join
+  validation would add substantial complexity that cannot currently be tested
+  well.
+- **PDF export remains a core feature.** Future formats may be additive but
+  must not replace it.
+- **The final visual redesign is intentionally deferred.** Functional screens
+  will continue evolving while features are added; cohesive product styling
+  should happen once the workflow is stable.
+- **Milestone 6A — Persistent workspace and report history:** implemented.
+- **Milestone 6B — More precise insight prioritization and AI diagnostics:**
+  next.
+- **Milestone 6C — Period/cohort comparisons within one dataset:** planned;
+  this deepens analysis without adding cross-dataset joins.
+- **Milestone 6D — Report presentation improvements:** planned after the
+  remaining functionality, while retaining HTML, JSON, and PDF exports.
+
+The project currently implements **Milestone 6A: Persistent workspace and report history**. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
 or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
 every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
@@ -38,6 +318,10 @@ print-ready HTML, and verified PDF downloads.
 - Escaped preview of the first five data rows
 - SHA-256 source-file hash for traceability
 - Automatic cleanup of failed uploads
+- Versioned workspace metadata under `instance/workspaces/`
+- Persistent `/workspaces` index ordered by latest artifact activity
+- Safe human-readable workspace naming and read-only legacy-upload discovery
+- Stage-aware resume links for uploaded, configured, analyzed, and reported datasets
 - Deterministic row and column counts
 - Numeric, categorical, date/time, boolean, identifier, free-text, and empty classifications
 - Missing-value and unique-value counts
@@ -159,6 +443,10 @@ print-ready HTML, and verified PDF downloads.
   and an optional evidence appendix
 - Regeneration that appends a version and preserves the last valid report on Ollama failure
 - Current-package fingerprint validation whenever a generated report is reopened
+- Complete immutable report history grouped by dataset and report-generation run
+- Version-specific report chart assets under `instance/generated_report_assets/`
+- Exact historical-version HTML, JSON, and PDF routes with read-only rendering
+- Current-versus-historical package status shown for every saved report version
 - KPI-only report configuration when no optional evidence or manual chart is selected
 - No Ollama call during report configuration
 - Localhost-only and debug-off defaults
@@ -613,4 +901,6 @@ This standalone check is optional and separate from the Flask workflow.
 - Generated synthesis remains intentionally bounded to related evidence packs rather than
   unconstrained long-form model prose
 - A report configuration currently belongs to one dataset scope
-- No persistent history, authentication, or multi-user isolation
+- Workspace history is local filesystem state; there is no authentication,
+  multi-user isolation, cloud synchronization, or automatic backup. Back up
+  `instance/` to retain uploaded sources and report history across disk loss

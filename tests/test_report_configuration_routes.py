@@ -572,6 +572,31 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
         ).glob("V*.json")
     )
     assert len(report_files) == 3
+    report_asset_directories = tuple(
+        (
+            Path(app.config["GENERATED_REPORT_ASSET_DIR"])
+            / dataset_id
+        ).glob("V*")
+    )
+    assert len(report_asset_directories) == 3
+    report_id = json_response.json["report_id"]
+    history = client.get(f"/reports/{dataset_id}/history")
+    historical_url = (
+        f"/reports/{dataset_id}/generated/{report_id}/versions/1"
+    )
+    historical_page = client.get(historical_url)
+    historical_json = client.get(f"{historical_url}/json")
+    historical_pdf = client.get(f"{historical_url}/pdf")
+
+    assert history.status_code == 200
+    assert b"3 immutable version(s)" in history.data
+    assert b"Matches current report package" in history.data
+    assert historical_page.status_code == 200
+    assert b"read-only historical snapshot" in historical_page.data
+    assert historical_json.status_code == 200
+    assert historical_json.json["version"] == 1
+    assert historical_pdf.status_code == 200
+    assert historical_pdf.data.startswith(b"%PDF-")
 
     class InvalidNarrationClient(_FakeNarrationClient):
         def chat(self, **kwargs: object) -> object:

@@ -15,12 +15,16 @@ from insight_reporter.report_generation_package import (
 from insight_reporter.report_narration import (
     ReportNarrationError,
     generate_narrated_report,
+    generated_report_chart_snapshots,
     included_report_stories,
     latest_generated_report,
+    list_generated_report_versions,
     load_generated_report,
+    load_generated_report_version,
     publish_report_presentation,
     regenerate_generated_story,
     save_generated_report,
+    snapshot_generated_report_charts,
 )
 
 
@@ -974,6 +978,30 @@ def test_generated_reports_are_immutable_versioned_and_package_bound(
     )
     assert latest is not None
     assert latest.version == 2
+    history = list_generated_report_versions(
+        report.dataset_id,
+        generated_report_dir=tmp_path,
+    )
+    assert [item.version for item in history] == [2, 1]
+    assert load_generated_report_version(
+        report.dataset_id,
+        report.report_id,
+        1,
+        generated_report_dir=tmp_path,
+    ).version == 1
+    chart_source = tmp_path / "source-chart.png"
+    chart_source.write_bytes(b"test chart bytes")
+    evidence_id = first.items[0].evidence_id
+    snapshot_generated_report_charts(
+        first,
+        {evidence_id: chart_source},
+        generated_report_asset_dir=tmp_path / "report-assets",
+    )
+    snapshots = generated_report_chart_snapshots(
+        first,
+        generated_report_asset_dir=tmp_path / "report-assets",
+    )
+    assert snapshots[evidence_id].read_bytes() == b"test chart bytes"
     with pytest.raises(ReportNarrationError, match="stale"):
         load_generated_report(
             report.dataset_id,

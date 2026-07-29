@@ -58,6 +58,8 @@ def test_evidence_and_chart_directories_are_outside_static_directory(
         "REPORT_CONFIGURATION_DIR",
         "REPORT_PACKAGE_DIR",
         "GENERATED_REPORT_DIR",
+        "GENERATED_REPORT_ASSET_DIR",
+        "WORKSPACE_DIR",
     ):
         directory = Path(app.config[setting]).resolve()
         assert directory.is_dir()

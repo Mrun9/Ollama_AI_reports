@@ -16,6 +16,7 @@ def app(tmp_path: Path) -> Flask:
             "TESTING": True,
             "SECRET_KEY": "test-only-secret-key",
             "UPLOAD_DIR": tmp_path / "uploads",
+            "WORKSPACE_DIR": tmp_path / "workspaces",
             "CONFIGURATION_DIR": tmp_path / "configurations",
             "INSIGHT_DIR": tmp_path / "insights",
             "EVIDENCE_DIR": tmp_path / "evidence",
@@ -24,6 +25,7 @@ def app(tmp_path: Path) -> Flask:
             "REPORT_CONFIGURATION_DIR": tmp_path / "report_configurations",
             "REPORT_PACKAGE_DIR": tmp_path / "report_packages",
             "GENERATED_REPORT_DIR": tmp_path / "generated_reports",
+            "GENERATED_REPORT_ASSET_DIR": tmp_path / "generated_report_assets",
             "VISUALIZATION_PREVIEW_DIR": tmp_path / "visualization_previews",
             "NAVIGATION_STATE_DIR": tmp_path / "navigation_state",
         }

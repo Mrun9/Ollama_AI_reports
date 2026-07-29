@@ -26,6 +26,7 @@ does not start the web application.
 ```text
 upload
   -> detect and validate CSV / JSON / XLSX
+  -> save persistent workspace identity
   -> build a typed dataset profile
   -> configure source or derived KPIs
   -> calculate deterministic insights
@@ -36,6 +37,7 @@ upload
   -> ask Ollama for structured stories
   -> validate model text against Python facts
   -> save versioned HTML/JSON and export PDF
+  -> reopen the workspace or any immutable report version later
 ```
 
 The browser never passes raw rows directly to Ollama. The report package
@@ -51,6 +53,7 @@ contains bounded evidence descriptors and Python-calculated fact references.
 | `config.py` | Environment-backed limits and Ollama settings |
 | `routes.py` | HTTP request orchestration and template rendering |
 | `navigation_state.py` | Short-lived POST/Redirect/GET UI state |
+| `workspace_history.py` | Durable workspace identity, progress reconstruction, and local history |
 
 `routes.py` is grouped into labelled sections for dataset and KPI setup,
 reports, visualizations, insights, and shared helpers. Route functions should
@@ -91,12 +94,15 @@ redirect.
 
 ## Runtime artifacts
 
-Source code is under `src/`. Generated state is under `instance/` and can be
-recreated through the UI.
+Source code is under `src/`. Local workspace state is under `instance/`.
+Milestone 6A makes that directory the persistent project store: do not delete
+it if uploaded sources or report history must be retained, and include it in
+local backups when recovery matters.
 
 | Directory | Contents |
 | --- | --- |
 | `instance/uploads/` | Randomly named retained source files |
+| `instance/workspaces/` | Safe human-readable identity for each retained dataset |
 | `instance/configurations/` | Reviewed KPI configurations |
 | `instance/insights/` | Deterministic Python insight reports |
 | `instance/evidence/` | Ranked, traceable evidence records |
@@ -106,11 +112,26 @@ recreated through the UI.
 | `instance/report_configurations/` | User-selected report content |
 | `instance/report_packages/` | Bounded narration input packages |
 | `instance/generated_reports/` | Immutable versioned report JSON |
+| `instance/generated_report_assets/` | Version-specific chart snapshots used by historical HTML/PDF |
 | `instance/navigation_state/` | Short-lived form and validation state |
 
 The dataset ID is the randomized filename stem created at upload. Most
 artifacts use that same ID, which is how the workflow joins its files without a
 database.
+
+The workspace index does not duplicate downstream state. It scans the
+dataset-bound artifacts to derive the latest completed stage, last activity,
+and report counts. New uploads receive a versioned workspace metadata file;
+pre-6A uploads remain discoverable through a read-only fallback identity.
+
+Generated-report filenames contain both a monotonically increasing dataset
+version and a report ID. The ordinary report route opens the latest revision
+for a report ID and requires the current package fingerprint. History routes
+load an exact filename and intentionally render it read-only, allowing older
+snapshots to remain inspectable after upstream configuration changes.
+Each newly saved version also receives its own chart-asset directory. Saving
+is rolled back if that snapshot cannot be created, preventing a report-history
+entry whose visuals were never retained.
 
 ## Trust boundaries
 
@@ -142,6 +163,7 @@ before a clearly labelled story-based fallback is used.
 - Change what Ollama receives: `report_generation_package.py` or the bounded
   descriptor construction in `report_narration.py`.
 - Change PDF layout: `report_pdf.py`.
+- Change workspace stages or history metadata: `workspace_history.py`.
 - Change environment defaults: `config.py` and `.env.example`.
 
 ## Verification
