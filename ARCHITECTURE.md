@@ -1,0 +1,156 @@
+# Project Architecture
+
+This application turns one local dataset into a reviewed report. Python owns
+all validation, calculations, evidence, and numerical claims. Ollama is used
+only for optional suggestions and narrative wording.
+
+## Start here
+
+Read these files in this order:
+
+1. `src/insight_reporter/app.py` creates and configures the Flask app.
+2. `src/insight_reporter/routes.py` shows the browser workflow and delegates
+   work to the domain modules.
+3. `src/insight_reporter/dataset_view.py` is the common CSV, JSON, and XLSX
+   data-access boundary.
+4. `src/insight_reporter/insight_engine.py` calculates deterministic findings.
+5. `src/insight_reporter/report_narration.py` gives verified evidence to
+   Ollama and validates every returned story.
+
+Application code lives under `src/insight_reporter/`. The separate
+`scripts/check_ollama.py` command only verifies local model connectivity; it
+does not start the web application.
+
+## End-to-end flow
+
+```text
+upload
+  -> detect and validate CSV / JSON / XLSX
+  -> build a typed dataset profile
+  -> configure source or derived KPIs
+  -> calculate deterministic insights
+  -> turn insights into ranked evidence and charts
+  -> optionally create manual visualizations
+  -> select report content
+  -> build a bounded, fingerprinted report package
+  -> ask Ollama for structured stories
+  -> validate model text against Python facts
+  -> save versioned HTML/JSON and export PDF
+```
+
+The browser never passes raw rows directly to Ollama. The report package
+contains bounded evidence descriptors and Python-calculated fact references.
+
+## Module map
+
+### Application and HTTP
+
+| Module | Responsibility |
+| --- | --- |
+| `app.py` | Flask factory, runtime directories, logging, security headers |
+| `config.py` | Environment-backed limits and Ollama settings |
+| `routes.py` | HTTP request orchestration and template rendering |
+| `navigation_state.py` | Short-lived POST/Redirect/GET UI state |
+
+`routes.py` is grouped into labelled sections for dataset and KPI setup,
+reports, visualizations, insights, and shared helpers. Route functions should
+remain thin: load validated inputs, call a domain module, and render or
+redirect.
+
+### Dataset and KPI domain
+
+| Module | Responsibility |
+| --- | --- |
+| `dataset_ingestion.py` | Safely retains an uploaded CSV, JSON, or XLSX file |
+| `dataset_view.py` | Normalizes supported files behind one row/column interface |
+| `dataset_profile.py` | Infers types and calculates column statistics |
+| `business_config.py` | Stores the reviewed KPI registry and shared dimensions |
+| `formula_engine.py` | Parses and evaluates the restricted formula language |
+| `derived_metrics.py` | Validates and previews derived KPI definitions |
+| `configuration_suggestions.py` | Optional Ollama suggestions for source KPIs |
+| `derived_kpi_suggestions.py` | Optional Ollama suggestions for derived KPIs |
+
+### Analysis and visualization
+
+| Module | Responsibility |
+| --- | --- |
+| `insight_engine.py` | Python-only trends, segments, anomalies, correlations, and benchmarks |
+| `evidence_layer.py` | Converts insights into ranked evidence records and charts |
+| `visualization_builder.py` | Validates, calculates, renders, and saves manual charts |
+| `manual_visualization_evidence.py` | Produces deterministic evidence for manual charts |
+| `dataset_context.py` | Builds safe field tokens shown beside configuration forms |
+
+### Report domain
+
+| Module | Responsibility |
+| --- | --- |
+| `report_configuration.py` | Validates the user's selected KPIs, evidence, and charts |
+| `report_generation_package.py` | Builds the exact bounded input contract for narration |
+| `report_narration.py` | Groups evidence, validates stories and the five-point executive summary, and versions report JSON |
+| `report_pdf.py` | Renders the validated report artifact as a PDF |
+
+## Runtime artifacts
+
+Source code is under `src/`. Generated state is under `instance/` and can be
+recreated through the UI.
+
+| Directory | Contents |
+| --- | --- |
+| `instance/uploads/` | Randomly named retained source files |
+| `instance/configurations/` | Reviewed KPI configurations |
+| `instance/insights/` | Deterministic Python insight reports |
+| `instance/evidence/` | Ranked, traceable evidence records |
+| `instance/charts/` | Automatic evidence chart images |
+| `instance/visualizations/` | Saved manual visualization definitions |
+| `instance/visualization_previews/` | Short-lived chart previews |
+| `instance/report_configurations/` | User-selected report content |
+| `instance/report_packages/` | Bounded narration input packages |
+| `instance/generated_reports/` | Immutable versioned report JSON |
+| `instance/navigation_state/` | Short-lived form and validation state |
+
+The dataset ID is the randomized filename stem created at upload. Most
+artifacts use that same ID, which is how the workflow joins its files without a
+database.
+
+## Trust boundaries
+
+There are three different kinds of content:
+
+1. **Python facts** — calculations and exact numeric values. These are trusted
+   only after deterministic validation.
+2. **User context** — objectives, titles, notes, and chart questions. These are
+   retained as user-provided text and escaped when rendered.
+3. **Ollama text** — optional suggestions and report prose. Structured model
+   responses are treated as untrusted and validated before saving.
+
+If an Ollama story invents or changes a number, references unknown evidence,
+duplicates a fact, or makes a prohibited causal claim, it is retried and may
+ultimately be replaced by a deterministic summary. A report with evidence but
+zero accepted AI stories is not saved. Executive-summary points are separately
+validated against their cited stories and facts; invalid summaries are retried
+before a clearly labelled story-based fallback is used.
+
+## Where to make common changes
+
+- Add a supported upload format: `dataset_view.py`, then
+  `dataset_ingestion.py`.
+- Add a deterministic analysis: `insight_engine.py`, then map its evidence and
+  chart behavior in `evidence_layer.py`.
+- Add a manual chart type: `visualization_builder.py`.
+- Change the report-selection form: `report_configuration.py`, its templates,
+  and the corresponding route.
+- Change what Ollama receives: `report_generation_package.py` or the bounded
+  descriptor construction in `report_narration.py`.
+- Change PDF layout: `report_pdf.py`.
+- Change environment defaults: `config.py` and `.env.example`.
+
+## Verification
+
+```bash
+conda activate ollama-env
+pytest -q
+ruff check .
+```
+
+Tests mirror the domain module names. Route tests cover the full browser
+workflow using isolated temporary artifact directories.

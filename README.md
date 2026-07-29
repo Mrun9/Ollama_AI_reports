@@ -5,6 +5,11 @@ evidence-grounded reports. Python performs deterministic calculations, and a loc
 provides optional configuration suggestions and evidence-grounded narrative wording from verified
 Python facts.
 
+New to the codebase? Read [Project Architecture](ARCHITECTURE.md) first. It
+contains the end-to-end request flow, module responsibilities, runtime artifact
+map, trust boundaries, and the correct file to edit for common changes. The
+sections below are the detailed behavior and safety reference.
+
 The project currently implements **Milestone 5C: Final report composition and export**. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
 or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
@@ -12,8 +17,10 @@ every KPI calculation and insight in Python; turns each insight into reviewer-ve
 evidence; lets users configure, review, and save validated KPI or supplementary charts; and creates
 a source-bound selection of the trusted KPIs, evidence, and charts. It then builds a bounded,
 evidence-only JSON package and uses local Ollama for structured stories whose numerical claims are
-validated against Python facts. Published reports support story selection and ordering, embedded
-charts, print-ready HTML, and verified PDF downloads.
+validated against Python facts. The narrative can naturally quote several verified values and add
+observations, cautious interpretations, and practical suggested next steps. Published reports
+support story selection and ordering, embedded charts, understandable evidence-confidence labels,
+print-ready HTML, and verified PDF downloads.
 
 ## Current capabilities
 
@@ -43,7 +50,7 @@ charts, print-ready HTML, and verified PDF downloads.
 - Configured KPI names excluded from later Ollama suggestion schemas and profile context
 - User-reviewed AI prefilling of KPI direction and shared date, category, and business-objective
   context
-- JSON-schema-constrained model responses at temperature zero
+- JSON-schema-constrained model responses with a configurable report temperature
 - Python rejection of hallucinated columns, extra fields, duplicate suggestions, and invented targets
 - Model confidence and evidence-based rationale displayed as advisory information
 - Select-and-edit flow that prefills the existing manual configuration form
@@ -136,9 +143,14 @@ charts, print-ready HTML, and verified PDF downloads.
 - A bounded catalogue of exact Python-verified display values, qualitative labels, and allowed
   fact-reference paths in model prompts
 - Structured responses restricted to the exact supplied `STY-...`, `EVD-...`, and `MVE-...` scope
-- Per-story rejection of rounded, invented, or unreferenced numbers; unsupported percentage or
-  currency symbols; number words; unknown references; modified story scope; or causal language
+- Exactly five prioritized executive-summary points generated from validated report stories, with
+  metric names, story provenance, and Python-verified numerical references
+- Per-story rejection of rounded, invented, or unreferenced quantitative values; unsupported
+  percentage or currency symbols; spelled-out quantitative claims; unknown references; modified
+  story scope; or causal language
 - Ollama-selected fact references resolved into exact numerical claims by Python
+- High, medium, or low confidence shown as deterministic evidence strength, with a plain-language
+  explanation that it is not a prediction probability
 - Python-rendered facts kept separate from explicitly labelled AI-written interpretation
 - Calculation, source columns, fact path, and evidence ID shown for each resolved numerical claim
 - KPI-only report generation without an Ollama call when no evidence was selected
@@ -444,17 +456,25 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 - Up to 10 high-priority evidence records are grouped by metric into at most five stable story
   packs. Each story pack contains at most three related evidence records, with capacity reserved
   for up to two selected manual visualizations.
-- Qualitative facts omit numeric leaves, while each evidence descriptor exposes at most three
+- Qualitative facts omit numeric leaves, while each evidence descriptor exposes at most five
   Python-calculated fact references with an exact display value and label.
 - The model receives qualitative labels, calculation descriptions, limitations, report objective,
   audience, tone, and detail level. All supplied text remains untrusted data.
 - The JSON schema requires one headline, finding, interpretation, follow-up, caveat, and bounded
   fact-reference list for the exact story ID.
-- A story may select up to four facts across its related evidence records. Narrative fields may
-  quote only their exact display values. Python checks every numeric token and rejects rounding,
-  calculations, invented values, dates, evidence IDs, common number words, unsupported units, and
-  causal language. Percentage signs are allowed only for percentage-labelled facts; correlations
-  remain associations.
+- A story may select up to six facts across its related evidence records. The prompt asks Ollama to
+  quote the most useful verified values naturally in its finding and interpretation. Python checks
+  every digit-based value and rejects rounding, calculations, invented values, dates, evidence IDs,
+  unsupported units, and causal language. Ordinary phrases such as “one area to review” are allowed,
+  while spelled-out quantitative claims remain blocked. Percentage signs are allowed only for
+  percentage-labelled facts; correlations remain associations.
+- Report narration uses a moderately creative default temperature of `0.35`. It is configurable
+  without changing Python calculations or the exact values available to the model.
+- Story findings are prompted to name the metric and state the observed direction, relationship, or
+  comparison directly; interpretation and suggested action remain separate fields.
+- Story confidence is conservatively derived from the linked evidence confidence. High, medium,
+  and low describe record support under deterministic rules; they are not model certainty scores
+  or prediction probabilities.
 - Python verifies that every selected fact belongs to the story pack, resolves the original value
   independently, and displays the claim beside its evidence ID.
 - Python copies the original observation object into the generated report and renders it separately
@@ -515,6 +535,7 @@ The application reads these optional process environment variables:
 | `APP_CSV_PREVIEW_ROWS` | `5` | Rows displayed after validation |
 | `APP_OLLAMA_MODEL` | `llama3.2:latest` | Local model used for suggestions and report commentary |
 | `APP_OLLAMA_TIMEOUT_SECONDS` | `120` | Local Ollama request timeout |
+| `APP_OLLAMA_REPORT_TEMPERATURE` | `0.35` | Report-writing creativity from `0.0` to `1.0`; calculations remain Python-controlled |
 
 The `APP_MAX_CSV_ROWS`, `APP_MAX_CSV_COLUMNS`, and `APP_CSV_PREVIEW_ROWS` names are retained for
 backward compatibility, but their limits now apply equally to CSV, JSON, and XLSX inputs.
@@ -568,7 +589,7 @@ data.
 After Ollama is installed, running, and has an approved model downloaded:
 
 ```bash
-python app.py
+python scripts/check_ollama.py
 ```
 
 This standalone check is optional and separate from the Flask workflow.
@@ -585,7 +606,8 @@ This standalone check is optional and separate from the Flask workflow.
 - Empty strings and the markers `NA`, `N/A`, `null`, `none`, and `NaN` count as missing.
 - Derived formulas do not yet support joins, rolling windows, forecasting, conditionals, or custom
   code.
-- AI confidence is advisory and not a calibrated probability.
+- Configuration-suggestion confidence is advisory and not a calibrated probability. Generated
+  report confidence is instead deterministic evidence strength based on record support.
 - Suggestions depend on the semantic ability of the selected local model and require human review.
 - No DOCX export yet
 - Generated synthesis remains intentionally bounded to related evidence packs rather than

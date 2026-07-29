@@ -26,6 +26,36 @@ class _StoryClient:
 
     def chat(self, **kwargs: object) -> object:
         properties = kwargs["format"]["properties"]
+        if "points" in properties:
+            prompt = kwargs["messages"][1]["content"]
+            report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
+            story = report_payload["stories"][0]
+            qualifiers = (
+                "Primary",
+                "Secondary",
+                "Additional",
+                "Related",
+                "Supporting",
+            )
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "points": [
+                                {
+                                    "text": (
+                                        f"{qualifier} revenue finding is "
+                                        "relevant to the objective."
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": [],
+                                }
+                                for qualifier in qualifiers
+                            ]
+                        }
+                    )
+                }
+            }
         references = properties["fact_references"]["items"]["enum"]
         headline = (
             "Primary revenue pattern merits review"
@@ -165,6 +195,8 @@ def test_pdf_contains_published_stories_evidence_and_chart(
     assert rendered.startswith(b"%PDF-")
     assert len(reader.pages) >= 2
     assert "Executive summary" in extracted
+    assert "AI-generated and Python-validated 5-point summary" in extracted
+    assert "Primary revenue finding" in extracted
     assert "Primary revenue pattern merits review" in extracted
     assert "123.45" in extracted
     assert "Source traceability" in extracted

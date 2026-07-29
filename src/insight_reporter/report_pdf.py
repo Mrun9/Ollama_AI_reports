@@ -34,6 +34,7 @@ from reportlab.platypus import (
 from insight_reporter.report_narration import (
     GeneratedReport,
     NarrativeStory,
+    included_executive_summary_points,
     included_report_stories,
 )
 
@@ -77,6 +78,7 @@ def build_report_pdf(
     """Render the published report with the same verified story content as HTML."""
 
     stories = included_report_stories(report)
+    summary_points = included_executive_summary_points(report)
     if report.items and not stories:
         raise ReportPdfError(
             "Select at least one included story before exporting PDF."
@@ -117,6 +119,17 @@ def build_report_pdf(
                     f"Version {report.version} | Generated {report.generated_at} "
                     f"| Local model {report.model}"
                     + (
+                        " | Narration creativity "
+                        + str(
+                            report.report_settings[
+                                "narration_temperature"
+                            ]
+                        )
+                        if "narration_temperature"
+                        in report.report_settings
+                        else ""
+                    )
+                    + (
                         " | Author "
                         + _plain_text(
                             report.report_settings["report_author"]
@@ -153,20 +166,53 @@ def build_report_pdf(
             ),
         ]
     )
-    for story in stories[:3]:
-        flowables.extend(
-            [
-                Paragraph(_markup(story.headline), styles["SummaryHeading"]),
-                Paragraph(
-                    _markup(f"Finding: {story.finding}"),
-                    styles["Body"],
+    if summary_points:
+        flowables.append(
+            Paragraph(
+                (
+                    "AI-generated and Python-validated "
+                    f"{len(summary_points)}-point summary"
+                    if all(
+                        point.narration_source == "ollama"
+                        for point in summary_points
+                    )
+                    else (
+                        f"{len(summary_points)}-point summary assembled from "
+                        "validated stories"
+                    )
                 ),
-                Paragraph(
-                    _markup(f"Why it matters: {story.interpretation}"),
-                    styles["Body"],
-                ),
-            ]
+                styles["SummaryHeading"],
+            )
         )
+        flowables.extend(
+            Paragraph(
+                _markup(f"• {point.text}"),
+                styles["Body"],
+            )
+            for point in summary_points
+        )
+    else:
+        for story in stories[:3]:
+            flowables.extend(
+                [
+                    Paragraph(_markup(story.headline), styles["SummaryHeading"]),
+                    Paragraph(
+                        _markup(f"What we found: {story.finding}"),
+                        styles["Body"],
+                    ),
+                    Paragraph(
+                        _markup(f"What it may mean: {story.interpretation}"),
+                        styles["Body"],
+                    ),
+                    Paragraph(
+                        _markup(
+                            f"Confidence - {story.confidence.title()}: "
+                            f"{story.confidence_explanation}"
+                        ),
+                        styles["Caveat"],
+                    ),
+                ]
+            )
 
     if report.kpis:
         flowables.extend(
@@ -269,6 +315,11 @@ def build_report_pdf(
                             ["Type", item.insight_type],
                             ["Records", str(item.record_count)],
                             [
+                                "Evidence confidence",
+                                f"{item.confidence.title()} "
+                                f"(score {item.confidence_score:g})",
+                            ],
+                            [
                                 "Source columns",
                                 ", ".join(item.source_columns) or "None",
                             ],
@@ -340,19 +391,26 @@ def _story_flowables(
         ),
         Paragraph(_markup(story.headline), styles["Heading2"]),
         Paragraph(
-            _markup(f"Observation: {story.finding}"),
+            _markup(f"What we found: {story.finding}"),
             styles["Finding"],
         ),
         Paragraph(
-            _markup(f"Why it matters: {story.interpretation}"),
+            _markup(f"What it may mean: {story.interpretation}"),
             styles["Body"],
         ),
         Paragraph(
-            _markup(f"Suggested follow-up: {story.follow_up}"),
+            _markup(f"Suggested next steps: {story.follow_up}"),
             styles["Body"],
         ),
         Paragraph(
-            _markup(f"Important caveat: {story.caveat}"),
+            _markup(f"Keep in mind: {story.caveat}"),
+            styles["Caveat"],
+        ),
+        Paragraph(
+            _markup(
+                f"Confidence - {story.confidence.title()}: "
+                f"{story.confidence_explanation}"
+            ),
             styles["Caveat"],
         ),
     ]

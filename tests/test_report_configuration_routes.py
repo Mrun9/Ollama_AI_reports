@@ -19,6 +19,37 @@ class _FakeNarrationClient:
     def chat(self, **kwargs: object) -> object:
         schema = kwargs["format"]
         properties = schema["properties"]
+        if "points" in properties:
+            prompt = kwargs["messages"][1]["content"]
+            report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
+            story = report_payload["stories"][0]
+            qualifiers = (
+                "Primary",
+                "Secondary",
+                "Additional",
+                "Related",
+                "Supporting",
+            )
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "points": [
+                                {
+                                    "text": (
+                                        f"{qualifier} finding for "
+                                        f"{story['metric']} is relevant to "
+                                        "the configured objective."
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": [],
+                                }
+                                for qualifier in qualifiers
+                            ]
+                        }
+                    )
+                }
+            }
         story_id = properties["story_id"]["enum"][0]
         fact_references = properties["fact_references"]["items"].get(
             "enum",
@@ -459,17 +490,21 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
     )
     page = client.get(generated.headers["Location"])
     assert page.status_code == 200
-    assert b"AI-written interpretation" in page.data
+    assert b"What it may mean" in page.data
     assert b"Python-generated facts" in page.data
     assert b"How this referenced value was produced" in page.data
-    assert b"Every displayed numerical claim" in page.data
+    assert b"Confidence:" in page.data
+    assert b"not a prediction probability" in page.data
+    assert b"AI-generated and Python-validated" in page.data
+    assert b"Primary finding for" in page.data
     assert b"&lt;script&gt;Trusted report&lt;/script&gt;" in page.data
     assert b"Example Analytics" in page.data
     assert b"Local Analyst" in page.data
     assert b"<script>Trusted report</script>" not in page.data
     json_response = client.get(f"{generated.headers['Location']}/json")
     assert json_response.status_code == 200
-    assert json_response.json["schema_version"] == 4
+    assert json_response.json["schema_version"] == 6
+    assert len(json_response.json["executive_summary"]) == 5
     assert json_response.json["version"] == 1
     assert json_response.json["items"][0]["evidence_id"] == evidence_id
     assert (
@@ -537,6 +572,42 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
         ).glob("V*.json")
     )
     assert len(report_files) == 3
+
+    class InvalidNarrationClient(_FakeNarrationClient):
+        def chat(self, **kwargs: object) -> object:
+            response = super().chat(**kwargs)
+            content = json.loads(response["message"]["content"])
+            content["finding"] = "The model invented a result of 999."
+            response["message"]["content"] = json.dumps(content)
+            return response
+
+    def zero_ai_generate(package, **kwargs):  # type: ignore[no-untyped-def]
+        return generate_narrated_report(
+            package,
+            model=kwargs["model"],
+            host=kwargs["host"],
+            timeout_seconds=kwargs["timeout_seconds"],
+            client=InvalidNarrationClient(),
+        )
+
+    monkeypatch.setattr(
+        "insight_reporter.routes.generate_narrated_report",
+        zero_ai_generate,
+    )
+    zero_ai = client.post(
+        f"/reports/{dataset_id}/generate",
+        follow_redirects=True,
+    )
+    assert zero_ai.status_code == 503
+    assert b"none passed evidence validation" in zero_ai.data
+    assert len(
+        tuple(
+            (
+                Path(app.config["GENERATED_REPORT_DIR"])
+                / dataset_id
+            ).glob("V*.json")
+        )
+    ) == 3
 
     def unavailable(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise ReportNarrationError("Ollama test failure.")

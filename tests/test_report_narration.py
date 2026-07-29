@@ -40,6 +40,40 @@ class FakeClient:
         self.calls.append(kwargs)
         schema = kwargs["format"]
         properties = schema["properties"]
+        if "points" in properties:
+            prompt = kwargs["messages"][1]["content"]
+            report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
+            stories = report_payload["stories"]
+            qualifiers = (
+                "Primary",
+                "Secondary",
+                "Additional",
+                "Related",
+                "Supporting",
+            )
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "points": [
+                                {
+                                    "text": (
+                                        f"{qualifiers[index]} finding for "
+                                        f"{story['metric']} is relevant to "
+                                        "the configured objective."
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": [],
+                                }
+                                for index, story in enumerate(
+                                    stories[index % len(stories)]
+                                    for index in range(5)
+                                )
+                            ]
+                        }
+                    )
+                }
+            }
         story_id = properties["story_id"]["enum"][0]
         fact_references = properties["fact_references"]["items"].get(
             "enum",
@@ -155,7 +189,7 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
         client=client,
     )
 
-    assert len(client.calls) == 2
+    assert len(client.calls) == 3
     assert len(report.items) == 5
     assert len(report.stories) == 2
     assert report.ai_narrated_evidence_ids == tuple(
@@ -166,7 +200,12 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
         story.narration_source == "ollama"
         for story in report.stories
     )
-    assert report.schema_version == 4
+    assert report.schema_version == 6
+    assert len(report.executive_summary) == 5
+    assert all(
+        point.narration_source == "ollama"
+        for point in report.executive_summary
+    )
     assert report.items[0].facts == {
         "highest_segment": "North",
         "value": 123.45,
@@ -190,6 +229,121 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
     assert "available_fact_references" in first_prompt
     assert client.calls[0]["think"] is False
     assert client.calls[0]["options"]["num_ctx"] == 4_096
+    assert client.calls[0]["options"]["temperature"] == 0.35
+    assert report.report_settings["narration_temperature"] == 0.35
+    assert report.stories[0].confidence == "medium"
+    assert "not a prediction probability" in (
+        report.stories[0].confidence_explanation
+    )
+
+
+def test_executive_summary_accepts_only_selected_exact_values() -> None:
+    class SummaryClient(FakeClient):
+        def chat(self, **kwargs: object) -> object:
+            if "points" not in kwargs["format"]["properties"]:
+                return super().chat(**kwargs)
+            self.calls.append(kwargs)
+            prompt = kwargs["messages"][1]["content"]
+            report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
+            story = report_payload["stories"][0]
+            reference = story["available_fact_references"][0]["reference"]
+            qualifiers = (
+                "Primary",
+                "Secondary",
+                "Additional",
+                "Related",
+                "Supporting",
+            )
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "points": [
+                                {
+                                    "text": (
+                                        "Primary revenue finding is 123.45 "
+                                        "and merits review."
+                                        if index == 0
+                                        else (
+                                            f"{qualifier} revenue finding "
+                                            "merits review."
+                                        )
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": (
+                                        [reference] if index == 0 else []
+                                    ),
+                                }
+                                for index, qualifier in enumerate(qualifiers)
+                            ]
+                        }
+                    )
+                }
+            }
+
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=SummaryClient(),
+    )
+
+    assert report.executive_summary[0].text == (
+        "Primary revenue finding is 123.45 and merits review."
+    )
+    assert report.executive_summary[0].fact_references[0].value == 123.45
+    assert all(
+        point.narration_source == "ollama"
+        for point in report.executive_summary
+    )
+
+
+def test_invalid_executive_summary_falls_back_to_validated_stories() -> None:
+    class InvalidSummaryClient(FakeClient):
+        def chat(self, **kwargs: object) -> object:
+            if "points" not in kwargs["format"]["properties"]:
+                return super().chat(**kwargs)
+            self.calls.append(kwargs)
+            prompt = kwargs["messages"][1]["content"]
+            report_payload = json.loads(prompt.split("\n", maxsplit=1)[1])
+            story = report_payload["stories"][0]
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "points": [
+                                {
+                                    "text": (
+                                        f"Revenue invented result {999 + index}."
+                                    ),
+                                    "story_ids": [story["story_id"]],
+                                    "fact_references": [],
+                                }
+                                for index in range(5)
+                            ]
+                        }
+                    )
+                }
+            }
+
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=InvalidSummaryClient(),
+    )
+
+    assert len(report.executive_summary) == 5
+    assert all(
+        point.narration_source == "deterministic_only"
+        for point in report.executive_summary
+    )
+    assert any(
+        "five-point executive summary" in limitation
+        for limitation in report.generation_limitations
+    )
 
 
 def test_story_ids_are_stable_for_the_same_evidence_pack() -> None:
@@ -340,6 +494,112 @@ def test_exact_referenced_number_is_allowed_in_commentary() -> None:
     )
 
 
+def test_multiple_python_verified_numbers_are_allowed_naturally() -> None:
+    package = _package(record_count=1)
+    record = dict(package.deterministic_evidence[0])
+    record["observation"] = {
+        "percentage_change": 23.45,
+        "current_value": 123.45,
+        "previous_value": 100,
+    }
+    record["ranking"] = {"confidence": 1.0, "rank": 1}
+    package = replace(package, deterministic_evidence=(record,))
+    client = FakeClient(
+        commentary=(
+            "Revenue reached 123.45 after a verified percentage change of "
+            "23.45%, making this one area to review."
+        )
+    )
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        temperature=0.6,
+        client=client,
+    )
+
+    assert report.stories[0].narration_source == "ollama"
+    assert "123.45" in report.stories[0].finding
+    assert "23.45%" in report.stories[0].finding
+    assert "one area" in report.stories[0].finding
+    assert report.stories[0].confidence == "high"
+    assert client.calls[0]["options"]["temperature"] == 0.6
+    assert len(report.stories[0].fact_references) == 2
+
+
+def test_invalid_story_is_retried_with_validation_feedback() -> None:
+    class RetryClient(FakeClient):
+        def chat(self, **kwargs: object) -> object:
+            if "points" in kwargs["format"]["properties"]:
+                return super().chat(**kwargs)
+            self.calls.append(kwargs)
+            schema = kwargs["format"]
+            properties = schema["properties"]
+            story_id = properties["story_id"]["enum"][0]
+            references = properties["fact_references"]["items"]["enum"]
+            finding = (
+                "Review these results in 2 steps."
+                if len(self.calls) == 1
+                else "This evidence supports a descriptive comparison."
+            )
+            return {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "story_id": story_id,
+                            "headline": "A verified pattern merits review",
+                            "finding": finding,
+                            "interpretation": (
+                                "The evidence is relevant to the objective."
+                            ),
+                            "follow_up": "Review whether the pattern persists.",
+                            "caveat": "The analysis remains descriptive.",
+                            "fact_references": references[:1],
+                        }
+                    )
+                }
+            }
+
+    client = RetryClient()
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        temperature=0.35,
+        client=client,
+    )
+
+    assert report.stories[0].narration_source == "ollama"
+    story_calls = [
+        call
+        for call in client.calls
+        if "story_id" in call["format"]["properties"]
+    ]
+    assert len(story_calls) == 2
+    assert story_calls[1]["options"]["temperature"] == 0.1
+    assert "Python rejected that response" in (
+        story_calls[1]["messages"][-1]["content"]
+    )
+
+
+@pytest.mark.parametrize("temperature", [-0.1, 1.1, float("nan"), True])
+def test_invalid_report_temperature_is_rejected(
+    temperature: object,
+) -> None:
+    with pytest.raises(ReportNarrationError, match="temperature"):
+        generate_narrated_report(
+            _package(record_count=1),
+            model="llama3.2:latest",
+            host="http://127.0.0.1:11434",
+            timeout_seconds=120,
+            temperature=temperature,  # type: ignore[arg-type]
+            client=FakeClient(),
+        )
+
+
 def test_percentage_symbol_requires_a_percentage_fact() -> None:
     package = _package(record_count=1)
     record = dict(package.deterministic_evidence[0])
@@ -488,15 +748,16 @@ def test_unknown_model_evidence_reference_is_rejected() -> None:
 def test_one_invalid_story_does_not_discard_valid_synthesis() -> None:
     class MixedClient:
         def __init__(self) -> None:
-            self.call_count = 0
+            self.invalid_story_id: str | None = None
 
         def chat(self, **kwargs: object) -> object:
             schema = kwargs["format"]
             properties = schema["properties"]
             story_id = properties["story_id"]["enum"][0]
             references = properties["fact_references"]["items"]["enum"]
-            invalid = self.call_count == 0
-            self.call_count += 1
+            if self.invalid_story_id is None:
+                self.invalid_story_id = story_id
+            invalid = story_id == self.invalid_story_id
             return {
                 "message": {
                     "content": json.dumps(
@@ -666,6 +927,7 @@ def test_story_packs_are_grouped_by_metric() -> None:
             ]["items"]["enum"]
         ]
         for call in client.calls
+        if "story_id" in call["format"]["properties"]
     ]
     assert [list(dict.fromkeys(pack)) for pack in packs] == [
         ["EVD-0000000000000001", "EVD-0000000000000003"],
@@ -704,6 +966,7 @@ def test_generated_reports_are_immutable_versioned_and_package_bound(
         expected_package_sha256=report.source_package_sha256,
     )
     assert loaded.version in {1, 2}
+    assert loaded.executive_summary == report.executive_summary
     latest = latest_generated_report(
         report.dataset_id,
         generated_report_dir=tmp_path,
@@ -731,3 +994,50 @@ def test_generated_reports_are_immutable_versioned_and_package_bound(
             report.report_id,
             generated_report_dir=tmp_path,
         )
+
+
+def test_older_report_without_executive_summary_remains_publishable(
+    tmp_path: Path,
+) -> None:
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+    saved, path = save_generated_report(
+        report,
+        generated_report_dir=tmp_path,
+    )
+    legacy_payload = json.loads(path.read_text(encoding="utf-8"))
+    legacy_payload["schema_version"] = 5
+    legacy_payload.pop("executive_summary")
+    path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+    legacy = load_generated_report(
+        saved.dataset_id,
+        saved.report_id,
+        generated_report_dir=tmp_path,
+    )
+    revised = publish_report_presentation(
+        legacy,
+        included_story_ids=tuple(
+            story.story_id for story in legacy.stories
+        ),
+        story_order=tuple(
+            story.story_id for story in legacy.stories
+        ),
+    )
+    saved_revision, _path = save_generated_report(
+        revised,
+        generated_report_dir=tmp_path,
+    )
+
+    assert legacy.executive_summary == ()
+    assert saved_revision.schema_version == 5
+    assert load_generated_report(
+        saved.dataset_id,
+        saved.report_id,
+        generated_report_dir=tmp_path,
+    ).executive_summary == ()

@@ -8,6 +8,20 @@ from insight_reporter.config import DefaultConfig
 from insight_reporter.logging_config import configure_logging
 from insight_reporter.routes import core
 
+_ARTIFACT_DIRECTORIES = (
+    ("UPLOAD_DIR", "uploads"),
+    ("CONFIGURATION_DIR", "configurations"),
+    ("INSIGHT_DIR", "insights"),
+    ("EVIDENCE_DIR", "evidence"),
+    ("CHART_DIR", "charts"),
+    ("VISUALIZATION_DIR", "visualizations"),
+    ("REPORT_CONFIGURATION_DIR", "report_configurations"),
+    ("REPORT_PACKAGE_DIR", "report_packages"),
+    ("GENERATED_REPORT_DIR", "generated_reports"),
+    ("VISUALIZATION_PREVIEW_DIR", "visualization_previews"),
+    ("NAVIGATION_STATE_DIR", "navigation_state"),
+)
+
 
 def create_app(test_config: dict[str, object] | None = None) -> Flask:
     """Create a configured application instance.
@@ -26,43 +40,14 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
-    app.config.setdefault("UPLOAD_DIR", Path(app.instance_path) / "uploads")
-    app.config.setdefault("CONFIGURATION_DIR", Path(app.instance_path) / "configurations")
-    app.config.setdefault("INSIGHT_DIR", Path(app.instance_path) / "insights")
-    app.config.setdefault("EVIDENCE_DIR", Path(app.instance_path) / "evidence")
-    app.config.setdefault("CHART_DIR", Path(app.instance_path) / "charts")
-    app.config.setdefault("VISUALIZATION_DIR", Path(app.instance_path) / "visualizations")
-    app.config.setdefault(
-        "REPORT_CONFIGURATION_DIR",
-        Path(app.instance_path) / "report_configurations",
-    )
-    app.config.setdefault(
-        "REPORT_PACKAGE_DIR",
-        Path(app.instance_path) / "report_packages",
-    )
-    app.config.setdefault(
-        "GENERATED_REPORT_DIR",
-        Path(app.instance_path) / "generated_reports",
-    )
-    app.config.setdefault(
-        "VISUALIZATION_PREVIEW_DIR",
-        Path(app.instance_path) / "visualization_previews",
-    )
-    app.config.setdefault("NAVIGATION_STATE_DIR", Path(app.instance_path) / "navigation_state")
-    Path(app.config["UPLOAD_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["CONFIGURATION_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["INSIGHT_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["EVIDENCE_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["CHART_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["VISUALIZATION_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["REPORT_CONFIGURATION_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["REPORT_PACKAGE_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["GENERATED_REPORT_DIR"]).mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-    Path(app.config["VISUALIZATION_PREVIEW_DIR"]).mkdir(parents=True, exist_ok=True)
-    Path(app.config["NAVIGATION_STATE_DIR"]).mkdir(parents=True, exist_ok=True)
+    # Runtime artifacts share one layout in production while tests can
+    # override any directory independently.
+    for setting, directory_name in _ARTIFACT_DIRECTORIES:
+        app.config.setdefault(
+            setting,
+            Path(app.instance_path) / directory_name,
+        )
+        Path(app.config[setting]).mkdir(parents=True, exist_ok=True)
 
     configure_logging(app)
     app.register_blueprint(core)

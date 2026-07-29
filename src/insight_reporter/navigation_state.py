@@ -13,7 +13,6 @@ _RETENTION_SECONDS = 24 * 60 * 60
 class NavigationStateError(ValueError):
     """Raised when transient navigation state is invalid or unavailable."""
 
-
 def save_navigation_state(payload: dict[str, object], *, state_dir: Path) -> str:
     """Atomically retain validated UI state outside Flask's static directory."""
 

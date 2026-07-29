@@ -1,4 +1,9 @@
-"""Local health and secure multi-format dataset routes."""
+"""HTTP orchestration for the local reporting workflow.
+
+Routes translate requests into calls to the domain modules. Calculations,
+validation, persistence, charting, and model interaction belong in those
+modules rather than here.
+"""
 
 import io
 import json
@@ -116,6 +121,7 @@ from insight_reporter.report_narration import (
     NarrativeStory,
     ReportNarrationError,
     generate_narrated_report,
+    included_executive_summary_points,
     included_report_stories,
     latest_generated_report,
     load_generated_report,
@@ -150,6 +156,9 @@ from insight_reporter.visualization_builder import (
 )
 
 core = Blueprint("core", __name__)
+
+
+# Dataset ingestion, profiling, and KPI configuration
 
 
 def _upload_limits() -> dict[str, int]:
@@ -784,6 +793,9 @@ def remove_configured_metric(dataset_id: str):  # type: ignore[no-untyped-def]
     )
 
 
+# Report selection, generation, publication, and export
+
+
 @core.get("/reports/<dataset_id>/configure")
 def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
     """Display the deterministic Milestone 5A report selection form."""
@@ -1072,7 +1084,17 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
             timeout_seconds=int(
                 current_app.config["OLLAMA_TIMEOUT_SECONDS"]
             ),
+            temperature=float(
+                current_app.config["OLLAMA_REPORT_TEMPERATURE"]
+            ),
         )
+        if draft.stories and not draft.ai_narrated_evidence_ids:
+            raise ReportNarrationError(
+                "Ollama returned responses, but none passed evidence "
+                "validation after four attempts per story. No report was "
+                "saved. Try Generate report again; if this persists, use a "
+                "more capable local model."
+            )
         generated, _path = save_generated_report(
             draft,
             generated_report_dir=Path(
@@ -1181,10 +1203,12 @@ def generated_report(
     ) as error:
         abort(422, description=str(error))
     published_stories = included_report_stories(report)
+    published_summary_points = included_executive_summary_points(report)
     return render_template(
         "generated_report.html",
         report=report,
         published_stories=published_stories,
+        published_summary_points=published_summary_points,
         story_sections=_generated_story_sections(published_stories),
         sections=_generated_report_sections(report.items),
         item_by_id={
@@ -1311,6 +1335,9 @@ def regenerate_report_story(
             timeout_seconds=int(
                 current_app.config["OLLAMA_TIMEOUT_SECONDS"]
             ),
+            temperature=float(
+                current_app.config["OLLAMA_REPORT_TEMPERATURE"]
+            ),
         )
         regenerated, _path = save_generated_report(
             revised,
@@ -1413,6 +1440,9 @@ def generated_report_json(
     ) as error:
         abort(422, description=str(error))
     return jsonify(report.to_dict())
+
+
+# Manual visualization workflow
 
 
 @core.get("/visualizations/<dataset_id>")
@@ -1734,6 +1764,9 @@ def regenerate_visualization(
     )
 
 
+# Deterministic insights and evidence
+
+
 @core.post("/insights/<dataset_id>")
 def deterministic_insights(dataset_id: str):  # type: ignore[no-untyped-def]
     """Generate factual observations, evidence records, and charts using Python."""
@@ -1889,6 +1922,9 @@ def request_too_large(_error: RequestEntityTooLarge):  # type: ignore[no-untyped
             "status_code": 413,
         },
     )
+
+
+# Shared request and rendering helpers
 
 
 def _dataset_path(dataset_id: str) -> Path:
@@ -2636,6 +2672,9 @@ def _derived_suggestion_view(suggestion: DerivedKpiSuggestion) -> dict[str, obje
         "confidence": suggestion.confidence,
         "rationale": list(suggestion.rationale),
     }
+
+
+# Operational endpoint
 
 
 @core.get("/health")

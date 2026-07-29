@@ -1,8 +1,5 @@
 """Reproducible, Python-only factual insight calculations."""
 
-import csv
-import hashlib
-import io
 import json
 import math
 import secrets
@@ -268,42 +265,6 @@ def save_insight_report(report: InsightReport, *, insight_dir: Path) -> Path:
         temporary_path.unlink(missing_ok=True)
         raise
     return final_path
-
-
-def _load_rows(path: Path) -> tuple[tuple[_Row, ...], tuple[str, ...], str]:
-    try:
-        raw_bytes = path.read_bytes()
-        text = raw_bytes.decode("utf-8-sig", errors="strict")
-    except (OSError, UnicodeDecodeError) as error:
-        raise InsightEngineError("Retained CSV cannot be read safely.") from error
-
-    reader = csv.reader(io.StringIO(text, newline=""), strict=True)
-    try:
-        raw_headers = next(reader)
-    except (StopIteration, csv.Error) as error:
-        raise InsightEngineError("Retained CSV has no readable header.") from error
-    headers = tuple(header.strip() for header in raw_headers)
-    if not headers or len(headers) != len(set(headers)):
-        raise InsightEngineError("Retained CSV columns are invalid.")
-
-    rows: list[_Row] = []
-    try:
-        for raw_row in reader:
-            if not raw_row:
-                continue
-            if len(raw_row) != len(headers):
-                raise InsightEngineError(
-                    f"Retained CSV row near line {reader.line_num} has changed width."
-                )
-            rows.append(_Row(reader.line_num, dict(zip(headers, raw_row, strict=True))))
-    except csv.Error as error:
-        raise InsightEngineError(
-            f"Retained CSV is malformed near line {reader.line_num}."
-        ) from error
-
-    if not rows:
-        raise InsightEngineError("Retained CSV has no data rows.")
-    return tuple(rows), headers, hashlib.sha256(raw_bytes).hexdigest()
 
 
 def _validate_inputs(

@@ -1,5 +1,6 @@
 """Safe application configuration defaults."""
 
+import math
 import os
 import secrets
 from pathlib import Path
@@ -13,6 +14,24 @@ def _positive_int(name: str, default: int) -> int:
     except ValueError:
         return default
     return value if value > 0 else default
+
+
+def _bounded_float(
+    name: str,
+    default: float,
+    *,
+    minimum: float,
+    maximum: float,
+) -> float:
+    """Read a finite floating-point value inside a safe range."""
+
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    if not math.isfinite(value) or not minimum <= value <= maximum:
+        return default
+    return value
 
 
 def _log_level() -> str:
@@ -37,6 +56,12 @@ class DefaultConfig:
     OLLAMA_HOST = "http://127.0.0.1:11434"
     OLLAMA_MODEL = _ollama_model()
     OLLAMA_TIMEOUT_SECONDS = _positive_int("APP_OLLAMA_TIMEOUT_SECONDS", 120)
+    OLLAMA_REPORT_TEMPERATURE = _bounded_float(
+        "APP_OLLAMA_REPORT_TEMPERATURE",
+        0.35,
+        minimum=0.0,
+        maximum=1.0,
+    )
     TRUSTED_HOSTS = ["127.0.0.1", "localhost"]
 
     MAX_UPLOAD_BYTES = _positive_int("APP_MAX_UPLOAD_BYTES", 10 * 1024 * 1024)

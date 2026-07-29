@@ -16,7 +16,10 @@
       .story { border-left: 0.35rem solid #315c9b; }
       .finding { font-size: 1.08rem; }
       .story-source { color: #555; font-size: 0.92rem; }
+      .confidence { background: #eef5ff; border-radius: 0.3rem; padding: 0.65rem; }
       .claim-list { padding-left: 1.3rem; }
+      .summary-list li { margin: 0.8rem 0; padding-left: 0.25rem; }
+      .summary-source { color: #555; font-size: 0.92rem; }
       .report-chart { display: block; max-height: 32rem; max-width: 100%; margin: 1rem auto; }
       .publishing-controls { background: #f4f7fb; padding: 1rem; }
       @media print {
@@ -36,6 +39,10 @@
       <p>
         Generated report version {{ report.version }} ·
         {{ report.generated_at }} · local model {{ report.model }}
+        {% if report.report_settings.narration_temperature is defined %}
+          · narration creativity
+          {{ report.report_settings.narration_temperature }}
+        {% endif %}
         {% if report.report_settings.report_author %}
           · author {{ report.report_settings.report_author }}
         {% endif %}
@@ -47,41 +54,58 @@
         {{ report.report_settings.business_objective }}
       </p>
       {% if published_stories %}
-        <p>
-          The highest-priority findings synthesize related evidence below.
-          Every displayed numerical claim is independently resolved from
-          Python evidence.
-        </p>
-        {% for story in published_stories[:3] %}
-          <article class="story">
-            <h3>{{ story.headline }}</h3>
-            <p class="finding">
-              <span class="source-label">Finding:</span>
-              {{ story.finding }}
-            </p>
-            <p>
-              <span class="source-label">Why it matters:</span>
-              {{ story.interpretation }}
-            </p>
-            {% if story.fact_references %}
-              <ul class="claim-list">
-                {% for fact_reference in story.fact_references %}
-                  <li>
-                    {{ fact_reference.prefix }}
-                    <strong>{{ fact_reference.formatted_value }}</strong>
-                    {% if report.report_settings.include_evidence_appendix %}
-                      <a href="#{{ fact_reference.evidence_id }}">
-                        [{{ fact_reference.evidence_id }}]
-                      </a>
-                    {% else %}
+        {% if report.ai_narrated_evidence_ids %}
+          <p>
+            The five points below prioritize the most decision-relevant
+            findings. AI wording is restricted to validated stories, and every
+            displayed number remains linked to Python evidence.
+          </p>
+        {% else %}
+          <p class="warning">
+            This saved report contains no AI-written stories. Every story is a
+            deterministic fallback because the model responses did not pass
+            evidence validation.
+          </p>
+        {% endif %}
+        {% if published_summary_points %}
+          <p class="summary-source">
+            {{ "AI-generated and Python-validated"
+              if published_summary_points|selectattr(
+                "narration_source", "equalto", "ollama"
+              )|list|length == published_summary_points|length
+              else "Assembled from validated report stories" }}
+          </p>
+          <ol class="summary-list">
+            {% for point in published_summary_points %}
+              <li>
+                {{ point.text }}
+                {% for fact_reference in point.fact_references %}
+                  {% if report.report_settings.include_evidence_appendix %}
+                    <a href="#{{ fact_reference.evidence_id }}">
                       [{{ fact_reference.evidence_id }}]
-                    {% endif %}
-                  </li>
+                    </a>
+                  {% else %}
+                    [{{ fact_reference.evidence_id }}]
+                  {% endif %}
                 {% endfor %}
-              </ul>
-            {% endif %}
-          </article>
-        {% endfor %}
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          {% for story in published_stories[:3] %}
+            <article class="story">
+              <h3>{{ story.headline }}</h3>
+              <p class="finding">
+                <span class="source-label">What we found:</span>
+                {{ story.finding }}
+              </p>
+              <p>
+                <span class="source-label">What it may mean:</span>
+                {{ story.interpretation }}
+              </p>
+            </article>
+          {% endfor %}
+        {% endif %}
       {% elif report.items %}
         <p>
           This earlier report version contains evidence-level commentary.
@@ -176,20 +200,26 @@
                   <button type="submit">Regenerate only this story</button>
                 </form>
                 <p class="finding">
-                  <span class="source-label">Observation:</span>
+                  <span class="source-label">What we found:</span>
                   {{ story.finding }}
                 </p>
                 <p>
-                  <span class="source-label">AI-written interpretation:</span>
+                  <span class="source-label">What it may mean:</span>
                   {{ story.interpretation }}
                 </p>
                 <p>
-                  <span class="source-label">Suggested follow-up:</span>
+                  <span class="source-label">Suggested next steps:</span>
                   {{ story.follow_up }}
                 </p>
                 <p>
-                  <span class="source-label">Important caveat:</span>
+                  <span class="source-label">Keep in mind:</span>
                   {{ story.caveat }}
+                </p>
+                <p class="confidence">
+                  <span class="source-label">
+                    Confidence: {{ story.confidence|capitalize }}
+                  </span>
+                  — {{ story.confidence_explanation }}
                 </p>
                 {% if story.fact_references %}
                   <h4>Verified numerical claims</h4>
@@ -289,6 +319,11 @@
                 <dd>{{ item.insight_type }}</dd>
                 <dt>Records analyzed</dt>
                 <dd>{{ item.record_count }}</dd>
+                <dt>Evidence confidence</dt>
+                <dd>
+                  {{ item.confidence|capitalize }}
+                  (deterministic score {{ item.confidence_score }})
+                </dd>
                 <dt>Source columns</dt>
                 <dd>
                   {{ item.source_columns|join(", ") if item.source_columns else "None" }}
@@ -409,6 +444,11 @@
               <dd>{{ item.insight_type }}</dd>
               <dt>Records analyzed</dt>
               <dd>{{ item.record_count }}</dd>
+              <dt>Evidence confidence</dt>
+              <dd>
+                {{ item.confidence|capitalize }}
+                (deterministic score {{ item.confidence_score }})
+              </dd>
               <dt>Source columns</dt>
               <dd>
                 {{ item.source_columns|join(", ") if item.source_columns else "None" }}
