@@ -6,11 +6,16 @@
     <title>{{ workspace.record.name }} | AI Insight Reporter</title>
     <style>
       body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
-      main { max-width: 880px; margin: 0 auto; }
+      main { max-width: 960px; margin: 0 auto; }
+      article, section.panel { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
       dl { display: grid; grid-template-columns: 11rem 1fr; gap: 0.4rem 1rem; }
       dt { font-weight: 700; }
       dd { margin: 0; overflow-wrap: anywhere; }
+      label { display: block; margin: 0.5rem 0; }
+      input, textarea { box-sizing: border-box; max-width: 38rem; width: 100%; }
+      form.inline { display: inline-block; margin-right: 0.5rem; }
       .warning { color: #754b00; }
+      .danger { color: #8a1c1c; }
     </style>
   </head>
   <body>
@@ -21,58 +26,268 @@
       {% if workspace.metadata_warning %}
         <p class="warning">{{ workspace.metadata_warning }}</p>
       {% endif %}
-      <form method="post" action="{{ url_for(
-        'core.update_workspace_name',
-        dataset_id=workspace.record.dataset_id
-      ) }}">
-        <label for="name">Workspace name</label>
-        <input id="name" name="name" type="text" maxlength="120"
-          value="{{ workspace.record.name }}" required>
-        <button type="submit">Save name</button>
-      </form>
 
-      <h2>Workspace status</h2>
-      <dl>
-        <dt>Dataset ID</dt>
-        <dd>{{ workspace.record.dataset_id }}</dd>
-        <dt>Original file</dt>
-        <dd>{{ workspace.record.original_filename }}</dd>
-        <dt>Retained source</dt>
-        <dd>{{ workspace.record.internal_filename }}</dd>
-        <dt>Format</dt>
-        <dd>{{ workspace.record.source_format|upper }}</dd>
-        <dt>Size</dt>
-        <dd>{{ workspace.record.size_bytes }} bytes</dd>
-        <dt>Current stage</dt>
-        <dd>{{ workspace.stage_label }}</dd>
-        <dt>Created</dt>
-        <dd>{{ workspace.record.created_at }}</dd>
-        <dt>Last activity</dt>
-        <dd>{{ workspace.last_activity_at }}</dd>
-        <dt>Report versions</dt>
-        <dd>{{ workspace.report_version_count }}</dd>
-        <dt>Report generation runs</dt>
-        <dd>{{ workspace.report_run_count }}</dd>
-      </dl>
-
-      <p><a href="{{ resume_url }}">Resume from {{ workspace.stage_label }}</a></p>
-      <p>
-        <a href="{{ url_for(
-          'core.dataset_profile',
-          dataset_id=workspace.record.dataset_id
-        ) }}">
-          Open dataset profile
-        </a>
-      </p>
-      {% if workspace.report_version_count %}
-        <p>
-          <a href="{{ url_for(
-            'core.generated_report_history',
+      {% if workspace.record.is_archived %}
+        <section class="panel">
+          <h2>Workspace archived</h2>
+          <p>
+            Its source, reports, and history remain retained and recoverable.
+          </p>
+          <form method="post" action="{{ url_for(
+            'core.undelete_workspace',
             dataset_id=workspace.record.dataset_id
           ) }}">
-            Open complete report history
-          </a>
-        </p>
+            <button type="submit">Restore workspace</button>
+          </form>
+        </section>
+      {% else %}
+        <section class="panel">
+          <h2>Edit workspace</h2>
+          <form method="post" action="{{ url_for(
+            'core.update_workspace_name',
+            dataset_id=workspace.record.dataset_id
+          ) }}">
+            <label>
+              Workspace name
+              <input name="name" type="text" maxlength="120"
+                value="{{ workspace.record.name }}" required>
+            </label>
+            <label>
+              Description
+              <textarea name="description" maxlength="1000">{{ workspace.record.description }}</textarea>
+            </label>
+            <button type="submit">Save workspace</button>
+          </form>
+        </section>
+      {% endif %}
+
+      <section class="panel">
+        <h2>Workspace status</h2>
+        <dl>
+          <dt>Workspace ID</dt>
+          <dd>{{ workspace.record.dataset_id }}</dd>
+          <dt>Current stage</dt>
+          <dd>{{ workspace.stage_label }}</dd>
+          <dt>Created</dt>
+          <dd>{{ workspace.record.created_at }}</dd>
+          <dt>Last activity</dt>
+          <dd>{{ workspace.last_activity_at }}</dd>
+          <dt>Active reports</dt>
+          <dd>{{ workspace.report_run_count }}</dd>
+          <dt>Report versions</dt>
+          <dd>{{ workspace.report_version_count }}</dd>
+        </dl>
+      </section>
+
+      <section class="panel">
+        <h2>Data source</h2>
+        {% if workspace.record.has_source %}
+          <dl>
+            <dt>Display name</dt>
+            <dd>{{ workspace.record.original_filename }}</dd>
+            <dt>Retained source</dt>
+            <dd>{{ workspace.record.internal_filename }}</dd>
+            <dt>Format</dt>
+            <dd>{{ workspace.record.source_format|upper }}</dd>
+            <dt>Size</dt>
+            <dd>{{ workspace.record.size_bytes }} bytes</dd>
+          </dl>
+          {% if not workspace.record.is_archived %}
+            <form method="post" action="{{ url_for(
+              'core.update_workspace_source_name',
+              dataset_id=workspace.record.dataset_id
+            ) }}">
+              <label>
+                Data-source display name
+                <input name="name" type="text" maxlength="255"
+                  value="{{ workspace.record.original_filename }}" required>
+              </label>
+              <button type="submit">Rename data source</button>
+            </form>
+          {% endif %}
+          <p>
+            <a href="{{ url_for(
+              'core.dataset_profile',
+              dataset_id=workspace.record.dataset_id
+            ) }}">Open dataset profile</a>
+          </p>
+          {% if not workspace.record.is_archived %}
+            <form method="post" action="{{ url_for(
+              'core.delete_workspace_source',
+              dataset_id=workspace.record.dataset_id
+            ) }}">
+              <button class="danger" type="submit">
+                Delete data source recoverably
+              </button>
+            </form>
+            <p>
+              Deleting the source moves it to local trash. Existing immutable
+              report history remains available.
+            </p>
+          {% endif %}
+        {% elif workspace.record.source_archived_at %}
+          <p>
+            The data source was moved to recoverable trash on
+            {{ workspace.record.source_archived_at }}.
+          </p>
+          {% if not workspace.record.is_archived %}
+            <form method="post" action="{{ url_for(
+              'core.undelete_workspace_source',
+              dataset_id=workspace.record.dataset_id
+            ) }}">
+              <button type="submit">Restore data source</button>
+            </form>
+          {% endif %}
+        {% else %}
+          <p>No source file has been selected for this workspace.</p>
+          <p>
+            <a href="{{ url_for(
+              'core.workspace_source_form',
+              dataset_id=workspace.record.dataset_id
+            ) }}">Select source file</a>
+          </p>
+        {% endif %}
+      </section>
+
+      {% if not workspace.record.is_archived %}
+        <section class="panel">
+          <h2>Next action</h2>
+          {% if not workspace.record.has_source %}
+            <p>Add or restore a source before building a report.</p>
+          {% elif not workspace.report_run_count %}
+            <p>No reports exist yet.</p>
+            {% if create_report_url %}
+              <p><a href="{{ create_report_url }}">Create the first report</a></p>
+            {% endif %}
+          {% else %}
+            <p><a href="{{ resume_url }}">Resume from {{ workspace.stage_label }}</a></p>
+            {% if create_report_url %}
+              <p><a href="{{ create_report_url }}">Create another report</a></p>
+            {% endif %}
+          {% endif %}
+        </section>
+      {% endif %}
+
+      <section class="panel">
+        <h2>Reports</h2>
+        {% if reports %}
+          {% for report in reports %}
+            <article>
+              <h3>
+                {{ workspace.record.report_names.get(
+                  report.report_id,
+                  report.report_settings.title
+                ) }}
+              </h3>
+              <p>
+                Latest saved version {{ report.version }} · generated
+                {{ report.generated_at }}
+              </p>
+              <p>
+                {% if workspace.record.has_source
+                      and not workspace.record.is_archived %}
+                  <a href="{{ url_for(
+                    'core.generated_report',
+                    dataset_id=workspace.record.dataset_id,
+                    report_id=report.report_id
+                  ) }}">Open report</a>
+                {% else %}
+                  <a href="{{ url_for(
+                    'core.generated_report_version',
+                    dataset_id=workspace.record.dataset_id,
+                    report_id=report.report_id,
+                    version=report.version
+                  ) }}">Open saved report</a>
+                {% endif %}
+                {% if not workspace.record.is_archived
+                      and workspace.record.has_source %}
+                  ·
+                  <a href="{{ url_for(
+                    'core.report_configuration_form',
+                    dataset_id=workspace.record.dataset_id
+                  ) }}">Edit report configuration</a>
+                {% endif %}
+              </p>
+              {% if not workspace.record.is_archived %}
+                <form class="inline" method="post" action="{{ url_for(
+                  'core.update_workspace_report_name',
+                  dataset_id=workspace.record.dataset_id,
+                  report_id=report.report_id
+                ) }}">
+                  <label>
+                    Report display name
+                    <input name="name" type="text" maxlength="160"
+                      value="{{ workspace.record.report_names.get(
+                        report.report_id,
+                        report.report_settings.title
+                      ) }}" required>
+                  </label>
+                  <button type="submit">Rename report</button>
+                </form>
+                <form class="inline" method="post" action="{{ url_for(
+                  'core.delete_workspace_report',
+                  dataset_id=workspace.record.dataset_id,
+                  report_id=report.report_id
+                ) }}">
+                  <button class="danger" type="submit">
+                    Delete report recoverably
+                  </button>
+                </form>
+              {% endif %}
+            </article>
+          {% endfor %}
+          <p>
+            <a href="{{ url_for(
+              'core.generated_report_history',
+              dataset_id=workspace.record.dataset_id
+            ) }}">Open complete report history</a>
+          </p>
+        {% else %}
+          <p>No active generated reports.</p>
+        {% endif %}
+
+        {% if archived_reports %}
+          <details>
+            <summary>Recoverably deleted reports ({{ archived_reports|length }})</summary>
+            {% for report in archived_reports %}
+              <article>
+                <h3>
+                  {{ workspace.record.report_names.get(
+                    report.report_id,
+                    report.report_settings.title
+                  ) }}
+                </h3>
+                {% if not workspace.record.is_archived %}
+                  <form method="post" action="{{ url_for(
+                    'core.undelete_workspace_report',
+                    dataset_id=workspace.record.dataset_id,
+                    report_id=report.report_id
+                  ) }}">
+                    <button type="submit">Restore report</button>
+                  </form>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </details>
+        {% endif %}
+      </section>
+
+      {% if not workspace.record.is_archived %}
+        <section class="panel">
+          <h2>Delete workspace</h2>
+          <p>
+            This is recoverable: all sources, configurations, and immutable
+            reports remain retained until the workspace is restored.
+          </p>
+          <form method="post" action="{{ url_for(
+            'core.delete_workspace',
+            dataset_id=workspace.record.dataset_id
+          ) }}">
+            <button class="danger" type="submit">
+              Delete workspace recoverably
+            </button>
+          </form>
+        </section>
       {% endif %}
     </main>
   </body>

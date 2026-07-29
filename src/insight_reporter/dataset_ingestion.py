@@ -53,11 +53,14 @@ def ingest_dataset(
     max_bytes: int,
     max_rows: int,
     max_columns: int,
+    dataset_id: str | None = None,
 ) -> DatasetUploadResult:
     """Detect, validate, and retain one source without trusting client metadata."""
 
     upload_dir.mkdir(parents=True, exist_ok=True)
-    upload_token = secrets.token_hex(16)
+    if dataset_id is not None and _DATASET_ID_PATTERN.fullmatch(dataset_id) is None:
+        raise DatasetValidationError("Workspace dataset ID is invalid.")
+    upload_token = dataset_id or secrets.token_hex(16)
     temporary_path = upload_dir / f".{upload_token}.{secrets.token_hex(8)}.part"
     inspection_path: Path | None = None
     final_path: Path | None = None
@@ -87,6 +90,13 @@ def ingest_dataset(
         )
         temporary_path.replace(inspection_path)
         final_path = upload_dir / f"{upload_token}.{source_format}"
+        if final_path.exists() or any(
+            (upload_dir / f"{upload_token}.{extension}").exists()
+            for extension in _SUPPORTED_EXTENSIONS
+        ):
+            raise DatasetValidationError(
+                "This workspace already has a retained data source."
+            )
 
         if source_format == "xlsx":
             try:

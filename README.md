@@ -271,6 +271,40 @@ find. A user can reopen a dataset, continue its workflow, inspect every saved
 report revision, and export an exact historical version without overwriting
 anything.
 
+### Milestone 6A.1 — Workspace-first project lifecycle
+
+**Problem:** A workspace still came into existence only after a successful
+upload. That made the file picker feel like the product's home page, left no
+place to plan work before selecting data, and provided no lifecycle controls
+for old workspaces, source labels, or report runs.
+
+**Implemented:**
+
+- `/` now starts at the persistent workspace index.
+- A workspace can be created with a name and optional description before it
+  has a source. Its server-generated identity is then reused when the one
+  supported CSV, flat JSON, or XLSX source is attached.
+- Empty workspaces show a source-selection action. Source-backed workspaces
+  show a create-first-report or stage-aware resume action, and generated
+  reports are listed directly on the workspace.
+- Workspace names/descriptions, data-source display names, and report display
+  names can be edited without changing safe filenames, IDs, evidence, or
+  immutable report JSON.
+- Workspace and report deletion is a recoverable metadata archive. Source
+  deletion moves the retained source and XLSX worksheet sidecar to
+  `instance/trash/sources/<dataset_id>/`.
+- Restoring a source returns it to the same safe dataset identity, so all
+  retained configurations and reports remain connected.
+- Removing a source does not remove generated reports. Their exact saved HTML,
+  JSON, and PDF versions remain available from immutable history.
+- Existing upload-first datasets and schema-1 workspace metadata remain
+  readable. A lifecycle edit safely adopts a source-only legacy entry into the
+  current schema.
+
+**Result:** The product now behaves like a small project workspace rather than
+an upload form. A user chooses or creates the project first, then adds its
+source and manages the reports that belong to it without losing history.
+
 ### Milestone 6B — Management-focused insights and AI diagnostics
 
 **Problem:** The original five-point summary could be technically valid but
@@ -319,6 +353,7 @@ management should review next.
   will continue evolving while features are added; cohesive product styling
   should happen once the workflow is stable.
 - **Milestone 6A — Persistent workspace and report history:** implemented.
+- **Milestone 6A.1 — Workspace-first lifecycle controls:** implemented.
 - **Milestone 6B — More precise insight prioritization and AI diagnostics:**
   implemented.
 - **Milestone 6C — Period/cohort comparisons within one dataset:** planned;
@@ -326,7 +361,9 @@ management should review next.
 - **Milestone 6D — Report presentation improvements:** planned after the
   remaining functionality, while retaining HTML, JSON, and PDF exports.
 
-The project currently implements **Milestone 6B: Management-focused insights and AI diagnostics**. It profiles one
+The project currently implements **Milestone 6A.1: Workspace-first project
+lifecycle** and **Milestone 6B: Management-focused insights and AI
+diagnostics**. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
 or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
 every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
@@ -338,10 +375,31 @@ observations, cautious interpretations, and practical suggested next steps. Publ
 support story selection and ordering, embedded charts, understandable evidence-confidence labels,
 print-ready HTML, and verified PDF downloads.
 
+### Workspace lifecycle semantics
+
+- A workspace may exist without a source, but this project still supports
+  exactly one active source per workspace.
+- Source contents are immutable inside a workspace. A user may rename the
+  display label or archive/restore the file; a genuinely different file should
+  start a new workspace so old evidence cannot be confused with new data.
+- Renaming a workspace, source, or report changes only escaped presentation
+  metadata. Server-controlled IDs and filenames never change.
+- A generated report is immutable. “Edit report configuration” changes the
+  input for a future generation; saving or regenerating appends a version.
+- Deleting a workspace or report archives its ID in workspace metadata.
+  Deleting a source moves only the source and optional XLSX selection sidecar
+  to recoverable trash. It deliberately keeps derived artifacts and reports.
+- Restoring reverses those lifecycle markers or file moves. There is currently
+  no permanent-delete UI, which avoids accidental destruction of local
+  project history.
+
 ## Current capabilities
 
 - Flask application factory and `/health` endpoint
-- One-file upload form at `/`
+- Workspace-first home page at `/workspaces` (with `/` redirecting there)
+- Empty workspace creation before source selection
+- One-file source selection inside a workspace, with `/upload` retained as a
+  compatible upload-first path
 - Strict UTF-8 and UTF-8-BOM CSV decoding
 - Flat JSON arrays of record objects with sparse-key normalization
 - XLSX content validation with explicit visible-worksheet selection
@@ -357,7 +415,9 @@ print-ready HTML, and verified PDF downloads.
 - Versioned workspace metadata under `instance/workspaces/`
 - Persistent `/workspaces` index ordered by latest artifact activity
 - Safe human-readable workspace naming and read-only legacy-upload discovery
-- Stage-aware resume links for uploaded, configured, analyzed, and reported datasets
+- Editable workspace descriptions, source display names, and report aliases
+- Recoverable workspace/report archival and recoverable source trash
+- Stage-aware source, create-report, and resume actions
 - Deterministic row and column counts
 - Numeric, categorical, date/time, boolean, identifier, free-text, and empty classifications
 - Missing-value and unique-value counts
@@ -520,8 +580,11 @@ The Flask application connects only to `http://127.0.0.1:11434`.
 python -m flask --app insight_reporter:create_app run --host 127.0.0.1 --port 5000
 ```
 
-Open `http://127.0.0.1:5000/` to upload a CSV, JSON, or XLSX source and review its deterministic
-profile. For a workbook with multiple visible worksheets, choose one worksheet before profiling.
+Open `http://127.0.0.1:5000/` to see existing workspaces. Create a workspace
+with a name and optional description, open it, and select its one CSV, flat
+JSON, or XLSX source. The compatible upload-first form remains at `/upload`.
+After source selection, review the deterministic profile. For a workbook with
+multiple visible worksheets, choose one worksheet before profiling.
 Click
 **Generate AI suggestions** only when suggestions are wanted. Select **Use this suggestion** to
 prefill the manual form, review or edit every field, and then confirm the final configuration.
@@ -562,15 +625,20 @@ user-provided context. If an older evidence artifact is present,
 regenerate deterministic insights once before saving a report so the exact observation fields are
 available to the package.
 
-All form actions use POST/Redirect/GET. Dataset profiles, suggestion results, formula previews,
-saved configurations, validation messages, and insight reports therefore finish on stable GET URLs,
-so browser Back, Forward, and Reload do not repeat a form submission. Small UI-only state is stored
-outside the static directory for 24 hours; raw dataset rows are never placed in state URLs.
+Successful state-changing forms use POST/Redirect/GET. Dataset profiles,
+suggestion results, formula previews, saved configurations, and insight
+reports therefore finish on stable GET URLs, so browser Back, Forward, and
+Reload do not repeat a form submission. Rejected lifecycle requests return a
+safe 4xx response without changing durable state. Small UI-only state is stored
+outside the static directory for 24 hours; raw dataset rows are never placed in
+state URLs.
 
 The health endpoint is available at `http://127.0.0.1:5000/health`.
 
 ```text
-CSV / flat JSON / selected XLSX worksheet
+workspace name and optional description
+                                  -> persistent empty workspace
+                                  -> select one CSV / flat JSON / XLSX source
                                   -> Python validation/profile
                                   -> optional Ollama suggestions
                                   -> Python validation and user review/edit
@@ -592,6 +660,7 @@ CSV / flat JSON / selected XLSX worksheet
                                   -> structured Ollama synthesis
                                   -> Python validation and fact/story separation
                                   -> immutable generated-report JSON and HTML
+                                  -> exact HTML / JSON / PDF history
 ```
 
 Confirm the expected routes with:
@@ -604,6 +673,10 @@ Expected application routes:
 
 ```text
 GET   /
+GET   /workspaces
+GET   /workspaces/<dataset_id>
+GET   /workspaces/<dataset_id>/source
+GET   /upload
 GET   /dataset/<dataset_id>
 GET   /dataset/<dataset_id>/sheet
 GET   /derived/<dataset_id>
@@ -623,7 +696,23 @@ GET   /reports/<dataset_id>/generated
 GET   /reports/<dataset_id>/generated/<report_id>
 GET   /reports/<dataset_id>/generated/<report_id>/json
 GET   /reports/<dataset_id>/generated/<report_id>/pdf
+GET   /reports/<dataset_id>/generated/<report_id>/versions/<version>
+GET   /reports/<dataset_id>/generated/<report_id>/versions/<version>/json
+GET   /reports/<dataset_id>/generated/<report_id>/versions/<version>/pdf
+GET   /reports/<dataset_id>/generated/<report_id>/versions/<version>/charts/<evidence_id>
+GET   /reports/<dataset_id>/history
 GET   /health
+POST  /workspaces
+POST  /workspaces/<dataset_id>/name
+POST  /workspaces/<dataset_id>/archive
+POST  /workspaces/<dataset_id>/restore
+POST  /workspaces/<dataset_id>/source
+POST  /workspaces/<dataset_id>/source/name
+POST  /workspaces/<dataset_id>/source/archive
+POST  /workspaces/<dataset_id>/source/restore
+POST  /workspaces/<dataset_id>/reports/<report_id>/name
+POST  /workspaces/<dataset_id>/reports/<report_id>/archive
+POST  /workspaces/<dataset_id>/reports/<report_id>/restore
 POST  /upload
 POST  /dataset/<dataset_id>/sheet
 POST  /suggest/<dataset_id>

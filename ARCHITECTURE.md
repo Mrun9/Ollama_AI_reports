@@ -24,9 +24,11 @@ does not start the web application.
 ## End-to-end flow
 
 ```text
-upload
+open workspace index
+  -> create or reopen a workspace
+  -> select one source when the workspace is empty
   -> detect and validate CSV / JSON / XLSX
-  -> save persistent workspace identity
+  -> attach source metadata to the existing workspace identity
   -> build a typed dataset profile
   -> configure source or derived KPIs
   -> calculate deterministic insights
@@ -114,15 +116,27 @@ local backups when recovery matters.
 | `instance/generated_reports/` | Immutable versioned report JSON |
 | `instance/generated_report_assets/` | Version-specific chart snapshots used by historical HTML/PDF |
 | `instance/navigation_state/` | Short-lived form and validation state |
+| `instance/trash/sources/<dataset_id>/` | Recoverably deleted source and XLSX selection sidecar |
 
-The dataset ID is the randomized filename stem created at upload. Most
-artifacts use that same ID, which is how the workflow joins its files without a
-database.
+In the workspace-first flow, the dataset ID is allocated when the empty
+workspace is created and becomes the safe filename stem when its source is
+attached. The compatible `/upload` flow still allocates the ID during upload.
+Most artifacts use that same ID, which is how the workflow joins its files
+without a database.
 
 The workspace index does not duplicate downstream state. It scans the
-dataset-bound artifacts to derive the latest completed stage, last activity,
-and report counts. New uploads receive a versioned workspace metadata file;
-pre-6A uploads remain discoverable through a read-only fallback identity.
+workspace metadata plus dataset-bound artifacts to derive the latest completed
+stage, last activity, and active/archived report counts. This makes empty
+workspaces visible even before an upload. Pre-6A uploads remain discoverable
+through a safe fallback identity and are adopted into current metadata on the
+first lifecycle edit.
+
+Workspace metadata schema 2 stores mutable presentation and lifecycle state:
+name, description, optional source metadata, archive timestamps, report
+aliases, and archived report IDs. Workspace/report deletion changes this
+metadata only. Source deletion is the exception: the safe source file and XLSX
+selection sidecar are moved transactionally to recoverable trash. Reports and
+their chart snapshots are never moved or rewritten.
 
 Generated-report filenames contain both a monotonically increasing dataset
 version and a report ID. The ordinary report route opens the latest revision
@@ -164,6 +178,8 @@ before a clearly labelled story-based fallback is used.
   descriptor construction in `report_narration.py`.
 - Change PDF layout: `report_pdf.py`.
 - Change workspace stages or history metadata: `workspace_history.py`.
+- Change workspace/source/report lifecycle routes: the workspace section of
+  `routes.py`, then `workspace.html` and `workspaces.html`.
 - Change environment defaults: `config.py` and `.env.example`.
 
 ## Verification

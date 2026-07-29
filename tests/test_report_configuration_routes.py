@@ -691,3 +691,47 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
         )
     ) == 3
     assert client.get(generated.headers["Location"]).status_code == 200
+
+    renamed_report = client.post(
+        f"/workspaces/{dataset_id}/reports/{report_id}/name",
+        data={"name": "Management performance brief"},
+    )
+    workspace_page = client.get(f"/workspaces/{dataset_id}")
+    archived_report = client.post(
+        f"/workspaces/{dataset_id}/reports/{report_id}/archive"
+    )
+
+    assert renamed_report.status_code == 303
+    assert b"Management performance brief" in workspace_page.data
+    assert archived_report.status_code == 303
+    assert client.get(generated.headers["Location"]).status_code == 404
+    assert client.get(historical_url).status_code == 404
+    assert b"Recoverably deleted report versions" in client.get(
+        f"/reports/{dataset_id}/history"
+    ).data
+
+    restored_report = client.post(
+        f"/workspaces/{dataset_id}/reports/{report_id}/restore"
+    )
+    archived_source = client.post(
+        f"/workspaces/{dataset_id}/source/archive"
+    )
+
+    assert restored_report.status_code == 303
+    assert archived_source.status_code == 303
+    assert not tuple(Path(app.config["UPLOAD_DIR"]).glob(f"{dataset_id}.*"))
+    assert client.get(generated.headers["Location"]).status_code == 404
+    assert client.get(historical_url).status_code == 200
+    assert client.get(f"{historical_url}/json").status_code == 200
+    assert client.get(f"{historical_url}/pdf").status_code == 200
+    assert b"Open saved report" in client.get(
+        f"/workspaces/{dataset_id}"
+    ).data
+
+    restored_source = client.post(
+        f"/workspaces/{dataset_id}/source/restore"
+    )
+    assert restored_source.status_code == 303
+    assert (
+        Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv"
+    ).is_file()

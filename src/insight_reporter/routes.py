@@ -48,6 +48,7 @@ from insight_reporter.dataset_context import (
     build_dataset_context,
 )
 from insight_reporter.dataset_ingestion import (
+    DatasetUploadResult,
     DatasetValidationError,
     find_dataset_path,
     ingest_dataset,
@@ -162,10 +163,21 @@ from insight_reporter.workspace_history import (
     WorkspaceDirectories,
     WorkspaceHistoryError,
     WorkspaceSummary,
+    archive_workspace,
+    archive_workspace_report,
+    archive_workspace_source,
+    attach_workspace_source,
+    create_empty_workspace,
     create_workspace_record,
     get_workspace_summary,
     list_workspace_summaries,
-    rename_workspace,
+    load_workspace_record,
+    rename_workspace_report,
+    rename_workspace_source,
+    restore_workspace,
+    restore_workspace_report,
+    restore_workspace_source,
+    update_workspace_details,
 )
 
 core = Blueprint("core", __name__)
@@ -176,17 +188,44 @@ core = Blueprint("core", __name__)
 
 @core.get("/workspaces")
 def workspace_history():  # type: ignore[no-untyped-def]
-    """List every retained local dataset and its derived workflow stage."""
+    """List active and recoverably archived local workspaces."""
 
     try:
-        workspaces = list_workspace_summaries(
+        all_workspaces = list_workspace_summaries(
             directories=_workspace_directories(),
+            include_archived=True,
         )
     except WorkspaceHistoryError as error:
         abort(422, description=str(error))
     return render_template(
         "workspaces.html",
-        workspaces=workspaces,
+        workspaces=tuple(
+            item for item in all_workspaces if not item.record.is_archived
+        ),
+        archived_workspaces=tuple(
+            item for item in all_workspaces if item.record.is_archived
+        ),
+    )
+
+
+@core.post("/workspaces")
+def create_workspace():  # type: ignore[no-untyped-def]
+    """Create an empty workspace before any source is selected."""
+
+    try:
+        workspace = create_empty_workspace(
+            request.form.get("name"),
+            description=request.form.get("description", ""),
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for(
+            "core.workspace_detail",
+            dataset_id=workspace.dataset_id,
+        ),
+        code=303,
     )
 
 
@@ -203,16 +242,41 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
         abort(422, description=str(error))
     if workspace is None:
         abort(404)
+    try:
+        report_versions = list_generated_report_versions(
+            dataset_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except ReportNarrationError as error:
+        abort(422, description=str(error))
+    latest_by_report_id: dict[str, GeneratedReport] = {}
+    for report in report_versions:
+        latest_by_report_id.setdefault(report.report_id, report)
+    active_reports = tuple(
+        report
+        for report_id, report in latest_by_report_id.items()
+        if report_id not in workspace.record.archived_report_ids
+    )
+    archived_reports = tuple(
+        report
+        for report_id, report in latest_by_report_id.items()
+        if report_id in workspace.record.archived_report_ids
+    )
     return render_template(
         "workspace.html",
         workspace=workspace,
         resume_url=_workspace_resume_url(workspace),
+        create_report_url=_workspace_create_report_url(workspace),
+        reports=active_reports,
+        archived_reports=archived_reports,
     )
 
 
 @core.post("/workspaces/<dataset_id>/name")
 def update_workspace_name(dataset_id: str):  # type: ignore[no-untyped-def]
-    """Persist a new human-readable name without changing dataset identity."""
+    """Persist editable workspace metadata without changing identity."""
 
     try:
         workspace = get_workspace_summary(
@@ -221,11 +285,265 @@ def update_workspace_name(dataset_id: str):  # type: ignore[no-untyped-def]
         )
         if workspace is None:
             abort(404)
-        rename_workspace(
+        update_workspace_details(
+            dataset_id,
+            name=request.form.get("name"),
+            description=request.form.get("description", ""),
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+            fallback_record=workspace.record,
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/archive")
+def delete_workspace(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Soft-delete a workspace without deleting its artifacts."""
+
+    try:
+        _materialize_workspace_metadata(dataset_id)
+        archive_workspace(
+            dataset_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(url_for("core.workspace_history"), code=303)
+
+
+@core.post("/workspaces/<dataset_id>/restore")
+def undelete_workspace(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Restore a soft-deleted workspace."""
+
+    try:
+        restore_workspace(
+            dataset_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.get("/workspaces/<dataset_id>/source")
+def workspace_source_form(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Show the source-selection form for an empty workspace."""
+
+    workspace = _required_workspace_summary(dataset_id)
+    if (
+        workspace.record.has_source
+        or workspace.record.source_archived_at is not None
+        or workspace.record.is_archived
+    ):
+        return redirect(
+            url_for("core.workspace_detail", dataset_id=dataset_id),
+            code=303,
+        )
+    return render_template(
+        "workspace_source.html",
+        workspace=workspace,
+        **_upload_limits(),
+    )
+
+
+@core.post("/workspaces/<dataset_id>/source")
+def add_workspace_source(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Validate and attach one source to an existing empty workspace."""
+
+    workspace = _required_workspace_summary(dataset_id)
+    if workspace.record.has_source:
+        abort(409, description="This workspace already has a data source.")
+    uploaded_files = [
+        item
+        for field_name in request.files
+        for item in request.files.getlist(field_name)
+    ]
+    if len(uploaded_files) != 1 or "file" not in request.files:
+        abort(
+            400,
+            description="Select exactly one CSV, JSON, or XLSX file.",
+        )
+    uploaded_file = request.files["file"]
+    result: DatasetUploadResult | None = None
+    try:
+        result = ingest_dataset(
+            uploaded_file,
+            upload_dir=Path(current_app.config["UPLOAD_DIR"]),
+            max_bytes=int(current_app.config["MAX_UPLOAD_BYTES"]),
+            max_rows=int(current_app.config["MAX_CSV_ROWS"]),
+            max_columns=int(current_app.config["MAX_CSV_COLUMNS"]),
+            dataset_id=dataset_id,
+        )
+        attach_workspace_source(
+            dataset_id,
+            result,
+            original_filename=uploaded_file.filename,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except (DatasetValidationError, WorkspaceHistoryError) as error:
+        if result is not None:
+            (
+                Path(current_app.config["UPLOAD_DIR"])
+                / result.internal_filename
+            ).unlink(missing_ok=True)
+        abort(
+            error.status_code
+            if isinstance(error, DatasetValidationError)
+            else 400,
+            description=str(error),
+        )
+    assert result is not None
+    if result.source_format == "xlsx":
+        if result.requires_table_selection:
+            return redirect(
+                url_for(
+                    "core.excel_sheet_selection",
+                    dataset_id=dataset_id,
+                ),
+                code=303,
+            )
+        save_xlsx_selection(
+            Path(current_app.config["UPLOAD_DIR"]),
+            dataset_id,
+            result.table_names[0],
+        )
+    return redirect(
+        url_for("core.dataset_profile", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/source/name")
+def update_workspace_source_name(
+    dataset_id: str,
+):  # type: ignore[no-untyped-def]
+    """Edit a data source's display label."""
+
+    try:
+        _materialize_workspace_metadata(dataset_id)
+        rename_workspace_source(
             dataset_id,
             request.form.get("name"),
             workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
-            fallback_record=workspace.record,
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/source/archive")
+def delete_workspace_source(
+    dataset_id: str,
+):  # type: ignore[no-untyped-def]
+    """Move a source to recoverable trash while keeping report history."""
+
+    try:
+        _materialize_workspace_metadata(dataset_id)
+        archive_workspace_source(
+            dataset_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+            upload_dir=Path(current_app.config["UPLOAD_DIR"]),
+            trash_dir=Path(current_app.config["TRASH_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/source/restore")
+def undelete_workspace_source(
+    dataset_id: str,
+):  # type: ignore[no-untyped-def]
+    """Restore a data source from recoverable trash."""
+
+    try:
+        restore_workspace_source(
+            dataset_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+            upload_dir=Path(current_app.config["UPLOAD_DIR"]),
+            trash_dir=Path(current_app.config["TRASH_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/reports/<report_id>/name")
+def update_workspace_report_name(
+    dataset_id: str,
+    report_id: str,
+):  # type: ignore[no-untyped-def]
+    """Rename a report through mutable workspace metadata."""
+
+    _require_report_run(dataset_id, report_id)
+    try:
+        _materialize_workspace_metadata(dataset_id)
+        rename_workspace_report(
+            dataset_id,
+            report_id,
+            request.form.get("name"),
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/reports/<report_id>/archive")
+def delete_workspace_report(
+    dataset_id: str,
+    report_id: str,
+):  # type: ignore[no-untyped-def]
+    """Soft-delete one immutable report run."""
+
+    _require_report_run(dataset_id, report_id)
+    try:
+        _materialize_workspace_metadata(dataset_id)
+        archive_workspace_report(
+            dataset_id,
+            report_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(
+        url_for("core.workspace_detail", dataset_id=dataset_id),
+        code=303,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/reports/<report_id>/restore")
+def undelete_workspace_report(
+    dataset_id: str,
+    report_id: str,
+):  # type: ignore[no-untyped-def]
+    """Restore one soft-deleted report run."""
+
+    _require_report_run(dataset_id, report_id)
+    try:
+        restore_workspace_report(
+            dataset_id,
+            report_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
         )
     except WorkspaceHistoryError as error:
         abort(400, description=str(error))
@@ -247,6 +565,13 @@ def _upload_limits() -> dict[str, int]:
 
 
 @core.get("/")
+def home():  # type: ignore[no-untyped-def]
+    """Start every session from persistent workspace history."""
+
+    return redirect(url_for("core.workspace_history"), code=302)
+
+
+@core.get("/upload")
 def upload_form():  # type: ignore[no-untyped-def]
     """Display the one-file dataset upload form."""
 
@@ -1245,13 +1570,44 @@ def generated_report_history(dataset_id: str):  # type: ignore[no-untyped-def]
         )
     except ReportNarrationError as error:
         abort(422, description=str(error))
+    try:
+        workspace_record = load_workspace_record(
+            dataset_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    archived_ids = (
+        set(workspace_record.archived_report_ids)
+        if workspace_record is not None
+        else set()
+    )
+    active_reports = tuple(
+        report for report in reports if report.report_id not in archived_ids
+    )
+    archived_reports = tuple(
+        report for report in reports if report.report_id in archived_ids
+    )
     current_package_sha256 = _current_package_sha256(dataset_id)
     return render_template(
         "report_history.html",
         dataset_id=dataset_id,
-        reports=reports,
+        reports=active_reports,
+        archived_reports=archived_reports,
+        report_names=(
+            workspace_record.report_names
+            if workspace_record is not None
+            else {}
+        ),
+        workspace_is_archived=(
+            workspace_record.is_archived
+            if workspace_record is not None
+            else False
+        ),
         current_package_sha256=current_package_sha256,
-        report_run_count=len({report.report_id for report in reports}),
+        report_run_count=len(
+            {report.report_id for report in active_reports}
+        ),
     )
 
 
@@ -1282,6 +1638,7 @@ def latest_report(dataset_id: str):  # type: ignore[no-untyped-def]
         abort(422, description=str(error))
     if report is None:
         abort(404)
+    _ensure_report_active(dataset_id, report.report_id)
     return redirect(
         url_for(
             "core.generated_report",
@@ -1299,6 +1656,7 @@ def generated_report(
 ):  # type: ignore[no-untyped-def]
     """Render one immutable, source-bound generated report."""
 
+    _ensure_report_active(dataset_id, report_id)
     profile = _load_profile(dataset_id)
     try:
         _configuration, _evidence, _visualizations, package = (
@@ -1347,6 +1705,7 @@ def generated_report_version(
 ):  # type: ignore[no-untyped-def]
     """Render one exact historical report snapshot without mutating it."""
 
+    _ensure_report_active(dataset_id, report_id)
     try:
         report = load_generated_report_version(
             dataset_id,
@@ -1385,6 +1744,7 @@ def publish_generated_report(
 ):  # type: ignore[no-untyped-def]
     """Save story inclusion and ordering as a new immutable report version."""
 
+    _ensure_report_active(dataset_id, report_id, mutable=True)
     profile = _load_profile(dataset_id)
     try:
         _configuration, _evidence, _visualizations, package = (
@@ -1464,6 +1824,7 @@ def regenerate_report_story(
 ):  # type: ignore[no-untyped-def]
     """Regenerate only one story and append a new immutable version."""
 
+    _ensure_report_active(dataset_id, report_id, mutable=True)
     profile = _load_profile(dataset_id)
     try:
         _configuration, _evidence, _visualizations, package = (
@@ -1520,6 +1881,7 @@ def generated_report_pdf(
 ):  # type: ignore[no-untyped-def]
     """Download one source-bound report as a print-ready PDF."""
 
+    _ensure_report_active(dataset_id, report_id)
     profile = _load_profile(dataset_id)
     try:
         _configuration, _evidence, visualizations, package = (
@@ -1566,6 +1928,7 @@ def generated_report_json(
 ):  # type: ignore[no-untyped-def]
     """Return one current generated report artifact as JSON."""
 
+    _ensure_report_active(dataset_id, report_id)
     profile = _load_profile(dataset_id)
     try:
         _configuration, _evidence, _visualizations, package = (
@@ -1601,6 +1964,7 @@ def generated_report_version_pdf(
 ):  # type: ignore[no-untyped-def]
     """Download a PDF rendered from one exact historical report version."""
 
+    _ensure_report_active(dataset_id, report_id)
     try:
         report = load_generated_report_version(
             dataset_id,
@@ -1635,6 +1999,7 @@ def generated_report_version_json(
 ):  # type: ignore[no-untyped-def]
     """Return one exact historical generated-report artifact as JSON."""
 
+    _ensure_report_active(dataset_id, report_id)
     try:
         report = load_generated_report_version(
             dataset_id,
@@ -1661,6 +2026,7 @@ def generated_report_version_chart(
 ):  # type: ignore[no-untyped-def]
     """Serve a still-retained chart referenced by one historical report."""
 
+    _ensure_report_active(dataset_id, report_id)
     try:
         report = load_generated_report_version(
             dataset_id,
@@ -2184,11 +2550,22 @@ def _workspace_directories() -> WorkspaceDirectories:
         generated_report_dir=Path(
             current_app.config["GENERATED_REPORT_DIR"]
         ),
+        trash_dir=Path(current_app.config["TRASH_DIR"]),
     )
 
 
 def _workspace_resume_url(workspace: WorkspaceSummary) -> str:
     dataset_id = workspace.record.dataset_id
+    if workspace.stage in {"source_required", "source_archived"}:
+        return url_for(
+            "core.workspace_source_form",
+            dataset_id=dataset_id,
+        )
+    if workspace.stage == "archived":
+        return url_for(
+            "core.workspace_detail",
+            dataset_id=dataset_id,
+        )
     endpoint_by_stage = {
         "report_generated": "core.generated_report_history",
         "report_configured": "core.saved_report_configuration",
@@ -2200,6 +2577,96 @@ def _workspace_resume_url(workspace: WorkspaceSummary) -> str:
         endpoint_by_stage[workspace.stage],
         dataset_id=dataset_id,
     )
+
+
+def _workspace_create_report_url(
+    workspace: WorkspaceSummary,
+) -> str | None:
+    if not workspace.record.has_source or workspace.record.is_archived:
+        return None
+    if workspace.stage in {"insights_generated", "report_generated"}:
+        return url_for(
+            "core.report_configuration_form",
+            dataset_id=workspace.record.dataset_id,
+        )
+    if workspace.stage == "report_configured":
+        return url_for(
+            "core.saved_report_configuration",
+            dataset_id=workspace.record.dataset_id,
+        )
+    return _workspace_resume_url(workspace)
+
+
+def _required_workspace_summary(dataset_id: str) -> WorkspaceSummary:
+    try:
+        workspace = get_workspace_summary(
+            dataset_id,
+            directories=_workspace_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    if workspace is None:
+        abort(404)
+    return workspace
+
+
+def _materialize_workspace_metadata(dataset_id: str) -> None:
+    """Adopt a source-only legacy workspace before a lifecycle mutation."""
+
+    workspace = _required_workspace_summary(dataset_id)
+    try:
+        record = load_workspace_record(
+            dataset_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError:
+        record = None
+    if record is None:
+        update_workspace_details(
+            dataset_id,
+            name=workspace.record.name,
+            description=workspace.record.description,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+            fallback_record=workspace.record,
+        )
+
+
+def _require_report_run(dataset_id: str, report_id: str) -> None:
+    try:
+        reports = list_generated_report_versions(
+            dataset_id,
+            generated_report_dir=Path(
+                current_app.config["GENERATED_REPORT_DIR"]
+            ),
+        )
+    except ReportNarrationError as error:
+        abort(422, description=str(error))
+    if not any(report.report_id == report_id for report in reports):
+        abort(404)
+
+
+def _ensure_report_active(
+    dataset_id: str,
+    report_id: str,
+    *,
+    mutable: bool = False,
+) -> None:
+    try:
+        record = load_workspace_record(
+            dataset_id,
+            workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    if record is not None and report_id in record.archived_report_ids:
+        abort(404, description="This report is in recoverable trash.")
+    if mutable and record is not None and record.is_archived:
+        abort(
+            409,
+            description=(
+                "Restore the workspace before changing its reports."
+            ),
+        )
 
 
 def _dataset_path(dataset_id: str) -> Path:

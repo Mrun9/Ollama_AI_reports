@@ -16,12 +16,19 @@ def test_health_endpoint(client: FlaskClient) -> None:
     }
 
 
-def test_root_displays_csv_upload_form(client: FlaskClient) -> None:
+def test_root_starts_from_workspace_history(client: FlaskClient) -> None:
     response = client.get("/")
 
-    assert response.status_code == 200
-    assert b"Upload one dataset" in response.data
-    assert b'method="post"' in response.data
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/workspaces"
+
+    workspaces = client.get("/workspaces")
+    legacy_upload = client.get("/upload")
+
+    assert workspaces.status_code == 200
+    assert b"Create workspace" in workspaces.data
+    assert legacy_upload.status_code == 200
+    assert b"Upload one dataset" in legacy_upload.data
 
 
 def test_upload_directory_is_outside_static_directory(app: Flask) -> None:
@@ -60,6 +67,7 @@ def test_evidence_and_chart_directories_are_outside_static_directory(
         "GENERATED_REPORT_DIR",
         "GENERATED_REPORT_ASSET_DIR",
         "WORKSPACE_DIR",
+        "TRASH_DIR",
     ):
         directory = Path(app.config[setting]).resolve()
         assert directory.is_dir()

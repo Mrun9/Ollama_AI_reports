@@ -28,6 +28,7 @@ def app(tmp_path: Path) -> Flask:
             "GENERATED_REPORT_ASSET_DIR": tmp_path / "generated_report_assets",
             "VISUALIZATION_PREVIEW_DIR": tmp_path / "visualization_previews",
             "NAVIGATION_STATE_DIR": tmp_path / "navigation_state",
+            "TRASH_DIR": tmp_path / "trash",
         }
     )
 

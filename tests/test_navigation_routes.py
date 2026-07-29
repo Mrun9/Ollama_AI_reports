@@ -135,7 +135,7 @@ def test_upload_error_redirect_is_reloadable(client: FlaskClient) -> None:
     )
 
     assert response.status_code == 303
-    assert response.headers["Location"].startswith("/?state=")
+    assert response.headers["Location"].startswith("/upload?state=")
     first = client.get(response.headers["Location"])
     second = client.get(response.headers["Location"])
     assert first.status_code == 400

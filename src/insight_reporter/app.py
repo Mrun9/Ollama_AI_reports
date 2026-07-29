@@ -22,6 +22,7 @@ _ARTIFACT_DIRECTORIES = (
     ("GENERATED_REPORT_ASSET_DIR", "generated_report_assets"),
     ("VISUALIZATION_PREVIEW_DIR", "visualization_previews"),
     ("NAVIGATION_STATE_DIR", "navigation_state"),
+    ("TRASH_DIR", "trash"),
 )
 
 

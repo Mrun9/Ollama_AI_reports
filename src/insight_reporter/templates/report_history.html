@@ -41,7 +41,10 @@
       {% if reports %}
         {% for report in reports %}
           <article>
-            <h2>{{ report.report_settings.title }} · version {{ report.version }}</h2>
+            <h2>
+              {{ report_names.get(report.report_id, report.report_settings.title) }}
+              · version {{ report.version }}
+            </h2>
             <dl>
               <dt>Report ID</dt>
               <dd>{{ report.report_id }}</dd>
@@ -96,6 +99,33 @@
         {% endfor %}
       {% else %}
         <p>No generated reports have been saved for this workspace.</p>
+      {% endif %}
+
+      {% if archived_reports %}
+        <details>
+          <summary>
+            Recoverably deleted report versions
+            ({{ archived_reports|length }})
+          </summary>
+          {% for report in archived_reports %}
+            <article>
+              <h2>
+                {{ report_names.get(report.report_id, report.report_settings.title) }}
+                · version {{ report.version }}
+              </h2>
+              <p>{{ report.report_id }} · generated {{ report.generated_at }}</p>
+              {% if not workspace_is_archived %}
+                <form method="post" action="{{ url_for(
+                  'core.undelete_workspace_report',
+                  dataset_id=dataset_id,
+                  report_id=report.report_id
+                ) }}">
+                  <button type="submit">Restore report run</button>
+                </form>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </details>
       {% endif %}
     </main>
   </body>

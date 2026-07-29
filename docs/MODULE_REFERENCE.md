@@ -27,7 +27,7 @@ Creates the Flask process and runtime directory layout.
   registers the `core` blueprint, and attaches security headers.
 - `_ARTIFACT_DIRECTORIES` is the single mapping between Flask configuration
   keys and subdirectories under `instance/`, including persistent workspace
-  metadata.
+  metadata and recoverable trash.
 
 Primary tests: `tests/test_app.py`, `tests/test_config.py`,
 `tests/test_logging_config.py`.
@@ -55,25 +55,42 @@ Prevents sensitive values from being written directly to logs.
 
 ### `workspace_history.py`
 
-Owns Milestone 6A workspace identity and reconstructs progress from filesystem
-artifacts without introducing a database.
+Owns Milestones 6A and 6A.1 workspace identity, lifecycle state, and progress
+reconstruction without introducing a database.
 
 Core contracts:
 
 - `WorkspaceDirectories` names every artifact directory required to inspect
   workflow progress.
-- `WorkspaceRecord` is the versioned durable identity created for a new
-  upload. It stores the safe display name, original filename, internal
-  filename, source format, fingerprint, size, and creation time.
+- `WorkspaceRecord` is schema-2 durable identity. It may be created before an
+  upload and stores name, description, optional source metadata, created and
+  updated timestamps, workspace/source archive timestamps, report aliases,
+  and archived report IDs. `has_source` and `is_archived` expose the two
+  important state checks.
 - `WorkspaceSummary` adds derived stage, last activity, immutable report
-  version count, generation-run count, and any legacy-metadata warning.
+  version count, active/archived generation-run counts, and any
+  legacy-metadata warning.
 
 Public functions:
 
+- `create_empty_workspace(name, description, workspace_dir)` allocates the
+  stable identity before a source exists.
 - `create_workspace_record(upload, original_filename, workspace_dir)` creates
-  metadata only after the source passed ingestion.
-- `rename_workspace(...)` changes the presentation name without changing the
-  dataset ID or any analytical artifact.
+  source-backed schema-2 metadata for the compatible upload-first path.
+- `attach_workspace_source(...)` binds a validated source whose safe filename
+  stem matches an empty workspace ID.
+- `update_workspace_details(...)` edits name and description;
+  `rename_workspace(...)` remains a compatibility wrapper.
+- `rename_workspace_source(...)` edits only the source's presentation label.
+- `archive_workspace(...)` / `restore_workspace(...)` toggle the recoverable
+  workspace archive timestamp without moving dependencies.
+- `archive_workspace_source(...)` / `restore_workspace_source(...)` move the
+  source and optional worksheet selection between uploads and recoverable
+  trash while retaining the workspace and report history.
+- `rename_workspace_report(...)` stores a report alias in mutable workspace
+  metadata so immutable generated-report JSON is never rewritten.
+- `archive_workspace_report(...)` / `restore_workspace_report(...)` hide or
+  restore every immutable version belonging to one report ID.
 - `load_workspace_record(...)` parses and validates one exact metadata file.
 - `get_workspace_summary(...)` combines one retained source with its current
   downstream artifacts.
@@ -82,16 +99,19 @@ Public functions:
 
 Important internals:
 
-- `_parse_workspace_record` treats persisted JSON as untrusted when reopening
-  it.
+- `_parse_workspace_record` treats persisted JSON as untrusted, accepts
+  schema 2, and migrates schema-1 records into the expanded in-memory contract.
 - `_legacy_workspace_record` gives pre-6A uploads a safe fallback identity;
   renaming that workspace materializes a normal versioned record.
-- `_workspace_stage` derives uploaded, configured, analyzed, report-ready, or
-  generated status.
-- `_report_counts` distinguishes immutable versions from independent report
-  IDs.
+- `_workspace_stage` additionally derives source-required, source-archived,
+  and workspace-archived states.
+- `_report_counts` distinguishes active immutable versions, active report
+  IDs, and archived report IDs.
 - `_clean_original_filename` removes browser-supplied path components and
   control characters.
+- `_save_workspace_record` writes through a random temporary file and atomic
+  replace. Source archive/restore rolls the file move back if metadata cannot
+  be saved.
 
 Primary test: `tests/test_workspace_history.py`.
 
@@ -104,9 +124,11 @@ Owns the one-file upload lifecycle.
 - `DatasetValidationError` carries a safe message and HTTP status.
 - `DatasetUploadResult` records the randomized filename, detected format,
   hash, size, shape, and available XLSX worksheet names.
-- `ingest_dataset(...)` streams the upload into a temporary file, enforces the
-  byte limit, detects its real format, validates it through `DatasetView`, and
-  atomically promotes only a valid source.
+- `ingest_dataset(..., dataset_id=None)` streams the upload into a temporary
+  file, enforces the byte limit, detects its real format, validates it through
+  `DatasetView`, and atomically promotes only a valid source. When
+  `dataset_id` is supplied by the workspace-first route, that already
+  validated identity becomes the safe filename stem.
 - `find_dataset_path(upload_dir, dataset_id)` safely resolves a server-created
   dataset ID to one retained CSV, JSON, or XLSX file.
 - `save_xlsx_selection(...)` and `load_xlsx_selection(...)` persist the
@@ -619,7 +641,19 @@ Dataset and KPI routes:
 
 Workspace routes:
 
-- `workspace_history`, `workspace_detail`, `update_workspace_name`
+- `home` redirects product entry to `workspace_history`.
+- `workspace_history`, `create_workspace`, and `workspace_detail` list,
+  create, and open workspaces, including empty and archived states.
+- `update_workspace_name`, `delete_workspace`, and
+  `undelete_workspace` edit metadata or toggle recoverable workspace state.
+- `workspace_source_form` and `add_workspace_source` validate and attach the
+  first source using the preallocated workspace ID.
+- `update_workspace_source_name`, `delete_workspace_source`, and
+  `undelete_workspace_source` manage source presentation and recoverable
+  source storage.
+- `update_workspace_report_name`, `delete_workspace_report`, and
+  `undelete_workspace_report` manage mutable aliases/archive markers around
+  immutable report runs.
 
 Report routes:
 
@@ -656,6 +690,12 @@ Important helper groups:
   report dependency graph.
 - `_workspace_directories` and `_workspace_resume_url` connect progress
   summaries to the correct browser continuation point.
+- `_workspace_create_report_url` distinguishes add-source, create-first-report,
+  and resume behavior; `_materialize_workspace_metadata` adopts a pre-6A
+  source-only entry immediately before a requested lifecycle mutation.
+- `_require_report_run` prevents lifecycle metadata for nonexistent reports;
+  `_ensure_report_active` prevents archived report IDs from being reopened
+  through ordinary current/exact routes.
 - `_current_package_sha256` labels saved report versions as current or
   historical without preventing history access.
 - `_render_generated_report` shares current and read-only historical
@@ -676,8 +716,13 @@ Route behaviour is covered across the route test files, especially
 
 ## Templates and browser JavaScript
 
-- `upload.html` — initial dataset upload.
-- `workspaces.html` / `workspace.html` — persistent workspace index and detail.
+- `workspaces.html` — product home, empty-workspace creation, active list, and
+  archived-workspace restoration.
+- `workspace.html` — metadata editor, source lifecycle, next action, active
+  reports, report aliases, report archival, and workspace archival.
+- `workspace_source.html` — one-file source selection for an existing empty
+  workspace.
+- `upload.html` — compatible upload-first entry.
 - `sheet_selection.html` — explicit XLSX worksheet selection.
 - `preview.html` — profile, suggestions, and initial KPI configuration.
 - `derived_configuration.html` — derived formula preview and configuration.

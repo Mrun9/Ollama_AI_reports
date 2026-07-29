@@ -7,48 +7,69 @@
     <style>
       body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
       main { max-width: 960px; margin: 0 auto; }
-      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
+      article, form.create { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
       dl { display: grid; grid-template-columns: 10rem 1fr; gap: 0.35rem 1rem; }
       dt { font-weight: 700; }
       dd { margin: 0; overflow-wrap: anywhere; }
+      label { display: block; margin: 0.5rem 0; }
+      input, textarea { box-sizing: border-box; max-width: 36rem; width: 100%; }
       .warning { color: #754b00; }
+      .archived { opacity: 0.8; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Persistent workspaces</h1>
+      <h1>Workspaces</h1>
       <p>
-        Reopen any locally retained dataset and continue from its latest
-        completed workflow stage.
+        Start from an existing workspace or create an empty one, then add one
+        data source and build reports inside it.
       </p>
-      <p><a href="{{ url_for('core.upload_form') }}">Upload a new dataset</a></p>
 
+      <form class="create" method="post" action="{{ url_for('core.create_workspace') }}">
+        <h2>Create workspace</h2>
+        <label>
+          Workspace name
+          <input name="name" type="text" maxlength="120"
+            placeholder="Quarterly sales review" required>
+        </label>
+        <label>
+          Description (optional)
+          <textarea name="description" maxlength="1000"
+            placeholder="What this workspace is for"></textarea>
+        </label>
+        <button type="submit">Create workspace</button>
+      </form>
+
+      <h2>Existing workspaces</h2>
       {% if workspaces %}
         {% for workspace in workspaces %}
           <article>
-            <h2>
+            <h3>
               <a href="{{ url_for(
                 'core.workspace_detail',
                 dataset_id=workspace.record.dataset_id
               ) }}">
                 {{ workspace.record.name }}
               </a>
-            </h2>
+            </h3>
+            {% if workspace.record.description %}
+              <p>{{ workspace.record.description }}</p>
+            {% endif %}
             <dl>
-              <dt>Original file</dt>
-              <dd>{{ workspace.record.original_filename }}</dd>
-              <dt>Format</dt>
-              <dd>{{ workspace.record.source_format|upper }}</dd>
+              <dt>Data source</dt>
+              <dd>
+                {{ workspace.record.original_filename
+                   if workspace.record.has_source
+                   else "No active source" }}
+              </dd>
               <dt>Current stage</dt>
               <dd>{{ workspace.stage_label }}</dd>
-              <dt>Created</dt>
-              <dd>{{ workspace.record.created_at }}</dd>
               <dt>Last activity</dt>
               <dd>{{ workspace.last_activity_at }}</dd>
-              <dt>Report history</dt>
+              <dt>Reports</dt>
               <dd>
-                {{ workspace.report_version_count }} saved version(s) across
-                {{ workspace.report_run_count }} generation run(s)
+                {{ workspace.report_run_count }} active report(s),
+                {{ workspace.report_version_count }} version(s)
               </dd>
             </dl>
             {% if workspace.metadata_warning %}
@@ -57,8 +78,35 @@
           </article>
         {% endfor %}
       {% else %}
-        <p>No retained workspaces are available yet.</p>
+        <p>
+          No active workspaces yet. Create one above, then select its source
+          file.
+        </p>
       {% endif %}
+
+      {% if archived_workspaces %}
+        <details>
+          <summary>Recoverably deleted workspaces ({{ archived_workspaces|length }})</summary>
+          {% for workspace in archived_workspaces %}
+            <article class="archived">
+              <h3>{{ workspace.record.name }}</h3>
+              <p>Archived {{ workspace.record.archived_at }}</p>
+              <form method="post" action="{{ url_for(
+                'core.undelete_workspace',
+                dataset_id=workspace.record.dataset_id
+              ) }}">
+                <button type="submit">Restore workspace</button>
+              </form>
+            </article>
+          {% endfor %}
+        </details>
+      {% endif %}
+
+      <p>
+        <a href="{{ url_for('core.upload_form') }}">
+          Use legacy upload-first flow
+        </a>
+      </p>
     </main>
   </body>
 </html>

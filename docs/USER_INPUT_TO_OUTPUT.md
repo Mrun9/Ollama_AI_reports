@@ -8,10 +8,11 @@ For the responsibilities and public API of each Python file, see [MODULE_REFEREN
 
 The application is a local, artifact-driven pipeline:
 
-1. A user uploads one dataset.
-2. The application gives that upload a `dataset_id`.
-3. A durable workspace record gives the randomized ID a safe human-readable
-   identity.
+1. A user creates or reopens a workspace.
+2. A new workspace receives a random `dataset_id` before it has a source.
+3. The user attaches one supported source; the same ID becomes its safe
+   filename stem. The compatible upload-first route performs steps 2 and 3
+   together.
 4. Every configuration, insight, chart, report package, and generated report is stored under that same identity.
 5. Each stage reads validated output from earlier stages instead of passing a large in-memory object through every page.
 6. AI is used only at bounded stages. Python code validates its structured responses before they can become application artifacts.
@@ -23,23 +24,25 @@ cache. It must be included in backups if workspace recovery is required.
 
 ```mermaid
 flowchart LR
-    A[Upload form] --> B[Stored dataset and workspace]
-    B --> C[Dataset profile]
-    C --> D[Business configuration]
-    D --> E[Deterministic insights]
-    E --> F[Evidence and charts]
-    F --> G[Report configuration]
-    G --> H[Report package]
-    H --> I[AI narration]
-    I --> J[Validated report artifact]
-    J --> K[HTML report]
-    J --> L[JSON report]
-    J --> M[PDF report]
-    J --> N[Persistent report history]
+    A[Workspace index] --> B[Create or reopen workspace]
+    B --> C[Select one source]
+    C --> D[Stored and validated dataset]
+    D --> E[Dataset profile]
+    E --> F[Business configuration]
+    F --> G[Deterministic insights]
+    G --> H[Evidence and charts]
+    H --> I[Report configuration]
+    I --> J[Report package]
+    J --> K[AI narration]
+    K --> L[Validated report artifact]
+    L --> M[HTML report]
+    L --> N[JSON report]
+    L --> O[PDF report]
+    L --> P[Persistent report history]
 
-    C -. optional AI suggestions .-> D
-    D -. optional derived KPI formula .-> E
-    B -. manual visualization request .-> F
+    E -. optional AI suggestions .-> F
+    F -. optional derived KPI formula .-> G
+    D -. manual visualization request .-> H
 ```
 
 ## Artifact identity and storage
@@ -49,7 +52,7 @@ The default data directory is controlled by the application configuration. Withi
 | Artifact | Typical storage location | Written by | Read by |
 | --- | --- | --- | --- |
 | Uploaded dataset | `uploads/<dataset_id>.<extension>` | Dataset ingestion | Profiling, insights, visualizations |
-| Workspace identity | `workspaces/<dataset_id>.json` | Upload and rename routes | Workspace index and detail |
+| Workspace identity/lifecycle | `workspaces/<dataset_id>.json` | Workspace creation, source attachment, and lifecycle routes | Workspace index, detail, and report access checks |
 | Workbook selection | `uploads/<dataset_id>.selection.json` | Sheet-selection route | Dataset loader |
 | Business configuration | `configurations/<dataset_id>.json` | Configuration routes | Insights and downstream report stages |
 | Insight set | `insights/<dataset_id>.json` | Insight generation | Evidence layer and report configuration |
@@ -61,39 +64,74 @@ The default data directory is controlled by the application configuration. Withi
 | Generated report | `generated_reports/<dataset_id>/V####-<report_id>.json` | Report generation | HTML, JSON, PDF, publishing |
 | Historical report charts | `generated_report_assets/<dataset_id>/V####-<report_id>/` | Report version save | Historical HTML and PDF |
 | Published-report state | Generated-report metadata/artifact state | Publishing routes | Published report view |
+| Recoverably deleted source | `trash/sources/<dataset_id>/` | Source archive route | Source restore route |
 
 Exact roots are initialized in `src/insight_reporter/app.py`; callers should
 use the Flask configuration keys rather than hard-coding these examples.
 
 ## End-to-end request flow
 
-### 1. Upload
+### 1. Workspace creation or selection
 
 **Browser input**
 
-- A file selected in the upload form.
-- Supported paths currently include CSV, JSON, and Excel workbooks.
+- A workspace name and optional description, or a click on an existing
+  workspace.
 
 **Route**
 
-- `GET /` renders the upload page.
-- `POST /upload` receives the multipart form submission.
+- `GET /` redirects to `GET /workspaces`.
+- `POST /workspaces` creates an empty workspace.
+- `GET /workspaces/<dataset_id>` displays source state, progress, reports, and
+  the next valid action.
 
 **Transformation**
 
-1. The route checks that a file was supplied.
-2. `dataset_ingestion.ingest_dataset()` validates the filename and extension.
-3. The upload is stored with an application-generated `dataset_id`.
-4. The ingestor inspects enough metadata to determine the source format and whether an Excel sheet must still be selected.
-5. A `DatasetUploadResult` describes the accepted upload.
-6. `workspace_history.create_workspace_record()` stores a safe display name,
-   original filename, internal identity, format, source fingerprint, size, and
-   creation time under `workspaces/`.
+1. `create_empty_workspace()` validates bounded presentation text.
+2. Python allocates a 32-character random identity and checks that no metadata
+   file already uses it.
+3. Schema-2 workspace JSON is written atomically with no source fields.
+4. `get_workspace_summary()` reports `source_required`; the workspace appears
+   in the index even though no upload file exists.
 
 **Output**
 
-- A stored source file.
-- A versioned workspace metadata artifact.
+- `workspaces/<dataset_id>.json`.
+- A stable workspace detail URL and a source-selection action.
+
+### 1B. Source selection and attachment
+
+**Browser input**
+
+- Exactly one CSV, flat JSON, or XLSX file selected from the workspace.
+
+**Route**
+
+- `GET /workspaces/<dataset_id>/source` renders source selection only for an
+  active empty workspace.
+- `POST /workspaces/<dataset_id>/source` validates and attaches the source.
+- `GET/POST /upload` remains the compatible upload-first path; it creates
+  source and workspace metadata in one operation.
+
+**Transformation**
+
+1. The route confirms the workspace exists, is active, and has no source.
+2. `dataset_ingestion.ingest_dataset(..., dataset_id=dataset_id)` performs the
+   normal size, extension, real-format, shape, and content checks.
+3. The validated source is atomically promoted as
+   `uploads/<dataset_id>.<extension>`.
+4. `DatasetUploadResult` supplies the detected format, source fingerprint,
+   byte size, shape, and worksheet names.
+5. `attach_workspace_source()` verifies the safe filename belongs to the
+   workspace and adds source metadata without changing its name, description,
+   or identity.
+6. If attachment fails, the just-created source is removed so an empty
+   workspace never falsely appears source-backed.
+
+**Output**
+
+- A stored source file attached to the existing workspace.
+- Updated schema-2 workspace metadata.
 - A redirect to sheet selection for a multi-sheet workbook, or directly to the dataset workflow for an immediately loadable source.
 
 The uploaded filename is presentation metadata. Later code should locate the dataset through the `dataset_id`, not trust a browser-supplied path.
@@ -418,6 +456,55 @@ This stage changes structured evidence into readable report prose.
 
 The five-point summary is not a second independent analysis. It is a concise synthesis of the validated findings already grounded in the report package.
 
+### 12B. Workspace, source, and report lifecycle changes
+
+Successful lifecycle forms use POST followed by a redirect back to a stable
+workspace page. Invalid or conflicting lifecycle requests return a safe 4xx
+response and leave durable state unchanged.
+
+**Presentation edits**
+
+- `POST /workspaces/<dataset_id>/name` validates and saves workspace name and
+  description.
+- `POST /workspaces/<dataset_id>/source/name` changes
+  `original_filename`, which is now a display label; the safe retained
+  filename does not change.
+- Source contents are not edited or replaced in place. A different file uses a
+  new workspace identity, preventing old calculations and new rows from being
+  mixed under one artifact key.
+- `POST /workspaces/<dataset_id>/reports/<report_id>/name` stores a
+  `report_names` alias in workspace metadata. It never edits
+  `V####-<report_id>.json`.
+- “Edit report configuration” returns to the deterministic report selection
+  form. A subsequent generation creates another immutable report artifact.
+
+**Recoverable delete and restore**
+
+- Workspace archive/restore sets or clears `archived_at`. All dependent files
+  stay in place, and archived workspaces are separated on the index.
+- Report archive/restore adds or removes the report ID in
+  `archived_report_ids`. This hides every version of that generation run from
+  active workspace/history lists and blocks ordinary report routes.
+- Source archive moves the safe source and optional
+  `<dataset_id>.selection.json` into
+  `trash/sources/<dataset_id>/`, then sets `source_archived_at`.
+- If source metadata cannot be saved, the source move is rolled back. Restore
+  performs the inverse move and similarly rolls back on metadata failure.
+- Source archival retains configurations, evidence, generated reports, and
+  version-specific charts. Exact saved report HTML/JSON/PDF can therefore be
+  opened without the current source. Creating or regenerating a report remains
+  unavailable until the source is restored.
+- The application deliberately has no permanent-delete route. This keeps
+  deletion reversible while the product is local-first and filesystem-backed.
+
+**Backward compatibility**
+
+- Schema-1 workspace JSON is parsed into the expanded in-memory contract.
+- A pre-6A source with no workspace JSON receives a safe fallback record in
+  read views.
+- Immediately before a lifecycle mutation, the route materializes that
+  fallback as schema 2 so the requested change has durable state.
+
 ### 13. Versioning, regeneration, and publishing
 
 Generated reports are treated as immutable versions.
@@ -437,8 +524,9 @@ When an upstream artifact changes, fingerprints help the application determine t
 
 **Persistent history**
 
-- `GET /workspaces` scans retained source files and downstream artifacts to
-  reconstruct every workspace's stage and last activity.
+- `GET /workspaces` scans workspace metadata, retained source files, and
+  downstream artifacts to reconstruct every workspace's stage and last
+  activity. Scanning metadata is what makes an empty workspace visible.
 - New uploads use their saved `WorkspaceRecord`; uploads from before 6A appear
   through a safe fallback name, and renaming one materializes current
   workspace metadata.
@@ -562,6 +650,8 @@ A maintainer adding a new stage should:
 The intended failure model is conservative:
 
 - Invalid uploads do not create a usable dataset workflow.
+- Invalid workspace-source attachment removes the newly retained file but
+  keeps the empty workspace available for another attempt.
 - Invalid form input returns the user to the relevant editor with a specific error.
 - A bad formula cannot be confirmed.
 - An unavailable Ollama service does not corrupt deterministic artifacts.
@@ -570,6 +660,8 @@ The intended failure model is conservative:
 - A PDF failure does not change the saved generated-report artifact.
 - Unreadable workspace metadata falls back to safe source-derived identity and
   does not make the retained dataset disappear.
+- Recoverable source moves are reversed if the corresponding metadata update
+  fails.
 - A malformed generated-report artifact is rejected instead of being listed
   as trusted history.
 
@@ -581,7 +673,10 @@ The application log should contain technical diagnostics, while the browser rece
 | --- | --- | --- |
 | Upload rejected | `dataset_ingestion.py` and upload limits | Route error handling and application logs |
 | Uploaded dataset absent from workspace list | Retained source filename and ID | `workspace_history.py` discovery and workspace metadata |
+| Empty workspace absent from workspace list | `workspaces/<dataset_id>.json` | Schema-2 parsing and workspace-directory configuration |
 | Workspace shows a legacy warning | `workspaces/<dataset_id>.json` | Retained source identity and metadata schema |
+| Source cannot be restored | `trash/sources/<dataset_id>/` | Conflicting file in `uploads/` and `source_archived_at` |
+| Report disappeared | `archived_report_ids` in workspace JSON | Recoverably deleted reports section |
 | Wrong Excel data appears | Workbook selection sidecar | `dataset_view.py` sheet loading |
 | Column absent from configuration | `dataset_profile.py` type inference | Source-suggestion validation |
 | Derived KPI cannot save | `formula_engine.py` parse/validation result | `derived_metrics.py` definition validation |
