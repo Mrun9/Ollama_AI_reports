@@ -66,6 +66,7 @@ def test_evidence_and_chart_directories_are_outside_static_directory(
         "REPORT_PACKAGE_DIR",
         "GENERATED_REPORT_DIR",
         "GENERATED_REPORT_ASSET_DIR",
+        "MODEL_RUN_METRICS_DIR",
         "WORKSPACE_DIR",
         "TRASH_DIR",
     ):

@@ -328,6 +328,78 @@ These answer different questions:
 Choose the definition that matches the business question. Do not select a formula only because its
 result looks more favorable.
 
+## Conditional category rates and shares
+
+Conditional KPIs use a dedicated builder instead of formula text. Use it when
+the question contains “where,” “only,” or “for this status/type,” and the
+numerator depends on exact category values.
+
+### New versus Returning revenue
+
+To answer “What percentage of revenue came from New customers?” configure:
+
+- KPI name: `New Customer Revenue Share`
+- Calculation base: `Value share`
+- Numeric value column: `Net_Sales`
+- Condition column: `Customer_Type`
+- Numerator value: `New`
+- Display format: fixed to `percentage`
+- Direction: choose the meaning appropriate to the business; a larger new
+  share is not automatically better
+- Optional target: a user-approved percentage from 0 to 100
+
+Python calculates:
+
+```text
+SUM(Net_Sales where Customer_Type is New)
+------------------------------------------------ × 100
+SUM(Net_Sales for all rows with valid Net_Sales)
+```
+
+This yields a statement such as “New customers generated 35% of Net Sales.”
+To show both New and Returning composition, also configure `Customer_Type` as
+a category for a normal additive `Net_Sales` source KPI. The automatic
+category-share insight calculates and reconciles every named group to 100%.
+
+### Return/Cancellation Rate
+
+When one row represents one order or other intended event, configure:
+
+- KPI name: `Return/Cancellation Rate`
+- Calculation base: `Record count`
+- Condition column: `Status`
+- Numerator values: `Returned` and `Cancelled`
+- Confirm: one row represents one denominator event
+- Direction: `lower`
+- Optional target: for example an approved target of `5`, meaning 5%
+
+Python calculates:
+
+```text
+COUNT(rows where Status is Returned or Cancelled)
+------------------------------------------------- × 100
+COUNT(all rows)
+```
+
+Do not use this record-count definition when one order appears on several
+product lines. The current builder does not perform distinct order counting.
+Prepare one row per event first or use already aggregated count columns in an
+approved aggregate formula.
+
+### Conditional calculation policies
+
+- Exact condition values come from the retained categorical/boolean column;
+  they are not typed freely or invented by AI.
+- Missing condition values stay in a record-count denominator.
+- Value-share rows with missing/non-numeric measure values are excluded from
+  numerator and denominator.
+- A zero denominator returns `null`.
+- Percentages are recalculated within each dataset, period, or segment; group
+  percentages are not added or averaged.
+- The conditional builder supports equality membership only. Numeric
+  comparisons, date conditions, nested Boolean logic, and distinct counts are
+  not yet supported.
+
 ## Configuration fields
 
 After writing a formula, configure the following:
@@ -378,6 +450,8 @@ Direction is business context; Python cannot infer it safely from column values 
 
 Select a date only when the source has a genuine, consistently populated date column. Without one,
 the system still produces non-temporal insights and explicitly skips period comparisons and trends.
+With at least three eligible periods, the latest grouped KPI is also compared
+with the mean of up to four preceding period aggregates.
 
 ### Category columns
 
@@ -391,6 +465,9 @@ Select categories that create meaningful comparison groups:
 - social-interaction level
 
 Avoid selecting identifiers such as customer ID because they create one group per record.
+When a date is also configured, each category value acts as a possible 6C
+cohort. Cohort movement is calculated only for values with at least two valid
+KPI records in both latest comparison periods.
 
 ### Target or benchmark
 
@@ -403,6 +480,19 @@ Use a target only when it has a defensible source, such as:
 
 Leaving the benchmark blank is better than inventing one. The optional dataset-mean helper is
 descriptive and should not automatically be treated as a business target.
+
+Always select what the target applies to:
+
+| Scope | Meaning | Required context |
+|---|---|---|
+| Each row | Compare every valid row-level KPI value with the target | Source KPI or row formula |
+| Each period | Recalculate the KPI for every eligible period and compare each aggregate | Date column |
+| Each segment | Recalculate the KPI for every eligible category value and compare each aggregate | At least one category column |
+| Complete dataset | Compare the KPI calculated once over all eligible records | No additional grouping |
+
+Aggregate formulas and conditional percentages do not have one KPI value per
+row, so they reject row scope. They can use period, segment, or complete
+dataset scope because the formula is recalculated inside the selected group.
 
 ### Business objective
 
@@ -422,6 +512,9 @@ State what should be measured, which comparisons matter, and any interpretation 
 | IQR row-level anomalies | Yes | Not applicable |
 | Row-level numeric associations | Yes | Not applicable |
 | Row-level benchmark breaches | Yes | Not applicable |
+| Period aggregate versus target | Yes | Yes |
+| Segment aggregate versus target | Yes | Yes |
+| Complete-dataset aggregate versus target | Yes | Yes |
 | Missing-data warnings | Yes | Yes |
 
 Aggregate KPIs remain useful for rates and ratios, but they do not have one KPI value per source
@@ -464,6 +557,9 @@ MEAN([depression_label]) * 100
 
 when the business question concerns prevalence.
 
+For text or Boolean category values, use the conditional KPI builder instead
+of attempting to place a string condition inside formula text.
+
 ### Averaging percentages when a weighted ratio is required
 
 The mean of row percentages is not always the same as the overall percentage. Use a ratio of sums
@@ -497,7 +593,8 @@ The formula language deliberately does not support:
 - arbitrary Python
 - `eval` or `exec`
 - SQL
-- conditional `IF` statements
+- arbitrary conditional `IF` statements (exact categorical membership is
+  available through the conditional KPI builder)
 - text concatenation
 - date arithmetic
 - window functions
@@ -507,8 +604,9 @@ The formula language deliberately does not support:
 A formula may reference up to 20 numeric columns and is subject to bounded length, expression-size,
 and nesting limits.
 
-If a required KPI needs conditional logic, category bucketing, date arithmetic, or multiple-source
-relationships, that transformation should be added as a separately validated feature rather than
+If a required KPI needs a condition beyond the exact-category builder,
+category bucketing, date arithmetic, or multiple-source relationships, that
+transformation should be added as a separately validated feature rather than
 encoded as unrestricted formula code.
 
 ## Final checklist

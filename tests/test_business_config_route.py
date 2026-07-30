@@ -61,6 +61,7 @@ def test_confirmed_configuration_is_validated_and_persisted(
             "date_column": "date",
             "category_columns": ["region"],
             "target_or_benchmark": "150",
+            "target_scope": "segment",
             "business_objective": "Increase regional revenue.",
         },
         follow_redirects=True,
@@ -72,9 +73,10 @@ def test_confirmed_configuration_is_validated_and_persisted(
     configuration_path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
     configuration = json.loads(configuration_path.read_text(encoding="utf-8"))
     assert configuration["dataset_id"] == dataset_id
-    assert configuration["schema_version"] == 4
+    assert configuration["schema_version"] == 6
     assert configuration["metrics"][0]["name"] == "revenue"
     assert configuration["metrics"][0]["target_or_benchmark"] == 150
+    assert configuration["metrics"][0]["target_scope"] == "segment"
     assert configuration["date_column"]["column"] == "date"
     assert configuration["category_columns"][0]["column"] == "region"
 
@@ -213,6 +215,10 @@ def test_existing_configuration_adds_source_kpis_without_reselecting_primary(
         data={
             "source_kpis": ["cost"],
             "kpi_direction": "lower",
+            "aggregation": "mean",
+            "display_format": "currency",
+            "target_or_benchmark": "75",
+            "target_scope": "dataset",
         },
         follow_redirects=True,
     )
@@ -240,3 +246,7 @@ def test_existing_configuration_adds_source_kpis_without_reselecting_primary(
         if metric["metric_id"] == payload["primary_metric_id"]
     )
     assert primary["name"] == "revenue"
+    assert payload["metrics"][1]["aggregation"] == "mean"
+    assert payload["metrics"][1]["display_format"] == "currency"
+    assert payload["metrics"][1]["target_or_benchmark"] == 75
+    assert payload["metrics"][1]["target_scope"] == "dataset"

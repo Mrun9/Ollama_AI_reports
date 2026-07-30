@@ -27,6 +27,9 @@ from werkzeug.datastructures import MultiDict
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from insight_reporter.business_config import (
+    DISPLAY_FORMATS,
+    SOURCE_AGGREGATIONS,
+    TARGET_SCOPES,
     BusinessConfiguration,
     BusinessConfigurationError,
     add_source_metrics,
@@ -36,7 +39,13 @@ from insight_reporter.business_config import (
     set_primary_metric,
     update_metric_settings,
     validate_business_configuration,
+    validate_conditional_business_configuration,
     validate_derived_business_configuration,
+)
+from insight_reporter.conditional_metrics import (
+    ConditionalMetricError,
+    condition_value_options,
+    validate_conditional_metric,
 )
 from insight_reporter.configuration_suggestions import (
     ConfigurationSuggestion,
@@ -182,6 +191,17 @@ from insight_reporter.workspace_history import (
 
 core = Blueprint("core", __name__)
 
+_DIAGNOSTIC_EVIDENCE_TYPES = frozenset(
+    {
+        "missing_data_warning",
+        "insufficient_data_warning",
+        "analysis_skipped",
+    }
+)
+_ASSOCIATION_EVIDENCE_TYPES = frozenset({"numeric_correlation"})
+_MAX_DEFAULT_EVIDENCE = 10
+_MAX_DEFAULT_ASSOCIATIONS = 2
+
 
 # Persistent workspaces and history
 
@@ -264,6 +284,34 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
         for report_id, report in latest_by_report_id.items()
         if report_id in workspace.record.archived_report_ids
     )
+    configuration_ready = _configuration_path(dataset_id).is_file()
+    evidence_ready = (
+        Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+    ).is_file()
+    visualization_count = 0
+    configuration = None
+    if workspace.record.has_source:
+        try:
+            profile = _load_profile(dataset_id)
+            configuration = _load_existing_configuration(
+                dataset_id,
+                profile,
+            )
+            visualization_count = len(
+                list_visualizations(
+                    dataset_id=dataset_id,
+                    visualization_dir=Path(
+                        current_app.config["VISUALIZATION_DIR"]
+                    ),
+                    profile=profile,
+                    configuration=configuration,
+                )
+            )
+        except (
+            BusinessConfigurationError,
+            VisualizationError,
+        ):
+            visualization_count = 0
     return render_template(
         "workspace.html",
         workspace=workspace,
@@ -271,6 +319,13 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
         create_report_url=_workspace_create_report_url(workspace),
         reports=active_reports,
         archived_reports=archived_reports,
+        configuration_ready=configuration_ready,
+        configuration=configuration,
+        evidence_ready=evidence_ready,
+        visualization_count=visualization_count,
+        report_configuration_ready=_report_configuration_path(
+            dataset_id
+        ).is_file(),
     )
 
 
@@ -801,6 +856,9 @@ def suggest_configurations(dataset_id: str):  # type: ignore[no-untyped-def]
             host=str(current_app.config["OLLAMA_HOST"]),
             timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
             excluded_kpis=excluded_kpis,
+            metrics_dir=Path(
+                current_app.config["MODEL_RUN_METRICS_DIR"]
+            ),
         )
     except (BusinessConfigurationError, ConfigurationSuggestionError) as error:
         current_app.logger.warning(
@@ -845,8 +903,13 @@ def review_suggestion(dataset_id: str):  # type: ignore[no-untyped-def]
                 target_or_benchmark=request.form.get(
                     "target_or_benchmark", ""
                 ),
+                target_scope=request.form.get("target_scope", "row") or "row",
                 business_objective=request.form.get(
                     "business_objective", ""
+                ),
+                aggregation=request.form.get("aggregation", "sum") or "sum",
+                display_format=(
+                    request.form.get("display_format", "number") or "number"
                 ),
             )
             form_data = request.form.copy()
@@ -868,6 +931,14 @@ def review_suggestion(dataset_id: str):  # type: ignore[no-untyped-def]
                 business_objective=request.form.get(
                     "business_objective", ""
                 ),
+                target_or_benchmark=request.form.get(
+                    "target_or_benchmark", ""
+                ),
+                aggregation=request.form.get("aggregation", "sum") or "sum",
+                display_format=(
+                    request.form.get("display_format", "number") or "number"
+                ),
+                target_scope=request.form.get("target_scope", "row") or "row",
             )
             form_data.pop("primary_kpi", None)
             form_data.setlist("source_kpis", [suggested_kpi])
@@ -902,6 +973,10 @@ def suggest_derived_kpis(dataset_id: str):  # type: ignore[no-untyped-def]
             model=str(current_app.config["OLLAMA_MODEL"]),
             host=str(current_app.config["OLLAMA_HOST"]),
             timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+            metrics_dir=Path(
+                current_app.config["MODEL_RUN_METRICS_DIR"]
+            ),
+            dataset_id=dataset_id,
         )
     except DerivedKpiSuggestionError as error:
         current_app.logger.warning(
@@ -991,6 +1066,41 @@ def derived_kpi_editor(dataset_id: str):  # type: ignore[no-untyped-def]
     )
 
 
+@core.get("/conditional/<dataset_id>")
+def conditional_kpi_editor(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Display the deterministic conditional-rate KPI builder."""
+
+    profile = _load_profile(dataset_id)
+    view = _load_dataset_view_for_id(dataset_id)
+    state = _load_view_state("conditional", dataset_id=dataset_id)
+    form_data = _form_from_state(state.get("form_data")) or MultiDict()
+    existing = _load_existing_configuration(dataset_id, profile)
+    if existing is not None:
+        _populate_existing_business_fields(form_data, existing)
+    return (
+        render_template(
+            "conditional_configuration.html",
+            dataset_id=dataset_id,
+            profile=profile,
+            configuration=existing,
+            form_data=form_data,
+            configuration_error=_state_text(
+                state,
+                "configuration_error",
+            ),
+            condition_values=condition_value_options(
+                view,
+                profile,
+            ),
+            calculation_bases=("record_count", "value_sum"),
+            target_scope_options=tuple(
+                scope for scope in TARGET_SCOPES if scope != "row"
+            ),
+        ),
+        _state_status(state),
+    )
+
+
 @core.post("/configure/<dataset_id>")
 def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
     """Validate and retain user-confirmed business selections."""
@@ -1013,6 +1123,11 @@ def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
                     "business_objective", ""
                 ),
                 secondary_kpis=request.form.getlist("secondary_kpis"),
+                aggregation=request.form.get("aggregation", "sum") or "sum",
+                display_format=(
+                    request.form.get("display_format", "number") or "number"
+                ),
+                target_scope=request.form.get("target_scope", "row") or "row",
             )
         else:
             context_submitted = (
@@ -1039,6 +1154,15 @@ def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
                     if context_submitted
                     else None
                 ),
+                target_or_benchmark=request.form.get(
+                    "target_or_benchmark",
+                    "",
+                ),
+                aggregation=request.form.get("aggregation", "sum") or "sum",
+                display_format=(
+                    request.form.get("display_format", "number") or "number"
+                ),
+                target_scope=request.form.get("target_scope", "row") or "row",
             )
     except BusinessConfigurationError as error:
         return _redirect_profile_state(
@@ -1099,6 +1223,7 @@ def configure_derived_kpi(dataset_id: str):  # type: ignore[no-untyped-def]
             business_objective=request.form.get("business_objective", ""),
             existing_configuration=_load_existing_configuration(dataset_id, profile),
             metric_role=request.form.get("metric_role", "primary"),
+            target_scope=request.form.get("target_scope") or None,
         )
     except BusinessConfigurationError as error:
         return _redirect_with_state(
@@ -1125,6 +1250,85 @@ def configure_derived_kpi(dataset_id: str):  # type: ignore[no-untyped-def]
     )
     return redirect(
         url_for("core.saved_configuration", dataset_id=dataset_id), code=303
+    )
+
+
+@core.post("/configure-conditional/<dataset_id>")
+def configure_conditional_kpi(
+    dataset_id: str,
+):  # type: ignore[no-untyped-def]
+    """Validate and retain a conditional count/value percentage KPI."""
+
+    profile = _load_profile(dataset_id)
+    view = _load_dataset_view_for_id(dataset_id)
+    condition_column = request.form.get("condition_column", "")
+    try:
+        metric = validate_conditional_metric(
+            profile,
+            view,
+            name=request.form.get("name", ""),
+            calculation_base=request.form.get(
+                "calculation_base",
+                "",
+            ),
+            condition_column=condition_column,
+            included_values=request.form.getlist(
+                f"included_values::{condition_column}"
+            ),
+            value_column=request.form.get("value_column", ""),
+            row_grain_confirmed=(
+                request.form.get("row_grain_confirmed", "") == "yes"
+            ),
+            source_id=source_id_from_hash(
+                profile.source_sha256,
+                profile.source_table_name,
+            ),
+        )
+        configuration = validate_conditional_business_configuration(
+            profile,
+            dataset_id=dataset_id,
+            conditional_metric=metric,
+            kpi_direction=request.form.get("kpi_direction", ""),
+            date_column=request.form.get("date_column", ""),
+            category_columns=request.form.getlist("category_columns"),
+            target_or_benchmark=request.form.get(
+                "target_or_benchmark",
+                "",
+            ),
+            business_objective=request.form.get(
+                "business_objective",
+                "",
+            ),
+            existing_configuration=_load_existing_configuration(
+                dataset_id,
+                profile,
+            ),
+            metric_role=request.form.get("metric_role", "secondary"),
+            target_scope=(
+                request.form.get("target_scope", "dataset") or "dataset"
+            ),
+        )
+        save_business_configuration(
+            configuration,
+            configuration_dir=Path(
+                current_app.config["CONFIGURATION_DIR"]
+            ),
+        )
+    except (ConditionalMetricError, BusinessConfigurationError) as error:
+        return _redirect_with_state(
+            "core.conditional_kpi_editor",
+            {
+                "view": "conditional",
+                "dataset_id": dataset_id,
+                "form_data": _form_to_state(request.form),
+                "configuration_error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+        )
+    return redirect(
+        url_for("core.saved_configuration", dataset_id=dataset_id),
+        code=303,
     )
 
 
@@ -1183,6 +1387,9 @@ def edit_metric_settings(dataset_id: str):  # type: ignore[no-untyped-def]
             request.form.get("metric_id", ""),
             kpi_direction=request.form.get("kpi_direction", ""),
             target_or_benchmark=request.form.get("target_or_benchmark", ""),
+            aggregation=request.form.get("aggregation"),
+            display_format=request.form.get("display_format"),
+            target_scope=request.form.get("target_scope"),
         )
         save_business_configuration(
             configuration,
@@ -1253,12 +1460,34 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
                 evidence_payload=evidence,
                 visualizations=visualizations,
             )
+    evidence_records = _sorted_evidence_records(evidence)
     return (
         render_template(
             "report_configuration_form.html",
             dataset_id=dataset_id,
             configuration=configuration,
-            evidence_records=_sorted_evidence_records(evidence),
+            evidence_records=evidence_records,
+            finding_evidence_records=tuple(
+                record
+                for record in evidence_records
+                if _evidence_kind(record) == "finding"
+            ),
+            association_evidence_records=tuple(
+                record
+                for record in evidence_records
+                if _evidence_kind(record) == "association"
+            ),
+            diagnostic_evidence_records=tuple(
+                record
+                for record in evidence_records
+                if _evidence_kind(record) == "diagnostic"
+            ),
+            recommended_evidence_ids=frozenset(
+                _recommended_evidence_ids(
+                    configuration,
+                    evidence,
+                )
+            ),
             visualizations=visualizations,
             visualization_metric_requirements={
                 artifact.visualization_id: tuple(
@@ -1510,6 +1739,9 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
             temperature=float(
                 current_app.config["OLLAMA_REPORT_TEMPERATURE"]
             ),
+            metrics_dir=Path(
+                current_app.config["MODEL_RUN_METRICS_DIR"]
+            ),
         )
         if draft.stories and not draft.ai_narrated_evidence_ids:
             raise ReportNarrationError(
@@ -1605,6 +1837,7 @@ def generated_report_history(dataset_id: str):  # type: ignore[no-untyped-def]
             else False
         ),
         current_package_sha256=current_package_sha256,
+        configuration=_configuration_path(dataset_id).is_file(),
         report_run_count=len(
             {report.report_id for report in active_reports}
         ),
@@ -1850,6 +2083,9 @@ def regenerate_report_story(
             temperature=float(
                 current_app.config["OLLAMA_REPORT_TEMPERATURE"]
             ),
+            metrics_dir=Path(
+                current_app.config["MODEL_RUN_METRICS_DIR"]
+            ),
         )
         regenerated, _path = _save_generated_report_with_charts(
             revised,
@@ -2053,13 +2289,14 @@ def generated_report_version_chart(
 # Manual visualization workflow
 
 
+@core.get("/workspaces/<dataset_id>/dashboard")
 @core.get("/visualizations/<dataset_id>")
 def saved_visualizations(dataset_id: str):  # type: ignore[no-untyped-def]
-    """List user-created KPI and supplementary visualizations."""
+    """Display the report dashboard and its saved visualizations."""
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         visualizations = list_visualizations(
             dataset_id=dataset_id,
             visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
@@ -2071,7 +2308,14 @@ def saved_visualizations(dataset_id: str):  # type: ignore[no-untyped-def]
     return render_template(
         "visualizations.html",
         dataset_id=dataset_id,
+        configuration=configuration,
         visualizations=visualizations,
+        evidence_ready=(
+            Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+        ).is_file(),
+        report_configuration_ready=_report_configuration_path(
+            dataset_id
+        ).is_file(),
     )
 
 
@@ -2081,12 +2325,15 @@ def visualization_builder(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
     except BusinessConfigurationError as error:
         abort(422, description=str(error))
     state = _load_view_state("visualization_builder", dataset_id=dataset_id)
     state_form = _form_from_state(state.get("form_data"))
-    form_data = state_form or _default_visualization_form(profile)
+    form_data = state_form or _default_visualization_form(
+        profile,
+        configuration=configuration,
+    )
     edit_id = request.args.get("edit", "")
     if state_form is None and edit_id:
         try:
@@ -2131,7 +2378,7 @@ def preview_visualization(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         values = _visualization_request_values(request.form)
         spec = parse_visualization_spec(values)
         if spec.replaces_visualization_id is not None:
@@ -2148,6 +2395,7 @@ def preview_visualization(dataset_id: str):  # type: ignore[no-untyped-def]
             configuration=configuration,
             spec=spec,
             chart_dir=Path(current_app.config["CHART_DIR"]),
+            dataset_id=dataset_id,
         )
         token = save_preview(
             artifact,
@@ -2182,7 +2430,7 @@ def visualization_preview(dataset_id: str, token: str):  # type: ignore[no-untyp
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         artifact = load_preview(
             token,
             dataset_id=dataset_id,
@@ -2196,6 +2444,7 @@ def visualization_preview(dataset_id: str, token: str):  # type: ignore[no-untyp
         artifact,
         preview_token=token,
         artifact_json=json.dumps(artifact.to_dict(), indent=2, sort_keys=True),
+        configuration=configuration,
     )
 
 
@@ -2207,7 +2456,7 @@ def visualization_preview_chart(
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         artifact = load_preview(
             token,
             dataset_id=dataset_id,
@@ -2227,7 +2476,7 @@ def confirm_visualization(dataset_id: str, token: str):  # type: ignore[no-untyp
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         artifact = load_preview(
             token,
             dataset_id=dataset_id,
@@ -2278,7 +2527,7 @@ def saved_visualization(
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         artifact = load_visualization(
             visualization_id,
             dataset_id=dataset_id,
@@ -2291,6 +2540,7 @@ def saved_visualization(
     return _render_visualization(
         artifact,
         artifact_json=json.dumps(artifact.to_dict(), indent=2, sort_keys=True),
+        configuration=configuration,
     )
 
 
@@ -2302,7 +2552,7 @@ def saved_visualization_chart(
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         artifact = load_visualization(
             visualization_id,
             dataset_id=dataset_id,
@@ -2324,7 +2574,7 @@ def regenerate_visualization(
 
     profile = _load_profile(dataset_id)
     try:
-        configuration = _require_configuration(dataset_id, profile)
+        configuration = _load_existing_configuration(dataset_id, profile)
         previous = load_visualization(
             visualization_id,
             dataset_id=dataset_id,
@@ -2343,6 +2593,7 @@ def regenerate_visualization(
             spec=spec,
             chart_dir=Path(current_app.config["CHART_DIR"]),
             assistant_metadata=previous.assistant,
+            dataset_id=dataset_id,
         )
         try:
             saved, _path = save_visualization(
@@ -2458,7 +2709,11 @@ def deterministic_insights(dataset_id: str):  # type: ignore[no-untyped-def]
 def saved_insights(dataset_id: str):  # type: ignore[no-untyped-def]
     """Display retained deterministic evidence from a stable GET URL."""
 
-    _load_profile(dataset_id)
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _require_configuration(dataset_id, profile)
+    except BusinessConfigurationError as error:
+        abort(422, description=str(error))
     report_path = Path(current_app.config["INSIGHT_DIR"]) / f"{dataset_id}.json"
     if not report_path.is_file():
         abort(404)
@@ -2485,6 +2740,9 @@ def saved_insights(dataset_id: str):  # type: ignore[no-untyped-def]
             if evidence is not None
             else None
         ),
+        diagnostic_evidence_types=_DIAGNOSTIC_EVIDENCE_TYPES,
+        association_evidence_types=_ASSOCIATION_EVIDENCE_TYPES,
+        configuration=configuration,
     )
 
 
@@ -2779,6 +3037,9 @@ def _render_profile(
                 if configuration is not None
                 else profile.kpi_candidates
             ),
+            source_aggregation_options=SOURCE_AGGREGATIONS,
+            display_format_options=DISPLAY_FORMATS,
+            target_scope_options=TARGET_SCOPES,
         ),
         status_code,
     )
@@ -2855,6 +3116,7 @@ def _render_derived_editor(
             form_data=form_data,
             dataset_context=dataset_context,
             configuration=configuration,
+            target_scope_options=TARGET_SCOPES,
         ),
         status_code,
     )
@@ -2871,6 +3133,16 @@ def _render_saved_configuration(
             "configuration.html",
             configuration=configuration,
             configuration_error=configuration_error,
+            source_aggregation_options=SOURCE_AGGREGATIONS,
+            display_format_options=DISPLAY_FORMATS,
+            target_scope_options=TARGET_SCOPES,
+            evidence_ready=(
+                Path(current_app.config["EVIDENCE_DIR"])
+                / f"{configuration.dataset_id}.json"
+            ).is_file(),
+            report_configuration_ready=_report_configuration_path(
+                configuration.dataset_id
+            ).is_file(),
             configuration_json=json.dumps(
                 configuration.to_dict(), indent=2, sort_keys=True
             ),
@@ -2908,11 +3180,15 @@ def _visualization_request_values(
     }
 
 
-def _default_visualization_form(profile: DatasetProfile) -> MultiDict[str, str]:
+def _default_visualization_form(
+    profile: DatasetProfile,
+    *,
+    configuration: BusinessConfiguration | None,
+) -> MultiDict[str, str]:
+    """Build a valid, useful starting point for the guided chart builder."""
+
     values = MultiDict[str, str]()
-    values["title"] = "Manual dataset visualization"
     values["purpose"] = ""
-    values["chart_type"] = "category_bar"
     values["aggregation"] = "configured"
     values["date_granularity"] = "month"
     values["filter_mode"] = "include"
@@ -2922,8 +3198,45 @@ def _default_visualization_form(profile: DatasetProfile) -> MultiDict[str, str]:
     values["scale"] = "linear"
     values["bin_count"] = "10"
     values["include_in_report"] = "yes"
+
+    measure_label = "Record count"
+    measure_selector = "count:records"
+    if configuration is not None:
+        primary = configuration.primary_metric
+        measure_label = primary.name
+        measure_selector = f"metric:{primary.metric_id}"
+    else:
+        numeric_column = next(
+            (
+                column.name
+                for column in profile.columns
+                if column.inferred_type.value == "numeric"
+                and not column.is_constant
+                and not column.is_empty
+            ),
+            None,
+        )
+        if numeric_column is not None:
+            measure_label = numeric_column
+            measure_selector = f"column:{numeric_column}"
+    values.setlist("measure_selectors", [measure_selector])
+
     if profile.category_candidates:
-        values["x_column"] = profile.category_candidates[0]
+        category = profile.category_candidates[0]
+        values["chart_type"] = "category_bar"
+        values["title"] = f"{measure_label} by {category}"
+        values["x_column"] = category
+    elif profile.date_candidates:
+        date_column = profile.date_candidates[0]
+        values["chart_type"] = "time_line"
+        values["title"] = f"{measure_label} over time"
+        values["x_column"] = date_column
+    elif measure_selector.startswith(("metric:", "column:")):
+        values["chart_type"] = "histogram"
+        values["title"] = f"{measure_label} distribution"
+    else:
+        values["chart_type"] = "category_bar"
+        values["title"] = "Record count"
     return values
 
 
@@ -2949,20 +3262,20 @@ def _build_dataset_context(
     view = _load_dataset_view_for_id(dataset_id)
     visualizations: tuple[VisualizationArtifact, ...] = ()
     evidence = None
+    try:
+        visualizations = list_visualizations(
+            dataset_id=dataset_id,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+    except VisualizationError as error:
+        current_app.logger.info(
+            "Saved visualizations excluded from dataset context: id=%s reason=%s",
+            dataset_id,
+            error,
+        )
     if configuration is not None:
-        try:
-            visualizations = list_visualizations(
-                dataset_id=dataset_id,
-                visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
-                profile=profile,
-                configuration=configuration,
-            )
-        except VisualizationError as error:
-            current_app.logger.info(
-                "Saved visualizations excluded from dataset context: id=%s reason=%s",
-                dataset_id,
-                error,
-            )
         evidence_path = (
             Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
         )
@@ -3283,6 +3596,62 @@ def _sorted_evidence_records(
     return tuple(sorted(records, key=sort_key))
 
 
+def _evidence_kind(record: dict[str, object]) -> str:
+    insight_type = record.get("insight_type")
+    if insight_type in _DIAGNOSTIC_EVIDENCE_TYPES:
+        return "diagnostic"
+    if insight_type in _ASSOCIATION_EVIDENCE_TYPES:
+        return "association"
+    return "finding"
+
+
+def _recommended_evidence_ids(
+    configuration: BusinessConfiguration,
+    evidence_payload: dict[str, object] | None,
+) -> tuple[str, ...]:
+    """Choose a bounded management-first default while preserving all choices."""
+
+    eligible = [
+        record
+        for record in _sorted_evidence_records(evidence_payload)
+        if _evidence_kind(record) != "diagnostic"
+        and isinstance(record.get("id"), str)
+    ]
+    selected: list[dict[str, object]] = []
+    selected_ids: set[str] = set()
+    correlation_count = 0
+
+    def add(record: dict[str, object]) -> None:
+        nonlocal correlation_count
+        record_id = str(record["id"])
+        if record_id in selected_ids or len(selected) >= _MAX_DEFAULT_EVIDENCE:
+            return
+        if _evidence_kind(record) == "association":
+            if correlation_count >= _MAX_DEFAULT_ASSOCIATIONS:
+                return
+            correlation_count += 1
+        selected.append(record)
+        selected_ids.add(record_id)
+
+    # Give every configured KPI one factual anchor before filling remaining
+    # slots by management relevance. metric_snapshot normally supplies it.
+    for metric in configuration.metrics:
+        candidate = next(
+            (
+                record
+                for record in eligible
+                if record.get("metric_id") == metric.metric_id
+                and _evidence_kind(record) == "finding"
+            ),
+            None,
+        )
+        if candidate is not None:
+            add(candidate)
+    for record in eligible:
+        add(record)
+    return tuple(str(record["id"]) for record in selected)
+
+
 def _default_report_form(
     configuration: BusinessConfiguration,
     *,
@@ -3304,11 +3673,12 @@ def _default_report_form(
     )
     values.setlist(
         "selected_evidence_ids",
-        [
-            str(record["id"])
-            for record in _sorted_evidence_records(evidence_payload)
-            if isinstance(record.get("id"), str)
-        ],
+        list(
+            _recommended_evidence_ids(
+                configuration,
+                evidence_payload,
+            )
+        ),
     )
     values.setlist(
         "selected_visualization_ids",
@@ -3364,12 +3734,14 @@ def _render_visualization(
     *,
     artifact_json: str,
     preview_token: str | None = None,
+    configuration: BusinessConfiguration | None = None,
 ):  # type: ignore[no-untyped-def]
     return render_template(
         "visualization.html",
         artifact=artifact,
         artifact_json=artifact_json,
         preview_token=preview_token,
+        configuration=configuration,
     )
 
 

@@ -1,3 +1,27 @@
+{% macro evidence_option(record) -%}
+  <article>
+    <label>
+      <input type="checkbox" name="selected_evidence_ids"
+        value="{{ record.id }}"
+        data-report-evidence-metric="{{ record.metric_id }}"
+        data-report-evidence-recommended="{{ 'true' if record.id in recommended_evidence_ids else 'false' }}"
+        {% if record.id in form_data.getlist('selected_evidence_ids') %}checked{% endif %}>
+      #{{ record.ranking.rank }} · {{ record.insight_type }}
+      ·
+      {% if record.metric_id == "DATASET" %}
+        dataset-wide
+      {% else %}
+        {{ record.metric }}
+      {% endif %}
+      · {{ record.id }}
+    </label>
+    <p>{{ record.calculation_description }}</p>
+    <p>
+      {{ record.record_count }} records
+      {% if record.chart %} · automatic chart available{% endif %}
+    </p>
+  </article>
+{%- endmacro %}
 <!doctype html>
 <html lang="en">
   <head>
@@ -8,6 +32,8 @@
   </head>
   <body>
     <main>
+      {% set current_section = "next" %}
+      {% include "_report_project_navigation.html" %}
       <h1>Configure the report</h1>
       <p>
         Milestone 5A selects trusted report content only. It does not call Ollama
@@ -91,10 +117,10 @@
         <fieldset>
           <legend>KPIs to include</legend>
           <p>
-            Select at least one. Selecting a KPI selects all of its evidence records;
-            deselecting it clears them. You may then remove individual evidence records
-            from a selected KPI. Dataset-wide evidence, such as missing-data warnings,
-            is independent of the KPI selection.
+            Select at least one. Selecting a KPI selects only its recommended
+            evidence; deselecting it clears all of that KPI's records. You may
+            add any optional association or diagnostic manually. Dataset-wide
+            evidence is independent of the KPI selection.
           </p>
           {% for metric in configuration.metrics %}
             <label>
@@ -116,43 +142,68 @@
         </fieldset>
 
         <fieldset>
-          <legend>Deterministic evidence records</legend>
-          {% if evidence_records %}
-            {% for record in evidence_records %}
-              <article>
-                <label>
-                  <input type="checkbox" name="selected_evidence_ids"
-                    value="{{ record.id }}"
-                    data-report-evidence-metric="{{ record.metric_id }}"
-                    {% if record.id in form_data.getlist('selected_evidence_ids') %}checked{% endif %}>
-                  #{{ record.ranking.rank }} · {{ record.insight_type }}
-                  ·
-                  {% if record.metric_id == "DATASET" %}
-                    dataset-wide
-                  {% else %}
-                    {{ record.metric }}
-                  {% endif %}
-                  · {{ record.id }}
-                </label>
-                <p>{{ record.calculation_description }}</p>
-                <p>
-                  {{ record.record_count }} records
-                  {% if record.chart %} · automatic chart available{% endif %}
-                </p>
-              </article>
+          <legend>Decision-relevant deterministic findings</legend>
+          <p>
+            The initial selection is limited to the strongest management
+            findings. You can still add any unselected record.
+          </p>
+          {% if finding_evidence_records %}
+            {% for record in finding_evidence_records %}
+              {{ evidence_option(record) }}
             {% endfor %}
+          {% elif not evidence_records %}
+            <p>
+              No deterministic evidence exists yet. A KPI-only report
+              selection can still be saved, or generate deterministic
+              insights first.
+            </p>
           {% else %}
             <p>
-              No deterministic evidence exists yet. A KPI-only report selection can
-              still be saved, or generate deterministic insights first.
-            </p>
-            <p>
-              <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
-                Return to the business configuration
-              </a>
+              No decision-relevant deterministic findings exist yet. A
+              KPI-only report selection can still be saved.
             </p>
           {% endif %}
         </fieldset>
+
+        {% if association_evidence_records %}
+          <details>
+            <summary>
+              Optional numeric associations
+              ({{ association_evidence_records|length }})
+            </summary>
+            <p>
+              At most two strong associations are selected automatically.
+              Associations are descriptive and do not establish causation.
+            </p>
+            {% for record in association_evidence_records %}
+              {{ evidence_option(record) }}
+            {% endfor %}
+          </details>
+        {% endif %}
+
+        {% if diagnostic_evidence_records %}
+          <details>
+            <summary>
+              Data-quality and analysis diagnostics
+              ({{ diagnostic_evidence_records|length }})
+            </summary>
+            <p>
+              Diagnostics remain reviewable but are not selected for a
+              management report by default.
+            </p>
+            {% for record in diagnostic_evidence_records %}
+              {{ evidence_option(record) }}
+            {% endfor %}
+          </details>
+        {% endif %}
+
+        {% if not evidence_records %}
+          <p>
+            <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
+              Return to the business configuration
+            </a>
+          </p>
+        {% endif %}
 
         <fieldset>
           <legend>Saved manual visualizations</legend>

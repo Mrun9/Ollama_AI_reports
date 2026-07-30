@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Conditional KPI | AI Insight Reporter</title>
+  </head>
+  <body>
+    <main>
+      {% set current_section = "kpi" %}
+      {% include "_report_project_navigation.html" %}
+      <h1>Build a conditional percentage KPI</h1>
+      <p>
+        Use this for rates and shares whose numerator depends on exact
+        categorical values. Python performs the filtering and division.
+      </p>
+
+      {% if configuration_error %}
+        <p role="alert"><strong>Conditional KPI rejected:</strong> {{ configuration_error }}</p>
+      {% endif %}
+
+      {% if configuration and configuration.metrics|length >= 5 %}
+        <p>The KPI registry already contains the maximum of five KPIs.</p>
+      {% elif condition_values %}
+        <form method="post"
+          action="{{ url_for('core.configure_conditional_kpi', dataset_id=dataset_id) }}">
+          <p>
+            <label for="conditional-name">KPI name</label>
+            <input id="conditional-name" name="name" required maxlength="120"
+              value="{{ form_data.get('name', 'Return/Cancellation Rate') }}">
+          </p>
+
+          <fieldset>
+            <legend>Calculation base</legend>
+            <label>
+              <input type="radio" name="calculation_base" value="record_count" required
+                {% if form_data.get('calculation_base', 'record_count') == 'record_count' %}checked{% endif %}>
+              Record count: matching rows ÷ all rows
+            </label>
+            <label>
+              <input type="radio" name="calculation_base" value="value_sum"
+                {% if form_data.get('calculation_base') == 'value_sum' %}checked{% endif %}>
+              Value share: matching value sum ÷ total value sum
+            </label>
+          </fieldset>
+
+          <p>
+            <label for="conditional-value-column">
+              Numeric value column (required only for value share)
+            </label>
+            <select id="conditional-value-column" name="value_column">
+              <option value="">Not used for record count</option>
+              {% for column in profile.kpi_candidates %}
+                <option value="{{ column }}"
+                  {% if form_data.get('value_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          <p>
+            <label for="condition-column">Condition column</label>
+            <select id="condition-column" name="condition_column" required>
+              <option value="">Select a condition column</option>
+              {% for column in condition_values %}
+                <option value="{{ column }}"
+                  {% if form_data.get('condition_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          <h2>Numerator values</h2>
+          <p>
+            Select values only under the condition column chosen above.
+            Other groups are ignored.
+          </p>
+          {% for column, values in condition_values.items() %}
+            <fieldset>
+              <legend>{{ column }}</legend>
+              {% for value in values %}
+                <label>
+                  <input type="checkbox"
+                    name="included_values::{{ column }}" value="{{ value }}"
+                    {% if value in form_data.getlist('included_values::' ~ column) %}checked{% endif %}>
+                  {{ value }}
+                </label>
+              {% endfor %}
+            </fieldset>
+          {% endfor %}
+
+          <label>
+            <input type="checkbox" name="row_grain_confirmed" value="yes"
+              {% if form_data.get('row_grain_confirmed') == 'yes' %}checked{% endif %}>
+            For record-count rates, I confirm that one row represents one
+            denominator event. Line-item data should not be treated as one row
+            per order.
+          </label>
+
+          <fieldset>
+            <legend>KPI direction</legend>
+            <label>
+              <input type="radio" name="kpi_direction" value="lower" required
+                {% if form_data.get('kpi_direction', 'lower') == 'lower' %}checked{% endif %}>
+              Lower is better
+            </label>
+            <label>
+              <input type="radio" name="kpi_direction" value="higher"
+                {% if form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>
+              Higher is better
+            </label>
+          </fieldset>
+
+          <p>
+            <label for="conditional-target">Optional percentage target</label>
+            <input id="conditional-target" name="target_or_benchmark"
+              type="number" min="0" max="100" step="any"
+              value="{{ form_data.get('target_or_benchmark', '') }}">
+          </p>
+          <p>
+            <label for="conditional-target-scope">Target applies to</label>
+            <select id="conditional-target-scope" name="target_scope" required>
+              {% for scope in target_scope_options %}
+                <option value="{{ scope }}"
+                  {% if form_data.get('target_scope', 'dataset') == scope %}selected{% endif %}>
+                  {% if scope == "period" %}Each period
+                  {% elif scope == "segment" %}Each segment
+                  {% else %}Complete dataset aggregate
+                  {% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          {% if configuration %}
+            <fieldset>
+              <legend>KPI role</legend>
+              <label>
+                <input type="radio" name="metric_role" value="secondary"
+                  {% if form_data.get('metric_role', 'secondary') == 'secondary' %}checked{% endif %}>
+                Add as secondary KPI
+              </label>
+              <label>
+                <input type="radio" name="metric_role" value="primary"
+                  {% if form_data.get('metric_role') == 'primary' %}checked{% endif %}>
+                Make this the primary KPI
+              </label>
+            </fieldset>
+          {% else %}
+            <input type="hidden" name="metric_role" value="primary">
+          {% endif %}
+
+          <h2>Shared analysis context</h2>
+          <p>
+            <label for="conditional-date">Date column</label>
+            <select id="conditional-date" name="date_column">
+              <option value="">No date column</option>
+              {% for column in profile.date_candidates %}
+                <option value="{{ column }}"
+                  {% if form_data.get('date_column') == column %}selected{% endif %}>
+                  {{ column }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          <fieldset>
+            <legend>Category or segment columns</legend>
+            {% for column in profile.category_candidates %}
+              <label>
+                <input type="checkbox" name="category_columns" value="{{ column }}"
+                  {% if column in form_data.getlist('category_columns') %}checked{% endif %}>
+                {{ column }}
+              </label>
+            {% endfor %}
+          </fieldset>
+
+          <p>
+            <label for="conditional-objective">Business objective</label>
+            <textarea id="conditional-objective" name="business_objective"
+              maxlength="2000" required>{{ form_data.get('business_objective', '') }}</textarea>
+          </p>
+
+          <button type="submit">Confirm conditional KPI</button>
+        </form>
+      {% else %}
+        <p>No bounded categorical or boolean fields are available for a condition.</p>
+      {% endif %}
+
+      <p>
+        <a href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}">
+          Return to dataset configuration
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

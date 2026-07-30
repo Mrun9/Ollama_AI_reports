@@ -22,6 +22,11 @@
     <main>
       <p><a href="{{ url_for('core.workspace_history') }}">All workspaces</a></p>
       <h1>{{ workspace.record.name }}</h1>
+      {% set dataset_id = workspace.record.dataset_id %}
+      {% set current_section = "source" %}
+      {% if workspace.record.has_source and not workspace.record.is_archived %}
+        {% include "_report_project_navigation.html" %}
+      {% endif %}
 
       {% if workspace.metadata_warning %}
         <p class="warning">{{ workspace.metadata_warning }}</p>
@@ -79,8 +84,8 @@
         </dl>
       </section>
 
-      <section class="panel">
-        <h2>Data source</h2>
+      <section class="panel" id="data-source">
+        <h2>1. Data source</h2>
         {% if workspace.record.has_source %}
           <dl>
             <dt>Display name</dt>
@@ -149,9 +154,69 @@
         {% endif %}
       </section>
 
+      {% if workspace.record.has_source %}
+        <section class="panel" id="kpi-evidence">
+          <h2>2. KPI configuration and deterministic evidence</h2>
+          {% if configuration_ready %}
+            <p>
+              {{ configuration.metrics|length if configuration else "Saved" }}
+              KPI configuration is available.
+              {{ "Deterministic evidence is ready." if evidence_ready else "Evidence has not been generated yet." }}
+            </p>
+            <p>
+              <a href="{{ url_for(
+                'core.saved_configuration',
+                dataset_id=workspace.record.dataset_id
+              ) }}">Open KPI configuration</a>
+            </p>
+            {% if evidence_ready %}
+              <p>
+                <a href="{{ url_for(
+                  'core.saved_insights',
+                  dataset_id=workspace.record.dataset_id
+                ) }}">Review deterministic evidence</a>
+                ·
+                <a href="{{ url_for(
+                  'core.report_configuration_form',
+                  dataset_id=workspace.record.dataset_id
+                ) }}">Configure and generate report</a>
+              </p>
+            {% endif %}
+          {% else %}
+            <p>No KPIs have been configured yet.</p>
+            <p>
+              <a href="{{ url_for(
+                'core.dataset_profile',
+                dataset_id=workspace.record.dataset_id
+              ) }}">Configure KPIs</a>
+            </p>
+          {% endif %}
+        </section>
+
+        <section class="panel" id="dashboard">
+          <h2>3. Dashboard and visualizations</h2>
+          <p>
+            {{ visualization_count }} saved visualization(s). Source-column
+            charts can be created before KPIs; configured KPIs appear
+            automatically when available.
+          </p>
+          <p>
+            <a href="{{ url_for(
+              'core.saved_visualizations',
+              dataset_id=workspace.record.dataset_id
+            ) }}">Open dashboard</a>
+            ·
+            <a href="{{ url_for(
+              'core.visualization_builder',
+              dataset_id=workspace.record.dataset_id
+            ) }}">Build a visualization</a>
+          </p>
+        </section>
+      {% endif %}
+
       {% if not workspace.record.is_archived %}
-        <section class="panel">
-          <h2>Next action</h2>
+        <section class="panel" id="next-actions">
+          <h2>4. Next actions</h2>
           {% if not workspace.record.has_source %}
             <p>Add or restore a source before building a report.</p>
           {% elif not workspace.report_run_count %}
@@ -168,8 +233,8 @@
         </section>
       {% endif %}
 
-      <section class="panel">
-        <h2>Reports</h2>
+      <section class="panel" id="report-revisions">
+        <h2>5. Report revisions</h2>
         {% if reports %}
           {% for report in reports %}
             <article>
@@ -243,7 +308,15 @@
             ) }}">Open complete report history</a>
           </p>
         {% else %}
-          <p>No active generated reports.</p>
+          <p>No generated report revisions yet.</p>
+          {% if evidence_ready %}
+            <p>
+              <a href="{{ url_for(
+                'core.report_configuration_form',
+                dataset_id=workspace.record.dataset_id
+              ) }}">Configure and generate the first report</a>
+            </p>
+          {% endif %}
         {% endif %}
 
         {% if archived_reports %}
@@ -274,7 +347,7 @@
 
       {% if not workspace.record.is_archived %}
         <section class="panel">
-          <h2>Delete workspace</h2>
+          <h2>Delete workspace and all</h2>
           <p>
             This is recoverable: all sources, configurations, and immutable
             reports remain retained until the workspace is restored.
@@ -284,7 +357,7 @@
             dataset_id=workspace.record.dataset_id
           ) }}">
             <button class="danger" type="submit">
-              Delete workspace recoverably
+              Delete workspace and all recoverably
             </button>
           </form>
         </section>

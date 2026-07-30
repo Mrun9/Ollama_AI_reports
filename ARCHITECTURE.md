@@ -30,8 +30,8 @@ open workspace index
   -> detect and validate CSV / JSON / XLSX
   -> attach source metadata to the existing workspace identity
   -> build a typed dataset profile
-  -> configure source or derived KPIs
-  -> calculate deterministic insights
+  -> configure source, derived, or exact-category conditional KPIs
+  -> calculate deterministic insights and period/cohort comparisons
   -> turn insights into ranked evidence and charts
   -> optionally create manual visualizations
   -> select report content
@@ -44,6 +44,9 @@ open workspace index
 
 The browser never passes raw rows directly to Ollama. The report package
 contains bounded evidence descriptors and Python-calculated fact references.
+Configured category values define 6C cohorts; Python recalculates each KPI
+inside eligible period/cohort groups, and only verified names and facts reach
+narration.
 
 ## Module map
 
@@ -53,6 +56,7 @@ contains bounded evidence descriptors and Python-calculated fact references.
 | --- | --- |
 | `app.py` | Flask factory, runtime directories, logging, security headers |
 | `config.py` | Environment-backed limits and Ollama settings |
+| `model_run_metrics.py` | Privacy-safe, append-only Ollama latency/token/outcome measurements |
 | `routes.py` | HTTP request orchestration and template rendering |
 | `navigation_state.py` | Short-lived POST/Redirect/GET UI state |
 | `workspace_history.py` | Durable workspace identity, progress reconstruction, and local history |
@@ -69,7 +73,8 @@ redirect.
 | `dataset_ingestion.py` | Safely retains an uploaded CSV, JSON, or XLSX file |
 | `dataset_view.py` | Normalizes supported files behind one row/column interface |
 | `dataset_profile.py` | Infers types and calculates column statistics |
-| `business_config.py` | Stores the reviewed KPI registry and shared dimensions |
+| `business_config.py` | Stores the reviewed KPI registry, per-source aggregation/format, explicit target scope, and shared dimensions |
+| `conditional_metrics.py` | Validates and evaluates exact-category record rates and value shares |
 | `formula_engine.py` | Parses and evaluates the restricted formula language |
 | `derived_metrics.py` | Validates and previews derived KPI definitions |
 | `configuration_suggestions.py` | Optional Ollama suggestions for source KPIs |
@@ -79,9 +84,9 @@ redirect.
 
 | Module | Responsibility |
 | --- | --- |
-| `insight_engine.py` | Python-only period changes, segment target performance, anomalies, correlations, and benchmarks |
-| `evidence_layer.py` | Prioritizes management-relevant insights and converts them into evidence records and charts |
-| `visualization_builder.py` | Validates, calculates, renders, and saves manual charts |
+| `insight_engine.py` | KPI capability planning, whole-dataset snapshots, consolidated diagnostics, and Python-only row/period/segment/dataset target, cohort, share, anomaly, correlation, and benchmark findings |
+| `evidence_layer.py` | Prioritizes management findings, expands actionable diagnostics, and creates traceable records and deterministic charts |
+| `visualization_builder.py` | Validates, calculates, renders, and saves dashboard charts before or after KPI configuration |
 | `manual_visualization_evidence.py` | Produces deterministic evidence for manual charts |
 | `dataset_context.py` | Builds safe field tokens shown beside configuration forms |
 
@@ -116,6 +121,7 @@ local backups when recovery matters.
 | `instance/generated_reports/` | Immutable versioned report JSON |
 | `instance/generated_report_assets/` | Version-specific chart snapshots used by historical HTML/PDF |
 | `instance/navigation_state/` | Short-lived form and validation state |
+| `instance/model_run_metrics/model_runs.csv` | One row per Ollama request, created on the first request |
 | `instance/trash/sources/<dataset_id>/` | Recoverably deleted source and XLSX selection sidecar |
 
 In the workspace-first flow, the dataset ID is allocated when the empty
@@ -165,17 +171,32 @@ zero accepted AI stories is not saved. Executive-summary points are separately
 validated against their cited stories and facts; invalid summaries are retried
 before a clearly labelled story-based fallback is used.
 
+Every actual Ollama request crosses `model_run_metrics.py`. The measurement
+ends when `client.chat()` returns, while the CSV row is finalized after normal
+Python validation so it can distinguish accepted output from returned but
+rejected output. Report-story and summary requests from the same browser
+operation share a workflow ID. Only counts, durations, settings, IDs, and
+outcomes are retained; model inputs and outputs are not copied into telemetry.
+
 ## Where to make common changes
 
 - Add a supported upload format: `dataset_view.py`, then
   `dataset_ingestion.py`.
 - Add a deterministic analysis: `insight_engine.py`, then map its evidence and
   chart behavior in `evidence_layer.py`.
+- Change when an analysis applies: `_metric_capabilities` in
+  `insight_engine.py`, then update the report-default curation helpers in
+  `routes.py`.
+- Change conditional-rate or value-share semantics:
+  `conditional_metrics.py`, then `business_config.py` and
+  `insight_engine.py`.
 - Add a manual chart type: `visualization_builder.py`.
 - Change the report-selection form: `report_configuration.py`, its templates,
   and the corresponding route.
 - Change what Ollama receives: `report_generation_package.py` or the bounded
   descriptor construction in `report_narration.py`.
+- Change a prompt materially: update its prompt-version constant and preserve
+  the `model_run_metrics.py` measurement boundary.
 - Change PDF layout: `report_pdf.py`.
 - Change workspace stages or history metadata: `workspace_history.py`.
 - Change workspace/source/report lifecycle routes: the workspace section of

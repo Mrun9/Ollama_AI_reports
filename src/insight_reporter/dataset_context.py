@@ -101,12 +101,9 @@ def build_dataset_context(
             formula = (
                 metric.derived_metric.formula_label
                 if metric.derived_metric is not None
+                else metric.conditional_metric.formula_label
+                if metric.conditional_metric is not None
                 else None
-            )
-            aggregation = (
-                metric.derived_metric.aggregation
-                if metric.derived_metric is not None
-                else "sum"
             )
             metrics.append(
                 ContextItem(
@@ -125,7 +122,7 @@ def build_dataset_context(
                             if metric.derived_metric is not None
                             else "row"
                         ),
-                        "aggregation": aggregation,
+                        "aggregation": metric.aggregation,
                         "display_format": metric.display_format,
                         "direction": metric.kpi_direction,
                     },

@@ -17,6 +17,7 @@ from typing import Any, Protocol
 
 from ollama import Client
 
+from insight_reporter.model_run_metrics import measure_model_run
 from insight_reporter.report_configuration import artifact_sha256
 from insight_reporter.report_generation_package import ReportGenerationPackage
 
@@ -77,6 +78,8 @@ _OLLAMA_CONTEXT_TOKENS = 4_096
 _OLLAMA_OUTPUT_TOKENS = 900
 _OLLAMA_SUMMARY_OUTPUT_TOKENS = 1_100
 _OMITTED_MODEL_VALUE = object()
+_STORY_PROMPT_VERSION = "report_story.v1"
+_SUMMARY_PROMPT_VERSION = "executive_summary.v1"
 
 _SYSTEM_PROMPT = """You write an understandable, decision-useful business-report story from a
 compact story pack containing related evidence.
@@ -365,6 +368,7 @@ def generate_narrated_report(
     timeout_seconds: int,
     temperature: float = 0.35,
     client: _ChatClient | None = None,
+    metrics_dir: Path | None = None,
 ) -> GeneratedReport:
     """Synthesize bounded evidence story packs without delegating facts."""
 
@@ -379,6 +383,7 @@ def generate_narrated_report(
     executive_summary: tuple[ExecutiveSummaryPoint, ...] = ()
     summary_fell_back = False
     if story_packs:
+        workflow_run_id = secrets.token_hex(16)
         if client is None:
             client = Client(host=host, timeout=float(timeout_seconds))
         for display_order, story_pack in enumerate(story_packs, start=1):
@@ -388,6 +393,10 @@ def generate_narrated_report(
                 model=model,
                 client=client,
                 temperature=temperature,
+                metrics_dir=metrics_dir,
+                task_type="report_story",
+                report_id="",
+                workflow_run_id=workflow_run_id,
             )
             if draft is None:
                 rejected_story_ids.append(story_pack.story_id)
@@ -415,6 +424,8 @@ def generate_narrated_report(
             model=model,
             client=client,
             temperature=temperature,
+            metrics_dir=metrics_dir,
+            workflow_run_id=workflow_run_id,
         ) or _deterministic_executive_summary(tuple(stories))
         summary_fell_back = any(
             point.narration_source != "ollama"
@@ -566,6 +577,7 @@ def regenerate_generated_story(
     timeout_seconds: int,
     temperature: float = 0.35,
     client: _ChatClient | None = None,
+    metrics_dir: Path | None = None,
 ) -> GeneratedReport:
     """Regenerate one stable story while preserving the rest of the report."""
 
@@ -600,12 +612,17 @@ def regenerate_generated_story(
         )
     if client is None:
         client = Client(host=host, timeout=float(timeout_seconds))
+    workflow_run_id = secrets.token_hex(16)
     draft = _generate_story(
         story_pack,
         package=package,
         model=model,
         client=client,
         temperature=temperature,
+        metrics_dir=metrics_dir,
+        task_type="report_story_regeneration",
+        report_id=report.report_id,
+        workflow_run_id=workflow_run_id,
     )
     replacement_story = (
         _narrative_story(
@@ -1136,6 +1153,10 @@ def _generate_story(
     model: str,
     client: _ChatClient,
     temperature: float,
+    metrics_dir: Path | None,
+    task_type: str,
+    report_id: str,
+    workflow_run_id: str,
 ) -> _StoryDraft | None:
     prompt_payload = {
         "report_context": {
@@ -1188,35 +1209,45 @@ def _generate_story(
         },
     ]
     for attempt in range(_MAX_STORY_ATTEMPTS):
+        options = {
+            "temperature": (
+                temperature if attempt == 0 else 0.1 if attempt == 1 else 0
+            ),
+            "num_ctx": _OLLAMA_CONTEXT_TOKENS,
+            "num_predict": _OLLAMA_OUTPUT_TOKENS,
+        }
         try:
-            response = client.chat(
+            with measure_model_run(
+                metrics_dir=metrics_dir,
+                task_type=task_type,
+                prompt_version=_STORY_PROMPT_VERSION,
                 model=model,
                 messages=messages,
-                format=_story_response_schema(
-                    story_pack,
-                    safe_mode=attempt >= 2,
-                ),
-                stream=False,
-                think=False,
-                options={
-                    "temperature": (
-                        temperature if attempt == 0 else 0.1 if attempt == 1 else 0
+                options=options,
+                dataset_id=package.dataset_id,
+                report_id=report_id,
+                story_id=story_pack.story_id,
+                attempt=attempt + 1,
+                workflow_run_id=workflow_run_id,
+            ) as measurement:
+                response = client.chat(
+                    model=model,
+                    messages=messages,
+                    format=_story_response_schema(
+                        story_pack,
+                        safe_mode=attempt >= 2,
                     ),
-                    "num_ctx": _OLLAMA_CONTEXT_TOKENS,
-                    "num_predict": _OLLAMA_OUTPUT_TOKENS,
-                },
-            )
-        except Exception as error:
-            raise ReportNarrationError(
-                "Local report narration is unavailable. Start Ollama and ensure "
-                f"{model} is installed. The existing generated report, if any, "
-                "was not changed."
-            ) from error
-        try:
-            return _parse_story_response(
-                _response_content(response),
-                story_pack,
-            )
+                    stream=False,
+                    think=False,
+                    options=options,
+                )
+                measurement.capture_response(response)
+                draft = _parse_story_response(
+                    _response_content(response),
+                    story_pack,
+                )
+                measurement.mark_validated()
+                return draft
         except ReportNarrationError as error:
             if attempt + 1 == _MAX_STORY_ATTEMPTS:
                 return None
@@ -1246,6 +1277,12 @@ def _generate_story(
                     ),
                 },
             ]
+        except Exception as error:
+            raise ReportNarrationError(
+                "Local report narration is unavailable. Start Ollama and ensure "
+                f"{model} is installed. The existing generated report, if any, "
+                "was not changed."
+            ) from error
     return None
 
 
@@ -1378,6 +1415,8 @@ def _generate_executive_summary(
     model: str,
     client: _ChatClient,
     temperature: float,
+    metrics_dir: Path | None,
+    workflow_run_id: str,
 ) -> tuple[ExecutiveSummaryPoint, ...] | None:
     if not stories:
         return ()
@@ -1450,34 +1489,49 @@ def _generate_executive_summary(
         },
     ]
     for attempt in range(_MAX_SUMMARY_ATTEMPTS):
+        options = {
+            "temperature": (
+                temperature
+                if attempt == 0
+                else 0.1
+                if attempt == 1
+                else 0
+            ),
+            "num_ctx": _OLLAMA_CONTEXT_TOKENS,
+            "num_predict": _OLLAMA_SUMMARY_OUTPUT_TOKENS,
+        }
         try:
-            response = client.chat(
+            with measure_model_run(
+                metrics_dir=metrics_dir,
+                task_type="executive_summary",
+                prompt_version=_SUMMARY_PROMPT_VERSION,
                 model=model,
                 messages=messages,
-                format=_summary_response_schema(
-                    stories,
-                    story_packs=story_packs,
-                    safe_mode=attempt + 1 == _MAX_SUMMARY_ATTEMPTS,
-                ),
-                stream=False,
-                think=False,
-                options={
-                    "temperature": (
-                        temperature
-                        if attempt == 0
-                        else 0.1
-                        if attempt == 1
-                        else 0
+                options=options,
+                dataset_id=package.dataset_id,
+                attempt=attempt + 1,
+                workflow_run_id=workflow_run_id,
+            ) as measurement:
+                response = client.chat(
+                    model=model,
+                    messages=messages,
+                    format=_summary_response_schema(
+                        stories,
+                        story_packs=story_packs,
+                        safe_mode=attempt + 1 == _MAX_SUMMARY_ATTEMPTS,
                     ),
-                    "num_ctx": _OLLAMA_CONTEXT_TOKENS,
-                    "num_predict": _OLLAMA_SUMMARY_OUTPUT_TOKENS,
-                },
-            )
-            return _parse_summary_response(
-                _response_content(response),
-                stories=stories,
-                story_packs=story_packs,
-            )
+                    stream=False,
+                    think=False,
+                    options=options,
+                )
+                measurement.capture_response(response)
+                summary = _parse_summary_response(
+                    _response_content(response),
+                    stories=stories,
+                    story_packs=story_packs,
+                )
+                measurement.mark_validated()
+                return summary
         except Exception as error:
             if attempt + 1 == _MAX_SUMMARY_ATTEMPTS:
                 return None
@@ -2308,15 +2362,28 @@ def _flatten_numeric_facts(
 def _fact_priority(fact: tuple[str, str, object]) -> tuple[int, str]:
     path = fact[0].casefold()
     preferred = (
+        "worst_performing_change.percentage_change",
+        "worst_performing_change.absolute_change",
+        "worst_performing_change.current_value",
+        "best_performing_change.percentage_change",
+        "best_performing_change.absolute_change",
         "percentage_change",
         "worst_segment.breach_percentage",
         "worst_segment.average_gap_to_target",
+        "worst_segment.gap_to_target",
         "worst_segment.average_value",
+        "worst_segment.value",
+        "current_gap_to_target",
+        "missed_period_count",
+        "missed_segment_count",
         "target",
         "coefficient",
+        "top_segment.share_percentage",
         "top_segment.value",
         "highest.value",
         "current_value",
+        "gap_to_target",
+        "baseline_value",
         "absolute_change",
         "breach_percentage",
         "breach_count",
@@ -2559,9 +2626,18 @@ def _section_for(insight_type: str) -> str:
         "analysis_skipped",
     }:
         return "data_quality_and_limitations"
-    if insight_type in {"period_change", "trend"}:
+    if insight_type in {
+        "period_change",
+        "period_baseline_comparison",
+        "trend",
+    }:
         return "trends_and_changes"
-    if insight_type in {"segment_ranking", "segment_contribution"}:
+    if insight_type in {
+        "segment_ranking",
+        "segment_share",
+        "cohort_period_comparison",
+        "segment_contribution",
+    }:
         return "segment_analysis"
     if insight_type == "iqr_anomaly_detection":
         return "anomalies"
@@ -2569,7 +2645,10 @@ def _section_for(insight_type: str) -> str:
         return "associations"
     if insight_type in {
         "benchmark_breach",
+        "metric_benchmark_comparison",
         "segment_benchmark_performance",
+        "period_target_comparison",
+        "segment_target_comparison",
     }:
         return "benchmarks"
     return "key_findings"

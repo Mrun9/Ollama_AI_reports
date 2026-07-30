@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from insight_reporter.business_config import BusinessConfiguration
+from insight_reporter.conditional_metrics import evaluate_conditional_metric
 from insight_reporter.dataset_profile import ColumnType, DatasetProfile
 from insight_reporter.dataset_view import (
     CsvDatasetView,
@@ -20,12 +21,14 @@ from insight_reporter.derived_metrics import (
     aggregate_derived_metric,
     evaluate_derived_metric,
 )
+from insight_reporter.formula_engine import aggregate_row_values
 
 _MISSING_MARKERS = frozenset({"", "na", "n/a", "null", "none", "nan"})
 _MIN_GENERAL_RECORDS = 5
 _MIN_PERIOD_RECORDS = 2
 _MIN_TREND_PERIODS = 3
 _MIN_SEGMENT_RECORDS = 2
+_MAX_BASELINE_PERIODS = 4
 _MIN_ANOMALY_RECORDS = 4
 _MIN_CORRELATION_PAIRS = 3
 _MIN_BENCHMARK_RECORDS = 3
@@ -114,10 +117,19 @@ class _TemporalContext:
     groups: dict[str, tuple[tuple[_Row, float], ...]]
 
 
+@dataclass(frozen=True)
+class _MetricCapabilities:
+    row_level_analysis: bool
+    additive: bool
+    applicable_analyses: tuple[str, ...]
+    not_applicable_analyses: tuple[dict[str, str], ...]
+
+
 class _Collector:
     def __init__(self) -> None:
         self.insights: list[Insight] = []
         self.metric_id = "DATASET"
+        self._insufficient_issues: list[dict[str, object]] = []
 
     def add(
         self,
@@ -144,6 +156,55 @@ class _Collector:
                 confidence=confidence,
                 limitations=limitations,
             )
+        )
+
+    def add_insufficient_issue(
+        self,
+        *,
+        analysis: str,
+        available: int,
+        required: int,
+        unit: str,
+        recommendation: str,
+    ) -> None:
+        self._insufficient_issues.append(
+            {
+                "analysis": analysis,
+                "status": "insufficient_data",
+                "available": available,
+                "required": required,
+                "unit": unit,
+                "recommendation": recommendation,
+            }
+        )
+
+    def flush_insufficient_issues(
+        self,
+        *,
+        metric: str,
+        source_columns: tuple[str, ...],
+    ) -> None:
+        if not self._insufficient_issues:
+            return
+        issues = list(self._insufficient_issues)
+        self._insufficient_issues.clear()
+        self.add(
+            insight_type="insufficient_data_warning",
+            metric=metric,
+            observation={
+                "reason": "analysis_requirements_not_met",
+                "issue_count": len(issues),
+                "issues": issues,
+            },
+            source_columns=source_columns,
+            record_count=max(
+                (int(issue["available"]) for issue in issues),
+                default=0,
+            ),
+            limitations=(
+                "Unavailable analyses are consolidated into one diagnostic "
+                "record and are not management findings.",
+            ),
         )
 
 
@@ -175,6 +236,7 @@ def generate_insights(
         source=view.sources[0],
         profile=profile,
         configuration=configuration,
+        rows=rows,
     )
 
     collector = _Collector()
@@ -182,21 +244,26 @@ def generate_insights(
     for metric in configuration.metrics:
         metric_configuration = configuration.for_metric(metric.metric_id)
         collector.metric_id = metric.metric_id
+        capabilities = _metric_capabilities(metric_configuration)
+        _add_metric_snapshot(
+            collector,
+            rows=rows,
+            configuration=metric_configuration,
+            capabilities=capabilities,
+        )
         if len(rows) < _MIN_GENERAL_RECORDS:
-            collector.add(
-                insight_type="insufficient_data_warning",
+            _add_insufficient_warning(
+                collector,
                 metric=metric_configuration.primary_kpi,
-                observation={
-                    "reason": "small_dataset",
-                    "available_records": len(rows),
-                    "recommended_minimum": _MIN_GENERAL_RECORDS,
-                },
-                source_columns=_metric_source_columns(metric_configuration),
-                record_count=len(rows),
-                confidence="high",
-                limitations=(
-                    "Dataset-level conclusions may be unstable with fewer than 5 rows.",
+                analysis="dataset_size",
+                available=len(rows),
+                required=_MIN_GENERAL_RECORDS,
+                unit="valid_records",
+                recommendation=(
+                    "Provide at least five source records before treating "
+                    "dataset-level patterns as stable."
                 ),
+                source_columns=_metric_source_columns(metric_configuration),
             )
 
         temporal = _prepare_temporal_context(
@@ -206,10 +273,26 @@ def generate_insights(
         )
         if temporal is not None:
             _add_period_change(collector, temporal, metric_configuration)
+            _add_period_baseline_comparison(
+                collector,
+                temporal,
+                metric_configuration,
+            )
             _add_trend(collector, temporal, metric_configuration)
+            _add_period_target_comparison(
+                collector,
+                temporal,
+                metric_configuration,
+            )
 
         for category_column in metric_configuration.category_columns:
             _add_segment_ranking(
+                collector,
+                rows=rows,
+                category_column=category_column,
+                configuration=metric_configuration,
+            )
+            _add_segment_share(
                 collector,
                 rows=rows,
                 category_column=category_column,
@@ -221,7 +304,19 @@ def generate_insights(
                 category_column=category_column,
                 configuration=metric_configuration,
             )
+            _add_segment_target_comparison(
+                collector,
+                rows=rows,
+                category_column=category_column,
+                configuration=metric_configuration,
+            )
             if temporal is not None:
+                _add_cohort_period_comparison(
+                    collector,
+                    temporal=temporal,
+                    category_column=category_column,
+                    configuration=metric_configuration,
+                )
                 _add_segment_contribution(
                     collector,
                     temporal=temporal,
@@ -229,17 +324,27 @@ def generate_insights(
                     configuration=metric_configuration,
                 )
 
-        _add_anomalies(
-            collector, rows=rows, configuration=metric_configuration
-        )
-        _add_correlations(
-            collector,
-            rows=rows,
-            profile=profile,
-            configuration=metric_configuration,
-        )
-        _add_benchmark_breaches(
-            collector, rows=rows, configuration=metric_configuration
+        if capabilities.row_level_analysis:
+            _add_anomalies(
+                collector, rows=rows, configuration=metric_configuration
+            )
+            _add_correlations(
+                collector,
+                rows=rows,
+                profile=profile,
+                configuration=metric_configuration,
+            )
+        if (
+            capabilities.row_level_analysis
+            and metric_configuration.metric_type != "conditional_rate"
+            and metric_configuration.target_scope == "row"
+        ):
+            _add_benchmark_breaches(
+                collector, rows=rows, configuration=metric_configuration
+            )
+        collector.flush_insufficient_issues(
+            metric=metric_configuration.primary_kpi,
+            source_columns=_metric_source_columns(metric_configuration),
         )
 
     return InsightReport(
@@ -279,6 +384,7 @@ def _validate_inputs(
     source: SourceManifest,
     profile: DatasetProfile,
     configuration: BusinessConfiguration,
+    rows: tuple[_Row, ...],
 ) -> None:
     configured_source = configuration.sources[0]
     if (
@@ -317,6 +423,22 @@ def _validate_inputs(
                     raise InsightEngineError(
                         "Derived KPI source columns are not numeric."
                     )
+        elif metric_configuration.metric_type == "conditional_rate":
+            conditional = metric_configuration.conditional_metric
+            if conditional is None:
+                raise InsightEngineError(
+                    "Conditional KPI configuration has no definition."
+                )
+            available_values = {
+                row.values[conditional.condition_column].strip()
+                for row in rows
+            }
+            if not set(conditional.included_values).issubset(
+                available_values
+            ):
+                raise InsightEngineError(
+                    "Conditional KPI values no longer exist in the retained dataset."
+                )
         else:
             raise InsightEngineError("Configured KPI type is unsupported.")
         selected_columns.update(_metric_source_columns(metric_configuration))
@@ -327,21 +449,240 @@ def _validate_inputs(
 
 
 def _add_missing_data_insights(collector: _Collector, profile: DatasetProfile) -> None:
-    for column in profile.columns:
-        if column.missing_count == 0:
-            continue
-        collector.add(
-            insight_type="missing_data_warning",
-            metric=column.name,
-            observation={
-                "missing_count": column.missing_count,
-                "missing_percentage": _clean(column.missing_percentage),
-                "total_records": profile.row_count,
-            },
-            source_columns=(column.name,),
-            record_count=profile.row_count,
-            limitations=("Configured missing-value markers are treated as missing.",),
+    affected = [
+        {
+            "column": column.name,
+            "missing_count": column.missing_count,
+            "missing_percentage": _clean(column.missing_percentage),
+            "total_records": profile.row_count,
+        }
+        for column in profile.columns
+        if column.missing_count > 0
+    ]
+    if not affected:
+        return
+    collector.add(
+        insight_type="missing_data_warning",
+        metric="Dataset completeness",
+        observation={
+            "affected_column_count": len(affected),
+            "total_column_count": len(profile.columns),
+            "maximum_missing_percentage": max(
+                float(item["missing_percentage"])
+                for item in affected
+            ),
+            "columns": affected,
+        },
+        source_columns=tuple(str(item["column"]) for item in affected),
+        record_count=profile.row_count,
+        limitations=(
+            "Configured missing-value markers are treated as missing.",
+            "Column-level missingness is consolidated into one dataset diagnostic.",
+        ),
+    )
+
+
+def _metric_capabilities(
+    configuration: BusinessConfiguration,
+) -> _MetricCapabilities:
+    derived = configuration.derived_metric
+    row_level = (
+        configuration.metric_type == "source"
+        or (
+            configuration.metric_type == "derived"
+            and derived is not None
+            and derived.calculation_level == "row"
         )
+    )
+    additive = _metric_aggregation(configuration) == "sum"
+    applicable = ["metric_snapshot"]
+    excluded: list[dict[str, str]] = []
+    if configuration.date_column is not None:
+        applicable.extend(
+            ("period_change", "period_baseline_comparison", "trend")
+        )
+    else:
+        excluded.append(
+            {
+                "analysis": "temporal_analyses",
+                "reason": "requires_confirmed_date_column",
+            }
+        )
+    if configuration.category_columns:
+        applicable.append("segment_ranking")
+        if configuration.date_column is not None:
+            applicable.append("cohort_period_comparison")
+    else:
+        excluded.append(
+            {
+                "analysis": "segment_analyses",
+                "reason": "requires_confirmed_category_column",
+            }
+        )
+    if row_level:
+        applicable.extend(
+            (
+                "iqr_anomaly_detection",
+                "numeric_correlation",
+            )
+        )
+    else:
+        excluded.extend(
+            (
+                {
+                    "analysis": "iqr_anomaly_detection",
+                    "reason": "requires_row_level_kpi_values",
+                },
+                {
+                    "analysis": "numeric_correlation",
+                    "reason": "requires_row_level_kpi_values",
+                },
+                {
+                    "analysis": "benchmark_breach",
+                    "reason": "requires_row_level_kpi_values",
+                },
+            )
+        )
+    if additive:
+        if configuration.category_columns:
+            applicable.append("segment_share")
+            if configuration.date_column is not None:
+                applicable.append("segment_contribution")
+    else:
+        excluded.extend(
+            (
+                {
+                    "analysis": "segment_share",
+                    "reason": "requires_nonnegative_additive_sum_values",
+                },
+                {
+                    "analysis": "segment_contribution",
+                    "reason": "requires_additive_sum_metric",
+                },
+            )
+        )
+    if configuration.target_or_benchmark is not None:
+        target_scope = configuration.target_scope
+        if target_scope == "dataset":
+            applicable.append("dataset_target_comparison")
+        elif target_scope == "period":
+            applicable.append("period_target_comparison")
+        elif target_scope == "segment":
+            applicable.append("segment_target_comparison")
+        elif row_level:
+            applicable.append("row_benchmark_breach")
+    return _MetricCapabilities(
+        row_level_analysis=row_level,
+        additive=additive,
+        applicable_analyses=tuple(dict.fromkeys(applicable)),
+        not_applicable_analyses=tuple(excluded),
+    )
+
+
+def _add_metric_snapshot(
+    collector: _Collector,
+    *,
+    rows: tuple[_Row, ...],
+    configuration: BusinessConfiguration,
+    capabilities: _MetricCapabilities,
+) -> None:
+    """Create one decision anchor and disclose the KPI's analysis coverage."""
+
+    entries = tuple(
+        (row, value)
+        for row in rows
+        if (value := _metric_group_value(row, configuration)) is not None
+    )
+    current_value = _aggregate_metric(entries, configuration)
+    if current_value is None:
+        _add_insufficient_warning(
+            collector,
+            metric=configuration.primary_kpi,
+            analysis="metric_snapshot",
+            available=len(entries),
+            required=1,
+            unit="valid_records",
+            recommendation=(
+                "Provide at least one record with every source value required "
+                "by this KPI definition."
+            ),
+            source_columns=_metric_source_columns(configuration),
+        )
+        return
+    observation: dict[str, object] = {
+        "current_value": _clean(current_value),
+        "aggregation": _metric_aggregation(configuration),
+        "display_format": configuration.primary_metric.display_format,
+        "valid_record_count": len(entries),
+        "excluded_record_count": len(rows) - len(entries),
+        "total_record_count": len(rows),
+        "applicable_analyses": list(capabilities.applicable_analyses),
+        "not_applicable_analyses": list(
+            capabilities.not_applicable_analyses
+        ),
+    }
+    limitations = [
+        _aggregation_limitation(configuration, "complete dataset"),
+        (
+            "This is a descriptive whole-dataset snapshot; period and segment "
+            "findings are calculated separately."
+        ),
+    ]
+    conditional = configuration.conditional_metric
+    target = configuration.target_or_benchmark
+    observation["target_scope"] = configuration.target_scope
+    if conditional is not None:
+        evaluation = evaluate_conditional_metric(
+            conditional,
+            tuple(row.values for row, _value in entries),
+        )
+        observation.update(
+            {
+                "numerator": evaluation.numerator,
+                "denominator": evaluation.denominator,
+                "numerator_record_count": (
+                    evaluation.numerator_record_count
+                ),
+                "denominator_record_count": (
+                    evaluation.denominator_record_count
+                ),
+            }
+        )
+    if target is not None:
+        observation["target"] = _clean(target)
+        observation["kpi_direction"] = configuration.kpi_direction
+        if configuration.target_scope == "dataset":
+            meets_target = _meets_target(
+                current_value,
+                target,
+                configuration.kpi_direction,
+            )
+            observation.update(
+                {
+                    "gap_to_target": _clean(current_value - target),
+                    "meets_target": meets_target,
+                    "favorable": meets_target,
+                }
+            )
+            limitations.append(
+                "The user-provided target is compared with the complete "
+                "dataset KPI aggregate."
+            )
+        else:
+            limitations.append(
+                f"The user-provided target applies per "
+                f"{configuration.target_scope}; its comparisons are calculated "
+                "separately from this whole-dataset snapshot."
+            )
+    collector.add(
+        insight_type="metric_snapshot",
+        metric=configuration.primary_kpi,
+        observation=observation,
+        source_columns=_metric_source_columns(configuration),
+        record_count=len(entries),
+        confidence=_count_confidence(len(entries)),
+        limitations=tuple(limitations),
+    )
 
 
 def _prepare_temporal_context(
@@ -352,16 +693,19 @@ def _prepare_temporal_context(
 ) -> _TemporalContext | None:
     date_column = configuration.date_column
     metric = configuration.primary_kpi
-    temporal_types = ["period_change", "trend", "segment_contribution"]
+    temporal_types = [
+        "period_change",
+        "period_baseline_comparison",
+        "trend",
+        "cohort_period_comparison",
+        "segment_contribution",
+    ]
+    if (
+        configuration.target_or_benchmark is not None
+        and configuration.target_scope == "period"
+    ):
+        temporal_types.append("period_target_comparison")
     if date_column is None:
-        collector.add(
-            insight_type="analysis_skipped",
-            metric=metric,
-            observation={"reason": "no_date_column", "analyses": temporal_types},
-            source_columns=_metric_source_columns(configuration),
-            record_count=0,
-            limitations=("Temporal analysis requires a user-confirmed date column.",),
-        )
         return None
 
     if any(_is_missing(row.values[date_column]) for row in rows):
@@ -443,6 +787,7 @@ def _add_period_change(
             analysis="period_change",
             available=len(periods),
             required=2,
+            unit="eligible_periods",
             source_columns=_source_columns(configuration, date_column),
         )
         return
@@ -457,6 +802,7 @@ def _add_period_change(
             analysis="period_change",
             available=min(len(previous_values), len(current_values)),
             required=_MIN_PERIOD_RECORDS,
+            unit="valid_records_per_period",
             source_columns=_source_columns(configuration, date_column),
         )
         return
@@ -509,6 +855,160 @@ def _add_period_change(
     )
 
 
+def _add_period_baseline_comparison(
+    collector: _Collector,
+    temporal: _TemporalContext,
+    configuration: BusinessConfiguration,
+) -> None:
+    """Compare the latest eligible period with recent period-level history."""
+
+    metric = configuration.primary_kpi
+    date_column = configuration.date_column
+    assert date_column is not None
+    eligible = [
+        (period, temporal.groups[period])
+        for period in sorted(temporal.groups)
+        if len(temporal.groups[period]) >= _MIN_PERIOD_RECORDS
+    ]
+    if len(eligible) < 3:
+        _add_insufficient_warning(
+            collector,
+            metric=metric,
+            analysis="period_baseline_comparison",
+            available=max(0, len(eligible) - 1),
+            required=2,
+            unit="prior_eligible_periods",
+            source_columns=_source_columns(configuration, date_column),
+        )
+        return
+
+    current_period, current_rows = eligible[-1]
+    baseline_groups = eligible[:-1][-_MAX_BASELINE_PERIODS:]
+    period_values: list[dict[str, object]] = []
+    baseline_values: list[float] = []
+    for period, rows in baseline_groups:
+        value = _aggregate_metric(rows, configuration)
+        if value is None:
+            collector.add(
+                insight_type="analysis_skipped",
+                metric=metric,
+                observation={
+                    "reason": "undefined_derived_aggregate",
+                    "analysis": "period_baseline_comparison",
+                },
+                source_columns=_source_columns(
+                    configuration,
+                    date_column,
+                ),
+                record_count=sum(
+                    len(group_rows)
+                    for _, group_rows in (*baseline_groups, eligible[-1])
+                ),
+                limitations=(
+                    "The configured derived aggregation produced no "
+                    "finite baseline-period value.",
+                ),
+            )
+            return
+        baseline_values.append(value)
+        period_values.append(
+            {
+                "period": period,
+                "value": _clean(value),
+                "role": "baseline",
+                "record_count": len(rows),
+            }
+        )
+
+    current_value = _aggregate_metric(current_rows, configuration)
+    if current_value is None:
+        collector.add(
+            insight_type="analysis_skipped",
+            metric=metric,
+            observation={
+                "reason": "undefined_derived_aggregate",
+                "analysis": "period_baseline_comparison",
+            },
+            source_columns=_source_columns(configuration, date_column),
+            record_count=sum(
+                len(rows)
+                for _, rows in (*baseline_groups, eligible[-1])
+            ),
+            limitations=(
+                "The configured derived aggregation produced no finite "
+                "current-period value.",
+            ),
+        )
+        return
+
+    baseline_value = statistics.fmean(baseline_values)
+    absolute_change = current_value - baseline_value
+    limitations = [
+        _aggregation_limitation(configuration, "calendar period"),
+        (
+            "The baseline is the arithmetic mean of up to four immediately "
+            "preceding eligible period aggregates; it is descriptive, not a "
+            "forecast or seasonal adjustment."
+        ),
+    ]
+    if math.isclose(baseline_value, 0.0, abs_tol=1e-12):
+        percentage_change = None
+        limitations.append(
+            "Percentage difference is not calculated because the baseline "
+            "value is zero."
+        )
+    else:
+        percentage_change = _clean(
+            (absolute_change / baseline_value) * 100
+        )
+    period_values.append(
+        {
+            "period": current_period,
+            "value": _clean(current_value),
+            "role": "current",
+            "record_count": len(current_rows),
+        }
+    )
+    direction = _direction(absolute_change)
+    baseline_periods = [period for period, _ in baseline_groups]
+    collector.add(
+        insight_type="period_baseline_comparison",
+        metric=metric,
+        observation={
+            "aggregation": _metric_aggregation(configuration),
+            "period_granularity": temporal.granularity,
+            "baseline_method": "mean_of_prior_period_aggregates",
+            "baseline_periods": baseline_periods,
+            "baseline_period_count": len(baseline_values),
+            "baseline_value": _clean(baseline_value),
+            "baseline_minimum": _clean(min(baseline_values)),
+            "baseline_maximum": _clean(max(baseline_values)),
+            "current_period": current_period,
+            "current_value": _clean(current_value),
+            "absolute_change": _clean(absolute_change),
+            "percentage_change": percentage_change,
+            "direction": direction,
+            "favorable": _favorable(
+                direction,
+                configuration.kpi_direction,
+            ),
+            "period_values": period_values,
+        },
+        source_columns=_source_columns(configuration, date_column),
+        filters={"periods": [*baseline_periods, current_period]},
+        record_count=sum(
+            len(rows) for _, rows in (*baseline_groups, eligible[-1])
+        ),
+        confidence=_count_confidence(
+            min(
+                len(rows)
+                for _, rows in (*baseline_groups, eligible[-1])
+            )
+        ),
+        limitations=tuple(limitations),
+    )
+
+
 def _add_trend(
     collector: _Collector,
     temporal: _TemporalContext,
@@ -529,6 +1029,7 @@ def _add_trend(
             analysis="trend",
             available=len(eligible),
             required=_MIN_TREND_PERIODS,
+            unit="eligible_periods",
             source_columns=_source_columns(configuration, date_column),
         )
         return
@@ -602,6 +1103,7 @@ def _add_segment_ranking(
             analysis=f"segment_ranking:{category_column}",
             available=len(eligible),
             required=2,
+            unit="eligible_segments",
             source_columns=_source_columns(configuration, category_column),
         )
         return
@@ -618,6 +1120,7 @@ def _add_segment_ranking(
             analysis=f"segment_ranking:{category_column}",
             available=len(segment_values),
             required=2,
+            unit="eligible_segments",
             source_columns=_source_columns(configuration, category_column),
         )
         return
@@ -654,6 +1157,308 @@ def _add_segment_ranking(
     )
 
 
+def _add_segment_share(
+    collector: _Collector,
+    *,
+    rows: tuple[_Row, ...],
+    category_column: str,
+    configuration: BusinessConfiguration,
+) -> None:
+    """Calculate each named category's reconciled share of an additive KPI."""
+
+    if _metric_aggregation(configuration) != "sum":
+        return
+    groups: dict[str, list[tuple[_Row, float]]] = {}
+    missing_category_count = 0
+    for row in rows:
+        segment = row.values[category_column].strip()
+        number = _metric_group_value(row, configuration)
+        if not segment or _is_missing(segment):
+            missing_category_count += 1
+            continue
+        if number is not None:
+            groups.setdefault(segment, []).append((row, number))
+    if len(groups) < 2:
+        return
+    segment_values: list[dict[str, object]] = []
+    for segment, entries in groups.items():
+        value = _aggregate_metric(tuple(entries), configuration)
+        if value is None:
+            continue
+        segment_values.append(
+            {
+                "segment": segment,
+                "value": float(value),
+                "record_count": len(entries),
+            }
+        )
+    if len(segment_values) < 2:
+        return
+    values = [float(item["value"]) for item in segment_values]
+    total = math.fsum(values)
+    if total <= 0 or any(value < 0 for value in values):
+        collector.add(
+            insight_type="analysis_skipped",
+            metric=configuration.primary_kpi,
+            observation={
+                "reason": "category_share_requires_nonnegative_additive_values",
+                "analysis": f"segment_share:{category_column}",
+                "category_column": category_column,
+            },
+            source_columns=_source_columns(configuration, category_column),
+            record_count=sum(
+                int(item["record_count"]) for item in segment_values
+            ),
+            limitations=(
+                "Category shares require a positive total and non-negative "
+                "additive segment values.",
+            ),
+        )
+        return
+    segment_values.sort(
+        key=lambda item: (
+            -float(item["value"]),
+            str(item["segment"]).casefold(),
+        )
+    )
+    for item in segment_values:
+        item["share_percentage"] = _clean(
+            (float(item["value"]) / total) * 100
+        )
+    rounded_total = math.fsum(
+        float(item["share_percentage"]) for item in segment_values
+    )
+    segment_values[-1]["share_percentage"] = _clean(
+        float(segment_values[-1]["share_percentage"])
+        + (100.0 - rounded_total)
+    )
+    collector.add(
+        insight_type="segment_share",
+        metric=configuration.primary_kpi,
+        observation={
+            "aggregation": "sum",
+            "category_column": category_column,
+            "total_value": _clean(total),
+            "reconciled_percentage_total": 100.0,
+            "missing_category_count": missing_category_count,
+            "top_segment": segment_values[0],
+            "bottom_segment": segment_values[-1],
+            "shares": segment_values,
+        },
+        source_columns=_source_columns(configuration, category_column),
+        record_count=sum(
+            int(item["record_count"]) for item in segment_values
+        ),
+        confidence=_count_confidence(
+            sum(int(item["record_count"]) for item in segment_values)
+        ),
+        limitations=(
+            "Shares use the sum of valid KPI values with non-missing category labels.",
+            "Shares describe composition and do not explain why the mix occurred.",
+        ),
+    )
+
+
+def _add_cohort_period_comparison(
+    collector: _Collector,
+    *,
+    temporal: _TemporalContext,
+    category_column: str,
+    configuration: BusinessConfiguration,
+) -> None:
+    """Compare like-for-like category cohorts across the latest two periods."""
+
+    periods = sorted(temporal.groups)
+    if len(periods) < 2:
+        return
+    previous_period, current_period = periods[-2:]
+    previous_rows = temporal.groups[previous_period]
+    current_rows = temporal.groups[current_period]
+    metric = configuration.primary_kpi
+    date_column = configuration.date_column
+    assert date_column is not None
+
+    def cohort_groups(
+        entries: tuple[tuple[_Row, float], ...],
+    ) -> dict[str, tuple[tuple[_Row, float], ...]]:
+        groups: dict[str, list[tuple[_Row, float]]] = {}
+        for row, number in entries:
+            cohort = row.values[category_column].strip()
+            if cohort and not _is_missing(cohort):
+                groups.setdefault(cohort, []).append((row, number))
+        return {
+            cohort: tuple(values)
+            for cohort, values in groups.items()
+        }
+
+    previous = cohort_groups(previous_rows)
+    current = cohort_groups(current_rows)
+    shared_cohorts = sorted(
+        set(previous) & set(current),
+        key=str.casefold,
+    )
+    eligible_cohorts = [
+        cohort
+        for cohort in shared_cohorts
+        if min(len(previous[cohort]), len(current[cohort]))
+        >= _MIN_SEGMENT_RECORDS
+    ]
+    if len(eligible_cohorts) < 2:
+        _add_insufficient_warning(
+            collector,
+            metric=metric,
+            analysis=f"cohort_period_comparison:{category_column}",
+            available=len(eligible_cohorts),
+            required=2,
+            unit="eligible_cohorts",
+            source_columns=_source_columns(
+                configuration,
+                date_column,
+                category_column,
+            ),
+        )
+        return
+
+    comparisons_with_scores: list[
+        tuple[dict[str, object], float]
+    ] = []
+    for cohort in eligible_cohorts:
+        previous_value = _aggregate_metric(
+            previous[cohort],
+            configuration,
+        )
+        current_value = _aggregate_metric(
+            current[cohort],
+            configuration,
+        )
+        if previous_value is None or current_value is None:
+            continue
+        absolute_change = current_value - previous_value
+        if math.isclose(previous_value, 0.0, abs_tol=1e-12):
+            percentage_change = None
+            magnitude = (
+                abs(absolute_change)
+                / max(abs(current_value), 1.0)
+            ) * 100
+        else:
+            percentage_change = _clean(
+                (absolute_change / previous_value) * 100
+            )
+            magnitude = abs(percentage_change)
+        direction = _direction(absolute_change)
+        direction_sign = 1.0 if absolute_change >= 0 else -1.0
+        if configuration.kpi_direction == "lower":
+            direction_sign *= -1
+        directional_score = magnitude * direction_sign
+        comparisons_with_scores.append(
+            (
+                {
+                    "cohort": cohort,
+                    "previous_value": _clean(previous_value),
+                    "current_value": _clean(current_value),
+                    "absolute_change": _clean(absolute_change),
+                    "percentage_change": percentage_change,
+                    "direction": direction,
+                    "favorable": _favorable(
+                        direction,
+                        configuration.kpi_direction,
+                    ),
+                    "previous_record_count": len(previous[cohort]),
+                    "current_record_count": len(current[cohort]),
+                },
+                directional_score,
+            )
+        )
+    if len(comparisons_with_scores) < 2:
+        _add_insufficient_warning(
+            collector,
+            metric=metric,
+            analysis=f"cohort_period_comparison:{category_column}",
+            available=len(comparisons_with_scores),
+            required=2,
+            unit="eligible_cohorts",
+            source_columns=_source_columns(
+                configuration,
+                date_column,
+                category_column,
+            ),
+        )
+        return
+
+    ordered = sorted(
+        comparisons_with_scores,
+        key=lambda item: (
+            item[1],
+            str(item[0]["cohort"]).casefold(),
+        ),
+    )
+    comparisons = [
+        item
+        for item, _score in sorted(
+            comparisons_with_scores,
+            key=lambda pair: (
+                -abs(pair[1]),
+                str(pair[0]["cohort"]).casefold(),
+            ),
+        )
+    ]
+    included_cohorts = {
+        str(item["cohort"]) for item in comparisons
+    }
+    excluded_cohort_count = len(
+        (set(previous) | set(current)) - included_cohorts
+    )
+    collector.add(
+        insight_type="cohort_period_comparison",
+        metric=metric,
+        observation={
+            "aggregation": _metric_aggregation(configuration),
+            "category_column": category_column,
+            "period_granularity": temporal.granularity,
+            "previous_period": previous_period,
+            "current_period": current_period,
+            "cohort_count": len(comparisons),
+            "excluded_cohort_count": excluded_cohort_count,
+            "best_performing_change": ordered[-1][0],
+            "worst_performing_change": ordered[0][0],
+            "comparisons": comparisons,
+        },
+        source_columns=_source_columns(
+            configuration,
+            date_column,
+            category_column,
+        ),
+        filters={
+            "periods": [previous_period, current_period],
+            "cohort_column": category_column,
+        },
+        record_count=sum(
+            len(previous[cohort]) + len(current[cohort])
+            for cohort in included_cohorts
+        ),
+        confidence=_count_confidence(
+            min(
+                min(len(previous[cohort]), len(current[cohort]))
+                for cohort in included_cohorts
+            )
+        ),
+        limitations=(
+            _aggregation_limitation(
+                configuration,
+                f"{category_column} cohort and calendar period",
+            ),
+            (
+                "Only like-for-like cohorts with at least two valid KPI "
+                "records in both comparison periods are included."
+            ),
+            (
+                "Cohort changes are descriptive and do not establish why "
+                "performance changed."
+            ),
+        ),
+    )
+
+
 def _add_segment_contribution(
     collector: _Collector,
     *,
@@ -666,21 +1471,6 @@ def _add_segment_contribution(
     date_column = configuration.date_column
     assert date_column is not None
     if _metric_aggregation(configuration) != "sum":
-        collector.add(
-            insight_type="analysis_skipped",
-            metric=metric,
-            observation={
-                "reason": "non_additive_metric",
-                "analysis": "segment_contribution",
-                "category_column": category_column,
-            },
-            source_columns=_source_columns(configuration, date_column, category_column),
-            record_count=0,
-            limitations=(
-                "Contribution-to-change requires an additive sum metric; means and ratios "
-                "cannot be reconciled as additive contributions.",
-            ),
-        )
         return
     if len(periods) < 2:
         return
@@ -790,7 +1580,7 @@ def _add_segment_benchmark_performance(
     """Compare confirmed row-level target attainment by business segment."""
 
     target = configuration.target_or_benchmark
-    if target is None:
+    if target is None or configuration.target_scope != "row":
         return
     groups: dict[str, list[float]] = {}
     for row in rows:
@@ -863,6 +1653,195 @@ def _add_segment_benchmark_performance(
     )
 
 
+def _add_period_target_comparison(
+    collector: _Collector,
+    temporal: _TemporalContext,
+    configuration: BusinessConfiguration,
+) -> None:
+    """Compare each eligible period aggregate with a per-period target."""
+
+    target = configuration.target_or_benchmark
+    if target is None or configuration.target_scope != "period":
+        return
+    performance: list[dict[str, object]] = []
+    for period, entries in sorted(temporal.groups.items()):
+        if len(entries) < _MIN_PERIOD_RECORDS:
+            continue
+        value = _aggregate_metric(entries, configuration)
+        if value is None:
+            continue
+        meets_target = _meets_target(
+            value,
+            target,
+            configuration.kpi_direction,
+        )
+        performance.append(
+            {
+                "period": period,
+                "value": _clean(value),
+                "target": _clean(target),
+                "gap_to_target": _clean(value - target),
+                "meets_target": meets_target,
+                "favorable": meets_target,
+                "record_count": len(entries),
+            }
+        )
+    if not performance:
+        _add_insufficient_warning(
+            collector,
+            metric=configuration.primary_kpi,
+            analysis="period_target_comparison",
+            available=0,
+            required=1,
+            unit="eligible_periods",
+            source_columns=_source_columns(
+                configuration,
+                configuration.date_column or "",
+            ),
+        )
+        return
+    current = performance[-1]
+    collector.add(
+        insight_type="period_target_comparison",
+        metric=configuration.primary_kpi,
+        observation={
+            "target_scope": "period",
+            "target": _clean(target),
+            "kpi_direction": configuration.kpi_direction,
+            "granularity": temporal.granularity,
+            "current_period": current["period"],
+            "current_value": current["value"],
+            "current_gap_to_target": current["gap_to_target"],
+            "current_meets_target": current["meets_target"],
+            "missed_period_count": sum(
+                not bool(item["meets_target"]) for item in performance
+            ),
+            "eligible_period_count": len(performance),
+            "period_performance": performance,
+        },
+        source_columns=_source_columns(
+            configuration,
+            configuration.date_column or "",
+        ),
+        record_count=sum(int(item["record_count"]) for item in performance),
+        confidence=_count_confidence(
+            min(int(item["record_count"]) for item in performance)
+        ),
+        limitations=(
+            _aggregation_limitation(configuration, "eligible period"),
+            "Periods with fewer than two valid KPI records are excluded.",
+        ),
+    )
+
+
+def _add_segment_target_comparison(
+    collector: _Collector,
+    *,
+    rows: tuple[_Row, ...],
+    category_column: str,
+    configuration: BusinessConfiguration,
+) -> None:
+    """Compare each eligible segment aggregate with a per-segment target."""
+
+    target = configuration.target_or_benchmark
+    if target is None or configuration.target_scope != "segment":
+        return
+    groups: dict[str, list[tuple[_Row, float]]] = {}
+    for row in rows:
+        segment = row.values[category_column].strip()
+        value = _metric_group_value(row, configuration)
+        if segment and not _is_missing(segment) and value is not None:
+            groups.setdefault(segment, []).append((row, value))
+    performance: list[dict[str, object]] = []
+    for segment, group_entries in groups.items():
+        if len(group_entries) < _MIN_SEGMENT_RECORDS:
+            continue
+        entries = tuple(group_entries)
+        value = _aggregate_metric(entries, configuration)
+        if value is None:
+            continue
+        meets_target = _meets_target(
+            value,
+            target,
+            configuration.kpi_direction,
+        )
+        performance.append(
+            {
+                "segment": segment,
+                "value": _clean(value),
+                "target": _clean(target),
+                "gap_to_target": _clean(value - target),
+                "meets_target": meets_target,
+                "favorable": meets_target,
+                "record_count": len(entries),
+            }
+        )
+    if len(performance) < 2:
+        _add_insufficient_warning(
+            collector,
+            metric=configuration.primary_kpi,
+            analysis=f"segment_target_comparison:{category_column}",
+            available=len(performance),
+            required=2,
+            unit="eligible_segments",
+            source_columns=_source_columns(configuration, category_column),
+        )
+        return
+    performance.sort(
+        key=lambda item: (
+            -_target_miss_amount(
+                float(item["value"]),
+                target,
+                configuration.kpi_direction,
+            ),
+            (
+                float(item["value"])
+                if configuration.kpi_direction == "higher"
+                else -float(item["value"])
+            ),
+            str(item["segment"]).casefold(),
+        )
+    )
+    worst = performance[0]
+    best = (
+        max
+        if configuration.kpi_direction == "higher"
+        else min
+    )(
+        performance,
+        key=lambda item: (
+            float(item["value"]),
+            str(item["segment"]).casefold(),
+        ),
+    )
+    collector.add(
+        insight_type="segment_target_comparison",
+        metric=configuration.primary_kpi,
+        observation={
+            "target_scope": "segment",
+            "category_column": category_column,
+            "target": _clean(target),
+            "kpi_direction": configuration.kpi_direction,
+            "worst_segment": worst,
+            "best_segment": best,
+            "missed_segment_count": sum(
+                not bool(item["meets_target"]) for item in performance
+            ),
+            "eligible_segment_count": len(performance),
+            "segment_performance": performance,
+        },
+        source_columns=_source_columns(configuration, category_column),
+        record_count=sum(int(item["record_count"]) for item in performance),
+        confidence=_count_confidence(
+            min(int(item["record_count"]) for item in performance)
+        ),
+        limitations=(
+            _aggregation_limitation(configuration, "eligible segment"),
+            "Segments with fewer than two valid KPI records are excluded.",
+        ),
+    )
+
+
 def _add_anomalies(
     collector: _Collector,
     *,
@@ -882,6 +1861,7 @@ def _add_anomalies(
             analysis="iqr_anomaly_detection",
             available=len(values),
             required=_MIN_ANOMALY_RECORDS,
+            unit="valid_row_values",
             source_columns=_metric_source_columns(configuration),
         )
         return
@@ -949,6 +1929,7 @@ def _add_correlations(
                 analysis=f"correlation:{column.name}",
                 available=len(pairs),
                 required=_MIN_CORRELATION_PAIRS,
+                unit="valid_numeric_pairs",
                 source_columns=_metric_first_source_columns(configuration, column.name),
             )
             continue
@@ -997,6 +1978,7 @@ def _add_benchmark_breaches(
             analysis="benchmark_breach",
             available=len(values),
             required=_MIN_BENCHMARK_RECORDS,
+            unit="valid_row_values",
             source_columns=_metric_source_columns(configuration),
         )
         return
@@ -1033,22 +2015,89 @@ def _add_insufficient_warning(
     available: int,
     required: int,
     source_columns: tuple[str, ...],
+    unit: str = "eligible_records_or_groups",
+    recommendation: str | None = None,
 ) -> None:
-    collector.add(
-        insight_type="insufficient_data_warning",
-        metric=metric,
-        observation={
-            "analysis": analysis,
-            "available_records_or_periods": available,
-            "required_records_or_periods": required,
-        },
-        source_columns=source_columns,
-        record_count=available,
-        limitations=("The calculation was skipped because evidence was insufficient.",),
+    del metric, source_columns
+    collector.add_insufficient_issue(
+        analysis=analysis,
+        available=available,
+        required=required,
+        unit=unit,
+        recommendation=(
+            recommendation
+            or _insufficient_recommendation(
+                analysis,
+                required=required,
+                unit=unit,
+            )
+        ),
+    )
+
+
+def _insufficient_recommendation(
+    analysis: str,
+    *,
+    required: int,
+    unit: str,
+) -> str:
+    if analysis == "period_change":
+        return (
+            "Provide two eligible periods with at least two valid KPI records "
+            "in each period."
+        )
+    if analysis == "period_baseline_comparison":
+        return (
+            "Provide a current eligible period and at least two prior eligible "
+            "periods, each with at least two valid KPI records."
+        )
+    if analysis == "trend":
+        return (
+            "Provide at least three eligible periods, each with at least two "
+            "valid KPI records."
+        )
+    if analysis.startswith("segment_ranking:"):
+        return (
+            "Provide at least two category values with two valid KPI records "
+            "in each category."
+        )
+    if analysis.startswith("cohort_period_comparison:"):
+        return (
+            "Provide at least two category values that each have two valid KPI "
+            "records in both latest periods; avoid using month or quarter "
+            "labels as cohorts when a date column already defines periods."
+        )
+    if analysis.startswith("correlation:"):
+        return (
+            "Provide at least three rows where both the KPI and comparison "
+            "column have valid row-level numeric values."
+        )
+    if analysis == "iqr_anomaly_detection":
+        return "Provide at least four valid row-level KPI values."
+    if analysis == "benchmark_breach":
+        return "Provide at least three valid row-level KPI values."
+    if analysis == "period_target_comparison":
+        return (
+            "Provide at least one period with two valid KPI records and keep "
+            "the configured date column."
+        )
+    if analysis.startswith("segment_target_comparison:"):
+        return (
+            "Provide at least two category values with two valid KPI records "
+            "in each category."
+        )
+    return (
+        f"Provide at least {required} {unit.replace('_', ' ')} required by "
+        "this analysis."
     )
 
 
 def _metric_source_columns(configuration: BusinessConfiguration) -> tuple[str, ...]:
+    if (
+        configuration.metric_type == "conditional_rate"
+        and configuration.conditional_metric is not None
+    ):
+        return configuration.conditional_metric.source_columns
     if configuration.metric_type == "derived" and configuration.derived_metric is not None:
         return configuration.derived_metric.source_columns
     return (configuration.primary_kpi,)
@@ -1069,6 +2118,16 @@ def _metric_first_source_columns(
 def _metric_value(row: _Row, configuration: BusinessConfiguration) -> float | None:
     if configuration.metric_type == "source":
         return _number(row.values[configuration.primary_kpi])
+    if configuration.metric_type == "conditional_rate":
+        metric = configuration.conditional_metric
+        if metric is None or metric.calculation_base != "record_count":
+            return None
+        return (
+            100.0
+            if row.values[metric.condition_column].strip()
+            in set(metric.included_values)
+            else 0.0
+        )
     metric = configuration.derived_metric
     if metric is None:
         return None
@@ -1076,6 +2135,13 @@ def _metric_value(row: _Row, configuration: BusinessConfiguration) -> float | No
 
 
 def _metric_group_value(row: _Row, configuration: BusinessConfiguration) -> float | None:
+    if configuration.metric_type == "conditional_rate":
+        metric = configuration.conditional_metric
+        if metric is None:
+            return None
+        if metric.calculation_base == "record_count":
+            return 1.0
+        return _number(row.values[metric.value_column or ""])
     metric = configuration.derived_metric
     if configuration.metric_type != "derived" or metric is None:
         return _metric_value(row, configuration)
@@ -1097,25 +2163,43 @@ def _aggregate_metric(
         return None
     metric = configuration.derived_metric
     aggregation = _metric_aggregation(configuration)
+    if configuration.metric_type == "conditional_rate":
+        conditional = configuration.conditional_metric
+        if conditional is None:
+            return None
+        return evaluate_conditional_metric(
+            conditional,
+            tuple(row.values for row, _ in entries),
+        ).percentage
     if metric is not None:
         return aggregate_derived_metric(
             metric,
             tuple(row.values for row, _ in entries),
         ).value
-    if aggregation == "sum":
-        return _clean(math.fsum(value for _, value in entries))
-    if aggregation == "mean":
-        return _clean(math.fsum(value for _, value in entries) / len(entries))
-    return None
+    return aggregate_row_values(
+        [value for _, value in entries],
+        aggregation,
+    )
 
 
 def _metric_aggregation(configuration: BusinessConfiguration) -> str:
-    metric = configuration.derived_metric
-    return metric.aggregation if metric is not None else "sum"
+    return configuration.primary_metric.aggregation
 
 
 def _aggregation_limitation(configuration: BusinessConfiguration, scope: str) -> str:
     aggregation = _metric_aggregation(configuration)
+    if aggregation == "conditional_rate":
+        metric = configuration.conditional_metric
+        base = (
+            "record counts"
+            if metric is not None
+            and metric.calculation_base == "record_count"
+            else "valid value sums"
+        )
+        return (
+            f"The conditional percentage divides matching {base} by all "
+            f"eligible {base} per {scope}."
+        )
     if aggregation == "ratio_of_sums":
         return f"The derived KPI is calculated as a ratio of source-column sums per {scope}."
     if aggregation == "formula":
@@ -1135,16 +2219,55 @@ def _metric_definition(configuration: BusinessConfiguration) -> dict[str, object
             "operation": metric.operation,
             "aggregation": metric.aggregation,
             "display_format": metric.display_format,
+            "target_or_benchmark": configuration.target_or_benchmark,
+            "target_scope": configuration.target_scope,
             "division_by_zero": "return_null",
             "missing_input": "return_null",
+        }
+    if (
+        configuration.metric_type == "conditional_rate"
+        and configuration.conditional_metric is not None
+    ):
+        conditional = configuration.conditional_metric
+        return {
+            "metric_id": configuration.primary_metric_id,
+            "metric_type": "conditional_rate",
+            "name": conditional.name,
+            "formula": conditional.formula_label,
+            "source_columns": list(conditional.source_columns),
+            "aggregation": "conditional_rate",
+            "display_format": "percentage",
+            "calculation_base": conditional.calculation_base,
+            "condition_column": conditional.condition_column,
+            "included_values": list(conditional.included_values),
+            "value_column": conditional.value_column,
+            "zero_denominator": "return_null",
+            "target_or_benchmark": configuration.target_or_benchmark,
+            "target_scope": configuration.target_scope,
         }
     return {
         "metric_id": configuration.primary_metric_id,
         "metric_type": "source",
         "name": configuration.primary_kpi,
         "source_columns": [configuration.primary_kpi],
-        "aggregation": "sum",
+        "aggregation": configuration.primary_metric.aggregation,
+        "display_format": configuration.primary_metric.display_format,
+        "target_or_benchmark": configuration.target_or_benchmark,
+        "target_scope": configuration.target_scope,
     }
+
+
+def _meets_target(value: float, target: float, direction: str) -> bool:
+    return value >= target if direction == "higher" else value <= target
+
+
+def _target_miss_amount(value: float, target: float, direction: str) -> float:
+    """Return a positive shortfall/excess when a value misses its target."""
+
+    return max(target - value, 0.0) if direction == "higher" else max(
+        value - target,
+        0.0,
+    )
 
 
 def _is_missing(value: str) -> bool:

@@ -7,6 +7,10 @@
   </head>
   <body>
     <main>
+      {% set dataset_id = report.dataset_id %}
+      {% set configuration = true %}
+      {% set current_section = "next" %}
+      {% include "_report_project_navigation.html" %}
       <h1>{{ report.title }}</h1>
       <p>
         Report content selection saved and revalidated against its current source,

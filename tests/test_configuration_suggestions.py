@@ -1,5 +1,6 @@
 """Structured local-Ollama suggestion and validation tests."""
 
+import csv
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,6 +17,7 @@ from insight_reporter.configuration_suggestions import (
     parse_suggestion_response,
 )
 from insight_reporter.dataset_profile import DatasetProfile, profile_csv
+from insight_reporter.model_run_metrics import model_metrics_csv_path
 
 
 class FakeChatClient:
@@ -50,9 +52,12 @@ def _suggestion(**overrides: object) -> dict[str, object]:
         "title": "Revenue performance",
         "primary_kpi": "revenue",
         "kpi_direction": "higher",
+        "aggregation": "sum",
+        "display_format": "currency",
         "date_column": "date",
         "category_columns": ["region"],
         "target_or_benchmark": None,
+        "target_scope": "period",
         "business_objective": "Evaluate revenue performance by region over time.",
         "confidence": 0.91,
         "rationale": [
@@ -82,6 +87,9 @@ def test_valid_structured_suggestion_is_accepted(tmp_path: Path) -> None:
     assert batch.suggestions[0].primary_kpi == "revenue"
     assert batch.suggestions[0].category_columns == ("region",)
     assert batch.suggestions[0].target_or_benchmark is None
+    assert batch.suggestions[0].aggregation == "sum"
+    assert batch.suggestions[0].display_format == "currency"
+    assert batch.suggestions[0].target_scope == "period"
 
 
 def test_hallucinated_columns_are_discarded_while_valid_suggestions_remain(
@@ -155,6 +163,7 @@ def test_unexpected_suggestion_fields_are_rejected(tmp_path: Path) -> None:
 def test_prompt_contains_profile_metadata_but_not_raw_rows(tmp_path: Path) -> None:
     profile = _profile(tmp_path)
     client = FakeChatClient(_response(_suggestion()))
+    metrics_dir = tmp_path / "metrics"
 
     generate_configuration_suggestions(
         profile,
@@ -163,6 +172,7 @@ def test_prompt_contains_profile_metadata_but_not_raw_rows(tmp_path: Path) -> No
         host="http://127.0.0.1:11434",
         timeout_seconds=5,
         client=client,
+        metrics_dir=metrics_dir,
     )
 
     assert len(client.calls) == 1
@@ -177,6 +187,15 @@ def test_prompt_contains_profile_metadata_but_not_raw_rows(tmp_path: Path) -> No
     assert call["options"] == {"temperature": 0}
     assert call["stream"] is False
     assert call["think"] is False
+    with model_metrics_csv_path(metrics_dir).open(
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        [metrics_row] = list(csv.DictReader(handle))
+    assert metrics_row["task_type"] == "configuration_suggestions"
+    assert metrics_row["prompt_version"] == "configuration_suggestions.v2"
+    assert metrics_row["status"] == "validated"
+    assert metrics_row["dataset_id"] == "a" * 32
 
 
 def test_existing_kpis_are_excluded_from_repeat_suggestions(
@@ -291,6 +310,24 @@ def test_model_schema_forces_null_when_dataset_has_no_date(tmp_path: Path) -> No
     assert suggestion_properties["category_columns"]["items"]["enum"] == list(
         profile.category_candidates
     )
+    assert suggestion_properties["aggregation"]["enum"] == [
+        "sum",
+        "mean",
+        "median",
+        "min",
+        "max",
+    ]
+    assert suggestion_properties["display_format"]["enum"] == [
+        "number",
+        "currency",
+        "percentage",
+    ]
+    assert suggestion_properties["target_scope"]["enum"] == [
+        "row",
+        "period",
+        "segment",
+        "dataset",
+    ]
 
 
 def test_no_date_fake_model_call_uses_null_and_is_accepted(tmp_path: Path) -> None:
@@ -300,7 +337,9 @@ def test_no_date_fake_model_call_uses_null_and_is_accepted(tmp_path: Path) -> No
         encoding="utf-8",
     )
     profile = profile_csv(path)
-    client = FakeChatClient(_response(_suggestion(date_column=None)))
+    client = FakeChatClient(
+        _response(_suggestion(date_column=None, target_scope="row"))
+    )
 
     batch = generate_configuration_suggestions(
         profile,
@@ -332,6 +371,7 @@ def test_model_schema_forces_empty_categories_when_none_are_detected(
                 primary_kpi="temperature",
                 date_column=None,
                 category_columns=[],
+                target_scope="row",
             )
         )
     )
@@ -351,3 +391,25 @@ def test_model_schema_forces_empty_categories_when_none_are_detected(
     assert profile.category_candidates == ()
     assert suggestion_properties["category_columns"] == {"const": []}
     assert batch.suggestions[0].category_columns == ()
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"aggregation": "count"},
+        {"display_format": "html"},
+        {"target_scope": "unknown"},
+        {"target_scope": "period", "date_column": None},
+        {"target_scope": "segment", "category_columns": []},
+    ],
+)
+def test_invalid_generated_kpi_semantics_are_rejected(
+    tmp_path: Path,
+    overrides: dict[str, object],
+) -> None:
+    with pytest.raises(ConfigurationSuggestionError, match="no valid"):
+        parse_suggestion_response(
+            _response(_suggestion(**overrides)),
+            profile=_profile(tmp_path),
+            dataset_id="a" * 32,
+        )

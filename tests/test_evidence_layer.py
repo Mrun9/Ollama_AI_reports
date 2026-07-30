@@ -126,7 +126,10 @@ def test_all_initial_chart_types_are_secure_and_use_supporting_data(
     charts = [record.chart for record in evidence.records if record.chart is not None]
     assert {chart.chart_type for chart in charts} == {
         "time_trend",
+        "period_baseline_comparison",
         "category_comparison",
+        "category_share",
+        "cohort_period_comparison",
         "segment_contribution",
         "segment_target_performance",
         "distribution_iqr_outliers",
@@ -161,6 +164,14 @@ def test_management_evidence_outranks_correlation(
         by_type["segment_benchmark_performance"].ranking.rank
         < by_type["numeric_correlation"].ranking.rank
     )
+    assert (
+        by_type["period_baseline_comparison"].ranking.rank
+        < by_type["numeric_correlation"].ranking.rank
+    )
+    assert (
+        by_type["cohort_period_comparison"].ranking.rank
+        < by_type["numeric_correlation"].ranking.rank
+    )
 
 
 def test_supporting_values_reproduce_period_correlation_and_outliers(
@@ -179,6 +190,17 @@ def test_supporting_values_reproduce_period_correlation_and_outliers(
     period = by_type["period_change"]
     previous, current = period.supporting_data
     assert float(current["value"]) - float(previous["value"]) == 195
+
+    baseline = by_type["period_baseline_comparison"]
+    assert [row["role"] for row in baseline.supporting_data] == [
+        "baseline",
+        "baseline",
+        "current",
+    ]
+    cohort = by_type["cohort_period_comparison"]
+    assert {
+        row["cohort"] for row in cohort.supporting_data
+    } == {"<script>alert(1)</script>", "B"}
 
     correlation = by_type["numeric_correlation"].supporting_data[0]
     count = int(correlation["pair_count"])

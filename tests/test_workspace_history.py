@@ -434,6 +434,13 @@ def test_upload_creates_reopenable_workspace(
     assert b"regional-sales" in history.data
     assert detail.status_code == 200
     assert b"Dataset uploaded" in detail.data
+    assert b"1. Data source" in detail.data
+    assert b"2. KPI configuration and deterministic evidence" in detail.data
+    assert b"3. Dashboard and visualizations" in detail.data
+    assert b"4. Next actions" in detail.data
+    assert b"5. Report revisions" in detail.data
+    assert b"Open dashboard" in detail.data
+    assert b"Delete workspace and all recoverably" in detail.data
     assert renamed.status_code == 303
     assert b"Regional performance" in client.get(
         f"/workspaces/{dataset_id}"

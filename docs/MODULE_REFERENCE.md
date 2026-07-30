@@ -53,6 +53,35 @@ Prevents sensitive values from being written directly to logs.
 - `SensitiveDataFilter` sanitizes log records before emission.
 - `configure_logging(app)` installs the filter and configured log level.
 
+### `model_run_metrics.py`
+
+Records a privacy-safe benchmark row for every Ollama request initiated by the
+application.
+
+- `measure_model_run(...)` returns a context manager for exactly one request.
+- `ModelRunMeasurement.capture_response(response)` stops wall-clock request
+  timing and extracts official Ollama token/duration metadata.
+- `ModelRunMeasurement.mark_validated()` records that the owning domain
+  validator accepted the structured response.
+- `model_metrics_csv_path(metrics_dir)` returns the stable
+  `model_runs.csv` location.
+- `_append_row(...)` creates the header once and uses thread plus file locking
+  for safe append-only writes. An I/O failure is logged without interrupting
+  model generation.
+- `_response_value`, `_duration_ms`, and related parsing helpers accept both
+  mapping-style test responses and Ollama response objects, leaving
+  unavailable official metrics blank.
+
+The module records request metadata and lengths, never prompt text, response
+text, dataset values, objectives, or exception messages. Prompt-version
+constants live beside the corresponding prompts so maintainers must make a
+version change explicit.
+
+Primary test: `tests/test_model_run_metrics.py`.
+
+The separate `scripts/check_ollama.py` command uses the same measurement
+boundary with task type `ollama_connectivity_check`.
+
 ### `workspace_history.py`
 
 Owns Milestones 6A and 6A.1 workspace identity, lifecycle state, and progress
@@ -212,8 +241,9 @@ Owns the reviewed KPI registry for one dataset.
 
 Core contracts:
 
-- `MetricConfiguration` stores one source or derived KPI and its direction,
-  benchmark, role, aggregation, dimensions, and formula definition.
+- `MetricConfiguration` stores one source, derived, or conditional KPI and its
+  direction, target/benchmark, explicit target scope, aggregation, display
+  format, and validated definition.
 - `BusinessConfiguration` stores source identity, shared date/categories and
   objective, one-to-five metrics, and the primary metric ID.
 
@@ -223,6 +253,9 @@ Public functions:
   source KPI configuration.
 - `validate_derived_business_configuration(...)` validates a derived KPI
   before registration.
+- `validate_conditional_business_configuration(...)` registers an
+  exact-value conditional percentage after its definition is validated
+  against retained rows.
 - `add_source_metrics(...)` appends reviewed source KPIs without replacing
   existing metrics.
 - `set_primary_metric(...)`, `remove_metric(...)`, and
@@ -234,15 +267,62 @@ Public functions:
 
 Important internals:
 
-- `_build_configuration`, `_source_metric`, and `_derived_registry_metric`
-  construct canonical objects.
+- `_build_configuration`, `_source_metric`, `_derived_registry_metric`, and
+  `_conditional_registry_metric` construct canonical objects.
+- `_validate_metric_semantics` prevents an editable source aggregation or
+  display format from changing a calculated KPI's fixed definition.
+- `_validate_target_scope` rejects unknown scopes and prevents aggregate-only
+  or conditional KPIs from pretending to have row-level values.
+- `_validate_target_scope_context` requires a date column for active period
+  targets and at least one category column for active segment targets.
+- `_default_target_scope` migrates schemas 1–5 without changing their previous
+  effective interpretation.
 - `_metric_id` creates stable metric identities.
 - `_deduplicate_metrics` prevents overlapping KPI definitions.
 - `_load_registry_configuration`, `_load_metric`, and
   `_load_legacy_configuration` implement backward-compatible loading.
 
+New configurations use schema 5. Schemas 1–4 are loaded and migrated in
+memory, with historical source KPIs defaulting to `sum` and `number`.
+
 Primary tests: `tests/test_business_config.py`,
-`tests/test_business_config_route.py`.
+`tests/test_business_config_route.py`, `tests/test_conditional_metrics.py`.
+
+### `conditional_metrics.py`
+
+Owns the deterministic category-filtered percentage definition. It is
+separate from the general formula parser so category values are never treated
+as executable formula text.
+
+Core contracts:
+
+- `ConditionalMetric` stores the calculation base, source-qualified
+  condition/value references, exact included values, formula label, and
+  row-grain confirmation.
+- `ConditionalMetricEvaluation` exposes numerator, denominator, percentage,
+  and numerator/denominator record support.
+
+Public functions:
+
+- `condition_value_options(view, profile)` reads bounded exact values only
+  from categorical/boolean candidates for checkbox selection.
+- `validate_conditional_metric(...)` validates a new definition against the
+  retained dataset and requires row-grain confirmation for record counts.
+- `load_conditional_metric(...)` structurally revalidates a persisted schema-1
+  definition and its source identities.
+- `evaluate_conditional_metric(metric, rows)` recalculates either matching
+  rows/all rows or matching value sum/total valid value sum. A zero
+  denominator returns `None`.
+
+Important internals:
+
+- `_build_conditional_metric` bounds names/value counts, checks source column
+  types, and preserves exact category text.
+- `_condition_candidates` excludes identifiers, free text, and numeric
+  measures from condition selection.
+- `_number` rejects missing, invalid, Boolean, and non-finite values.
+
+Primary test: `tests/test_conditional_metrics.py`.
 
 ### `formula_engine.py`
 
@@ -310,13 +390,19 @@ Requests source-KPI configuration suggestions from local Ollama.
 
 - `ConfigurationSuggestion` and `SuggestionBatch` are validated outputs.
 - `build_suggestion_response_schema(...)` restricts returned KPI, date, and
-  category names to supplied profile candidates.
+  category names to supplied profile candidates, and constrains aggregation,
+  display format, and target scope to supported values.
 - `build_profile_summary(profile, ...)` creates compact metadata without raw
   rows.
-- `generate_configuration_suggestions(...)` calls Ollama.
+- `generate_configuration_suggestions(...)` calls Ollama for advisory KPI
+  semantics. The model must leave the numeric target null.
+- The call is measured as `configuration_suggestions`; `_PROMPT_VERSION`
+  identifies its prompt contract (`configuration_suggestions.v2` for the
+  expanded KPI fields).
 - `parse_suggestion_response(...)` parses JSON and revalidates every field.
 - `_validate_suggestion`, `_bounded_string`, and `_response_content` enforce
-  the model-output trust boundary.
+  the model-output trust boundary. Period scope requires a date column and
+  segment scope requires at least one category column.
 
 Primary tests: `tests/test_configuration_suggestions.py`,
 `tests/test_suggestion_routes.py`.
@@ -331,6 +417,8 @@ Requests optional formula ideas from local Ollama.
   aggregations, and output shape.
 - `build_derived_kpi_profile_summary(...)` sends bounded numeric metadata.
 - `generate_derived_kpi_suggestions(...)` performs the local model call.
+- The call is measured as `derived_kpi_suggestions`; `_PROMPT_VERSION`
+  identifies its prompt contract.
 - `parse_derived_kpi_response(...)` and `_validate_suggestion(...)` reject
   unknown columns, invalid definitions, duplicate names, and unsafe output.
 - `_numeric_candidate_columns` removes constants and identifier-like columns.
@@ -350,7 +438,10 @@ Core contracts:
   record support, confidence, and limitations.
 - `InsightReport` binds all insights to the dataset, source fingerprints, and
   KPI definitions.
-- `_Collector` assigns stable `INS-...` IDs while algorithms run.
+- `_MetricCapabilities` records whether row-level and additive algorithms can
+  apply and retains explicit reasons for unavailable analysis families.
+- `_Collector` assigns stable `INS-...` IDs and consolidates unmet sample-size
+  requirements while algorithms run.
 
 Public functions:
 
@@ -360,22 +451,45 @@ Public functions:
 
 Analysis functions:
 
-- `_add_missing_data_insights` creates dataset-quality warnings.
+- `_add_missing_data_insights` consolidates every affected column into one
+  dataset-quality warning and supporting table.
+- `_add_metric_snapshot` calculates one whole-dataset KPI anchor with
+  valid/excluded support, conditional numerator/denominator facts, and
+  capability coverage.
 - `_prepare_temporal_context` validates dates and groups rows by period.
 - `_add_period_change` compares adjacent valid periods.
+- `_add_period_baseline_comparison` averages up to four prior eligible
+  period-level aggregates and compares the latest period with that recent
+  baseline, including exact baseline periods and range.
+- `_add_period_target_comparison` recalculates one KPI aggregate per eligible
+  period and records current status, every period gap, and missed-period
+  count.
 - `_add_trend` calculates a linear direction over valid periods.
 - `_add_segment_ranking` compares category aggregates.
+- `_add_segment_share` calculates named composition for non-negative additive
+  source KPIs and reconciles displayed shares to 100%.
+- `_add_cohort_period_comparison` recalculates the KPI for like-for-like named
+  category cohorts in the latest two periods, excludes cohorts without enough
+  support in both, and identifies direction-adjusted best/worst movement.
 - `_add_segment_benchmark_performance` identifies the best and worst
-  target-attainment segments and calculates per-segment average values, gaps,
-  breach counts, and breach percentages.
+  row-target-attainment segments and calculates per-segment average values,
+  gaps, breach counts, and breach percentages.
+- `_add_segment_target_comparison` recalculates one KPI aggregate per eligible
+  named segment and records best/worst segments and missed-segment count.
 - `_add_segment_contribution` reconciles segment changes to the total change.
 - `_add_anomalies` applies Tukey’s IQR rule.
 - `_add_correlations` calculates Pearson associations.
-- `_add_benchmark_breaches` counts values crossing the configured threshold.
+- `_add_benchmark_breaches` counts values crossing an explicitly row-scoped
+  target.
 
-Calculation helpers such as `_metric_value`, `_aggregate_metric`, `_pearson`,
-`_linear_trend`, `_direction`, `_favorable`, and `_count_confidence` keep the
-algorithms deterministic and testable.
+Calculation helpers such as `_metric_value`, `_metric_group_value`,
+`_aggregate_metric`, `_metric_aggregation`, `_pearson`, `_linear_trend`,
+`_direction`, `_favorable`, and `_count_confidence` keep the algorithms
+deterministic and testable. `_aggregate_metric` reapplies source, derived, or
+conditional semantics inside each dataset, period, segment, or cohort-period
+group. `_metric_capabilities` is evaluated before those algorithms:
+aggregate-formula and conditional KPIs never enter row-only anomaly,
+correlation, or benchmark code.
 
 Primary test: `tests/test_insight_engine.py`.
 
@@ -408,18 +522,25 @@ Important internals:
 - `_calculation_description` explains how each insight was produced.
 - `_evidence_id` creates stable evidence identities.
 - `_ranking`, `_impact_score`, and `_assign_ranks` prioritize evidence;
-  material target gaps, period changes, and segment findings receive greater
-  management relevance than associations and technical warnings.
+  material target gaps, period/baseline changes, and cohort/segment findings
+  receive greater management relevance than associations and technical
+  warnings.
+- `_supporting_data` expands consolidated diagnostic issues into one readable
+  row per unmet requirement.
 - `_chart_type_for` and `_generate_chart` choose and render deterministic
-  chart types, including segment target-performance bars.
+  chart types, including a period-versus-baseline line, cohort-movement bars,
+  segment target-performance bars, and named category-share bars.
 
 Primary test: `tests/test_evidence_layer.py`.
 
-## Manual visualizations
+## Dashboard and manual visualizations
 
 ### `visualization_builder.py`
 
 Owns manual chart validation, calculation, rendering, preview, and persistence.
+The configuration argument is optional for source-column and record-count
+charts. KPI selectors are resolved only when a reviewed business
+configuration exists.
 
 Core contracts:
 
@@ -432,7 +553,8 @@ Public functions:
 
 - `parse_visualization_spec(...)` validates submitted form values.
 - `build_visualization(...)` resolves measures, filters rows, calculates
-  grouped values, and renders the chart.
+  grouped values, and renders the chart. It accepts an explicit dataset ID
+  when no KPI configuration exists.
 - `save_preview(...)`, `load_preview(...)`, and `delete_preview(...)` manage
   short-lived preview artifacts.
 - `save_visualization(...)`, `load_visualization(...)`, and
@@ -441,11 +563,31 @@ Public functions:
 - `artifact_chart_filename(...)` resolves a saved chart safely.
 - `spec_to_form(...)` repopulates the editor when reopening a chart.
 
+The `saved_visualizations` route supplies these revalidated artifacts to
+`visualizations.html`. The dashboard template embeds each artifact through the
+validated `saved_visualization_chart` route, so saved PNGs appear directly in
+responsive chart cards without exposing chart-directory paths. Cards retain
+links to detailed provenance, editing, and deterministic regeneration.
+
+`routes._default_visualization_form(...)` builds a deterministic starting
+recommendation from the current primary KPI or first usable numeric source
+column plus an available category/date field. `visualization_builder.html`
+presents chart types as business questions and keeps technical controls in
+collapsed advanced options. `static/visualization_builder.js` provides
+progressive guidance by limiting grouping options and measure counts to the
+selected chart family; it does not calculate data or replace server validation.
+
 Important internals:
 
 - `_resolve_measure` and `_validate_compatibility` enforce chart/measure rules.
+  `_resolve_measure` rejects only KPI selectors—not source selectors—when no
+  KPI configuration exists.
+- `_date_filter_column` resolves a selected time axis, configured date, or one
+  unambiguous profiled date without inventing a date field.
 - `_filter_rows`, `_grouped_data`, `_row_measure_value`, and
-  `_group_measure_value` calculate displayed values.
+  `_group_measure_value` calculate displayed values. Grouped conditional KPIs
+  call `evaluate_conditional_metric` over the exact group's rows rather than
+  averaging row indicators.
 - `_render_chart`, `_render_line`, `_render_bars`, `_render_scatter`, and
   `_render_box` produce images through Matplotlib’s non-interactive backend.
 - `_validate_dataset` and `_source_metadata` bind artifacts to the source.
@@ -566,13 +708,19 @@ Public functions:
 Generation internals:
 
 - `_story_packs` groups bounded evidence by metric.
+- `_section_for` places period-baseline evidence under trends and cohort
+  movement under segment analysis; `_fact_priority` raises the verified worst
+  and best cohort changes into the bounded fact catalog.
 - `_generate_story`, `_story_response_schema`, and `_parse_story_response`
-  implement structured generation and validation-aware retries.
+  implement structured generation and validation-aware retries. Every attempt
+  is measured as `report_story` or `report_story_regeneration` under
+  `_STORY_PROMPT_VERSION`.
 - `_generate_executive_summary`, `_summary_response_schema`, and
   `_parse_summary_response` do the same for exactly five prioritized,
   actionable management points. Each point must name its metric, quote an
   exact selected fact, and include a concrete review, comparison, validation,
-  investigation, or monitoring action.
+  investigation, or monitoring action. Every attempt is measured as
+  `executive_summary` under `_SUMMARY_PROMPT_VERSION`.
 - `_story_context_descriptors` supplies path-labelled context so a model can
   distinguish the current quarter from the previous quarter or the worst
   region from another segment without inventing either.
@@ -635,6 +783,7 @@ Dataset and KPI routes:
 - `dataset_profile`, `excel_sheet_selection`, `select_excel_sheet`
 - `suggest_configurations`, `review_suggestion`
 - `suggest_derived_kpis`, `review_derived_kpi`, `derived_kpi_editor`
+- `conditional_kpi_editor`, `configure_conditional_kpi`
 - `configure_dataset`, `configure_derived_kpi`
 - `saved_configuration`, `choose_primary_metric`,
   `edit_metric_settings`, `remove_configured_metric`
@@ -674,6 +823,10 @@ Visualization routes:
 - `saved_visualization`, `saved_visualization_chart`,
   `regenerate_visualization`
 
+`saved_visualizations` is also exposed as
+`/workspaces/<dataset_id>/dashboard`. The legacy visualization-list URL
+remains supported.
+
 Insight and evidence routes:
 
 - `deterministic_insights`, `saved_insights`, `evidence_chart`
@@ -704,6 +857,9 @@ Important helper groups:
 - `_save_generated_report_with_charts` rolls back a newly written report JSON
   if its version-specific chart snapshot cannot be persisted.
 - `_render_*`, `_default_*_form`, and `_*_form_from_*` prepare templates.
+- `_evidence_kind` separates management findings, optional associations, and
+  diagnostics; `_recommended_evidence_ids` builds the bounded management-first
+  default report selection.
 - `_redirect_with_state`, `_load_view_state`, and `_state_*` implement stable
   GET pages after form submissions.
 - `_generated_report_chart_paths`, `_generated_report_sections`, and
@@ -726,11 +882,18 @@ Route behaviour is covered across the route test files, especially
 - `sheet_selection.html` — explicit XLSX worksheet selection.
 - `preview.html` — profile, suggestions, and initial KPI configuration.
 - `derived_configuration.html` — derived formula preview and configuration.
+- `conditional_configuration.html` — exact-category record-rate/value-share
+  builder and row-grain confirmation.
 - `configuration.html` — saved KPI registry.
 - `insights.html` — deterministic insights and evidence cards.
 - `visualization_builder.html` — manual chart editor.
-- `visualization.html` / `visualizations.html` — saved chart detail/list.
+- `visualization.html` — saved chart detail.
+- `visualizations.html` — report dashboard and saved chart collection.
+- `_report_project_navigation.html` — persistent Data source, KPI/evidence,
+  Dashboard, Next actions, and Report revisions navigation.
 - `report_configuration_form.html` — report content selection.
+- `static/report_configuration.js` — synchronizes KPI dependencies while
+  selecting only server-marked recommended evidence, not every diagnostic.
 - `report_configuration.html` — saved report readiness and package review.
 - `generated_report.html` — executive summary, published stories, evidence,
   version controls, JSON links, and PDF link.
@@ -738,8 +901,6 @@ Route behaviour is covered across the route test files, especially
   and historical HTML/JSON/PDF links.
 - `_dataset_context.html` — shared context-panel partial.
 - `static/context_panel.js` — safe insertion of approved context tokens.
-- `static/report_configuration.js` — synchronizes KPI, evidence, and
-  visualization dependencies in the report form.
 
 Templates render already validated objects, but still rely on Jinja escaping;
 they must not mark user or model text as safe HTML.

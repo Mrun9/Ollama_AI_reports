@@ -4,17 +4,125 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Visualization Builder | AI Insight Reporter</title>
+    <style>
+      :root {
+        --background: #f4f7fb;
+        --panel: #fff;
+        --border: #d8e0ec;
+        --muted: #536174;
+        --accent: #2563eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        background: var(--background);
+        color: #172033;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 0;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 1080px;
+        padding: 1.5rem clamp(1rem, 3vw, 3rem) 3rem;
+      }
+      form {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: clamp(1rem, 3vw, 2rem);
+      }
+      label { display: block; font-weight: 650; }
+      input[type="text"], input:not([type]), input[type="date"],
+      input[type="number"], select, textarea {
+        border: 1px solid #aeb9c8;
+        border-radius: 0.4rem;
+        font: inherit;
+        margin-top: 0.3rem;
+        max-width: 42rem;
+        padding: 0.55rem 0.65rem;
+        width: 100%;
+      }
+      textarea { min-height: 5rem; }
+      .intro, .help { color: var(--muted); }
+      .step {
+        border: 0;
+        border-top: 1px solid var(--border);
+        margin: 1.5rem 0 0;
+        padding: 1.5rem 0 0;
+      }
+      .step:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+      .step legend { font-size: 1.1rem; font-weight: 750; }
+      .goal-grid, .measure-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      }
+      .goal-card, .measure-card {
+        border: 1px solid var(--border);
+        border-radius: 0.55rem;
+        cursor: pointer;
+        font-weight: 500;
+        padding: 0.8rem;
+      }
+      .goal-card:has(input:checked) {
+        background: #eff6ff;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .measure-card:has(input:checked) {
+        background: #f0fdf4;
+        border-color: #16a34a;
+      }
+      .goal-card small {
+        color: var(--muted);
+        display: block;
+        margin: 0.3rem 0 0 1.35rem;
+      }
+      .tag {
+        background: #e8eef7;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        margin-left: 0.35rem;
+        padding: 0.12rem 0.4rem;
+      }
+      details {
+        border-top: 1px solid var(--border);
+        margin-top: 1.5rem;
+        padding-top: 1.2rem;
+      }
+      details summary { cursor: pointer; font-size: 1.05rem; font-weight: 750; }
+      details > fieldset { margin-top: 1rem; }
+      .report-option {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        padding: 0.8rem;
+      }
+      button[type="submit"] {
+        background: var(--accent);
+        border: 0;
+        border-radius: 0.45rem;
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 750;
+        padding: 0.7rem 1rem;
+      }
+      [hidden] { display: none !important; }
+    </style>
+    <script
+      src="{{ url_for('static', filename='visualization_builder.js') }}"
+      defer></script>
   </head>
   <body>
     <main>
-      <h1>Build a manual visualization</h1>
-      <p>
-        Select configured KPIs, supplementary numeric source columns, or record count.
-        Python validates the configuration and generates every plotted value.
-      </p>
-      <p>
-        Non-KPI selections are allowed for the final report, but they will be labelled as
-        supplementary visualizations rather than KPI evidence.
+      {% set current_section = "dashboard" %}
+      {% include "_report_project_navigation.html" %}
+      <h1>Create a visualization</h1>
+      <p class="intro">
+        Start with the business question—not chart terminology. A recommended
+        setup is already selected, so you can preview it immediately or change
+        any of the simple choices below.
       </p>
 
       {% if error %}
@@ -26,76 +134,95 @@
         <input type="hidden" name="replaces_visualization_id"
           value="{{ form_data.get('replaces_visualization_id', '') }}">
 
-        <p>
-          <label for="visualization-title">Chart title</label>
-          <input id="visualization-title" name="title" maxlength="120" required
-            value="{{ form_data.get('title', '') }}">
-        </p>
-
-        <p>
-          <label for="visualization-purpose">
-            What question should this visualization answer? (optional)
-          </label>
-          <textarea id="visualization-purpose" name="purpose"
-            maxlength="500">{{ form_data.get('purpose', '') }}</textarea>
-        </p>
-        <p>
-          This purpose is retained as user-provided context for report narration.
-          Python still calculates every factual observation.
-        </p>
-
-        <p>
-          <label for="chart-type">Chart type</label>
-          <select id="chart-type" name="chart_type" required>
-            {% set chart_labels = {
-              "time_line": "Time-series line",
-              "category_bar": "Category bar",
-              "category_bar_horizontal": "Horizontal category bar",
-              "scatter": "Scatter plot",
-              "histogram": "Distribution histogram",
-              "box": "Box and outliers"
-            } %}
+        <fieldset class="step">
+          <legend>1. What do you want to understand?</legend>
+          <p class="help">Choose the question closest to your business decision.</p>
+          {% set chart_choices = {
+            "time_line": (
+              "See change over time",
+              "Monthly, quarterly, or yearly trends"
+            ),
+            "category_bar": (
+              "Compare groups",
+              "Compare regions, products, teams, or categories"
+            ),
+            "category_bar_horizontal": (
+              "Rank groups",
+              "Show highest or lowest groups clearly"
+            ),
+            "scatter": (
+              "Find a relationship",
+              "See whether two numeric values move together"
+            ),
+            "histogram": (
+              "See the distribution",
+              "Understand common, low, and high values"
+            ),
+            "box": (
+              "Find spread and outliers",
+              "See typical ranges and unusual values"
+            )
+          } %}
+          <div class="goal-grid">
             {% for chart_type in chart_types %}
-              <option value="{{ chart_type }}"
-                {% if form_data.get('chart_type') == chart_type %}selected{% endif %}>
-                {{ chart_labels[chart_type] }}
-              </option>
+              <label class="goal-card">
+                <input type="radio" name="chart_type" value="{{ chart_type }}"
+                  {% if form_data.get('chart_type') == chart_type %}checked{% endif %}
+                  required>
+                {{ chart_choices[chart_type][0] }}
+                <small>{{ chart_choices[chart_type][1] }}</small>
+              </label>
             {% endfor %}
-          </select>
-        </p>
+          </div>
+        </fieldset>
 
-        <fieldset>
-          <legend>Measures (select one to five)</legend>
-          {% for metric in configuration.metrics %}
-            {% set selector = "metric:" ~ metric.metric_id %}
-            <label>
-              <input type="checkbox" name="measure_selectors" value="{{ selector }}"
-                {% if selector in form_data.getlist('measure_selectors') %}checked{% endif %}>
-              KPI: {{ metric.name }} ({{ metric.display_format }})
-            </label>
-          {% endfor %}
-          <label>
+        <fieldset class="step">
+          <legend>2. Which number should the chart explain?</legend>
+          <p class="help" id="measure-help">
+            One recommended measure is preselected. Trend and comparison
+            charts can show up to five compatible measures.
+          </p>
+          <div class="measure-grid">
+          {% if configuration %}
+            {% for metric in configuration.metrics %}
+              {% set selector = "metric:" ~ metric.metric_id %}
+              <label class="measure-card">
+                <input type="checkbox" name="measure_selectors" value="{{ selector }}"
+                  {% if selector in form_data.getlist('measure_selectors') %}checked{% endif %}>
+                {{ metric.name }} <span class="tag">KPI</span>
+              </label>
+            {% endfor %}
+          {% else %}
+            <p class="help">KPIs will appear here after they are configured.</p>
+          {% endif %}
+          <label class="measure-card">
             <input type="checkbox" name="measure_selectors" value="count:records"
               {% if "count:records" in form_data.getlist('measure_selectors') %}checked{% endif %}>
-            Supplementary: record count
+            Number of records <span class="tag">source</span>
           </label>
           {% for column in numeric_columns %}
             {% set selector = "column:" ~ column %}
-            <label>
+            <label class="measure-card">
               <input type="checkbox" name="measure_selectors" value="{{ selector }}"
                 {% if selector in form_data.getlist('measure_selectors') %}checked{% endif %}>
-              Supplementary numeric column: {{ column }}
+              {{ column }} <span class="tag">source</span>
             </label>
           {% endfor %}
+          </div>
         </fieldset>
 
-        <p>
-          <label for="x-column">X-axis or box-plot category</label>
+        <fieldset class="step">
+          <legend>3. How should the results be organized?</legend>
+          <p class="help" id="grouping-help">
+            Choose the date or business group that should organize the chart.
+          </p>
+        <p id="x-column-field">
+          <label for="x-column" id="x-column-label">Group results by</label>
           <select id="x-column" name="x_column">
-            <option value="">Not applicable</option>
+            <option value="" data-kind="none">No grouping</option>
             <optgroup label="Date columns">
               {% for column in profile.date_candidates %}
-                <option value="{{ column }}"
+                <option value="{{ column }}" data-kind="date"
                   {% if form_data.get('x_column') == column %}selected{% endif %}>
                   {{ column }}
                 </option>
@@ -103,7 +230,7 @@
             </optgroup>
             <optgroup label="Category columns">
               {% for column in profile.category_candidates %}
-                <option value="{{ column }}"
+                <option value="{{ column }}" data-kind="category"
                   {% if form_data.get('x_column') == column %}selected{% endif %}>
                   {{ column }}
                 </option>
@@ -111,7 +238,7 @@
             </optgroup>
             <optgroup label="Numeric columns for scatter plots">
               {% for column in numeric_columns %}
-                <option value="{{ column }}"
+                <option value="{{ column }}" data-kind="numeric"
                   {% if form_data.get('x_column') == column %}selected{% endif %}>
                   {{ column }}
                 </option>
@@ -119,11 +246,39 @@
             </optgroup>
           </select>
         </p>
+        </fieldset>
 
-        <p>
-          <label for="series-column">Optional series/category colour</label>
+        <fieldset class="step">
+          <legend>4. Name the chart</legend>
+          <p>
+            <label for="visualization-title">Chart title</label>
+            <input id="visualization-title" name="title" maxlength="120" required
+              value="{{ form_data.get('title', '') }}">
+          </p>
+          <p>
+            <label for="visualization-purpose">
+              What decision or question will this chart support? (optional)
+            </label>
+            <textarea id="visualization-purpose" name="purpose"
+              maxlength="500">{{ form_data.get('purpose', '') }}</textarea>
+          </p>
+          <p class="help">
+            This wording helps report narration understand why you created the
+            chart. Python still calculates every plotted value.
+          </p>
+        </fieldset>
+
+        <details>
+          <summary>Advanced options</summary>
+          <p class="help">
+            The recommended defaults work for most charts. Open these settings
+            only for a specific calculation, split, filter, or display.
+          </p>
+
+        <p id="series-field">
+          <label for="series-column">Split each result by (optional)</label>
           <select id="series-column" name="series_column">
-            <option value="">No series</option>
+            <option value="">Do not split</option>
             {% for column in profile.category_candidates %}
               <option value="{{ column }}"
                 {% if form_data.get('series_column') == column %}selected{% endif %}>
@@ -134,12 +289,20 @@
         </p>
 
         <p>
-          <label for="visualization-aggregation">Aggregation</label>
+          <label for="visualization-aggregation">How should values be combined?</label>
           <select id="visualization-aggregation" name="aggregation" required>
+            {% set aggregation_labels = {
+              "configured": "Recommended / use KPI setting",
+              "sum": "Total",
+              "mean": "Average",
+              "median": "Middle value",
+              "min": "Lowest value",
+              "max": "Highest value"
+            } %}
             {% for aggregation in aggregations %}
               <option value="{{ aggregation }}"
                 {% if form_data.get('aggregation') == aggregation %}selected{% endif %}>
-                {{ "Use configured KPI aggregation" if aggregation == "configured" else aggregation }}
+                {{ aggregation_labels[aggregation] }}
               </option>
             {% endfor %}
           </select>
@@ -150,7 +313,7 @@
         </p>
 
         <p>
-          <label for="date-granularity">Date granularity</label>
+          <label for="date-granularity">Group dates into</label>
           <select id="date-granularity" name="date_granularity" required>
             {% for granularity in date_granularities %}
               <option value="{{ granularity }}"
@@ -164,7 +327,7 @@
         <fieldset>
           <legend>Optional filters</legend>
           <p>
-            <label for="filter-column">Category filter column</label>
+            <label for="filter-column">Filter using</label>
             <select id="filter-column" name="filter_column">
               <option value="">No category filter</option>
               {% for column in profile.category_candidates %}
@@ -177,12 +340,12 @@
           </p>
           <p>
             <label for="filter-values">
-              Category values, one exact value per line
+              Values to include or exclude, one per line
             </label>
             <textarea id="filter-values" name="filter_values">{{ form_data.get('filter_values', '') }}</textarea>
           </p>
           <p>
-            <label for="filter-mode">Category filter mode</label>
+            <label for="filter-mode">Use those values to</label>
             <select id="filter-mode" name="filter_mode">
               {% for mode in filter_modes %}
                 <option value="{{ mode }}"
@@ -205,9 +368,9 @@
         </fieldset>
 
         <fieldset>
-          <legend>Display settings</legend>
+          <legend>Display choices</legend>
           <p>
-            <label for="sort-by">Sort categories by</label>
+            <label for="sort-by">Order groups using</label>
             <select id="sort-by" name="sort_by">
               <option value="value"
                 {% if form_data.get('sort_by') == 'value' %}selected{% endif %}>value</option>
@@ -216,25 +379,25 @@
             </select>
           </p>
           <p>
-            <label for="sort-direction">Sort direction</label>
+            <label for="sort-direction">Order</label>
             <select id="sort-direction" name="sort_direction">
               <option value="descending"
                 {% if form_data.get('sort_direction') == 'descending' %}selected{% endif %}>
-                descending
+                highest first
               </option>
               <option value="ascending"
                 {% if form_data.get('sort_direction') == 'ascending' %}selected{% endif %}>
-                ascending
+                lowest first
               </option>
             </select>
           </p>
           <p>
-            <label for="top-n">Top-N categories (1–50)</label>
+            <label for="top-n">Maximum groups to show (1–50)</label>
             <input id="top-n" name="top_n" type="number" min="1" max="50"
               value="{{ form_data.get('top_n', '10') }}">
           </p>
           <p>
-            <label for="axis-scale">Value-axis scale</label>
+            <label for="axis-scale">Value scale</label>
             <select id="axis-scale" name="scale">
               {% for scale in scales %}
                 <option value="{{ scale }}"
@@ -245,43 +408,31 @@
             </select>
           </p>
           <p>
-            <label for="bin-count">Histogram bins (5–50)</label>
+            <label for="bin-count">Distribution detail (5–50 groups)</label>
             <input id="bin-count" name="bin_count" type="number" min="5" max="50"
               value="{{ form_data.get('bin_count', '10') }}">
           </p>
         </fieldset>
+        </details>
 
-        <p>
+        <p class="report-option">
           <label>
             <input type="checkbox" name="include_in_report" value="yes"
               {% if form_data.get('include_in_report') %}checked{% endif %}>
-            Include this visualization in the final report
+            Make this chart available when building the final report
           </label>
         </p>
 
-        <button type="submit">Generate validated preview</button>
+        <button type="submit">Preview my chart</button>
+        <span class="help">Nothing is saved until you approve the preview.</span>
       </form>
-
-      <h2>Compatibility summary</h2>
-      <ul>
-        <li>Line: date x-axis; aggregate or row-level measures.</li>
-        <li>Bar: category x-axis; aggregate or row-level measures.</li>
-        <li>Scatter: numeric x-axis and exactly one row-level measure.</li>
-        <li>Histogram: exactly one row-level measure.</li>
-        <li>Box: exactly one row-level measure and optional category.</li>
-        <li>Multiple measures must have compatible display formats.</li>
-      </ul>
 
       <p>
         <a href="{{ url_for('core.saved_visualizations', dataset_id=dataset_id) }}">
-          View saved visualizations
+          Return to dashboard
         </a>
       </p>
-      <p>
-        <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
-          Return to saved configuration
-        </a>
-      </p>
+
     </main>
   </body>
 </html>

@@ -5,6 +5,7 @@ import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from ollama import Client
@@ -15,10 +16,12 @@ from insight_reporter.derived_metrics import (
     DerivedMetricError,
     validate_derived_metric,
 )
+from insight_reporter.model_run_metrics import measure_model_run
 
 _MAX_PROFILE_JSON_CHARACTERS = 12_000
 _MAX_RESPONSE_CHARACTERS = 100_000
 _MAX_SUGGESTIONS = 2
+_PROMPT_VERSION = "derived_kpi_suggestions.v1"
 _MAX_MODEL_NUMERIC_COLUMNS = 40
 _OLLAMA_CONTEXT_TOKENS = 4_096
 _OLLAMA_OUTPUT_TOKENS = 640
@@ -177,6 +180,8 @@ def generate_derived_kpi_suggestions(
     host: str,
     timeout_seconds: int,
     client: _ChatClient | None = None,
+    metrics_dir: Path | None = None,
+    dataset_id: str = "",
 ) -> DerivedKpiSuggestionBatch:
     """Ask Ollama only for formula definitions, then validate them in Python."""
 
@@ -197,35 +202,54 @@ def generate_derived_kpi_suggestions(
         )
     if client is None:
         client = Client(host=host, timeout=float(timeout_seconds))
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                "Propose exactly two optional derived KPI and business-configuration "
+                "definitions for this JSON dataset profile. Do not calculate values.\n"
+                + profile_json
+            ),
+        },
+    ]
+    options = {
+        "temperature": 0,
+        "num_ctx": _OLLAMA_CONTEXT_TOKENS,
+        "num_predict": _OLLAMA_OUTPUT_TOKENS,
+    }
     try:
-        response = client.chat(
+        with measure_model_run(
+            metrics_dir=metrics_dir,
+            task_type="derived_kpi_suggestions",
+            prompt_version=_PROMPT_VERSION,
             model=model,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        "Propose exactly two optional derived KPI and business-configuration "
-                        "definitions for this JSON dataset profile. Do not calculate values.\n"
-                        + profile_json
-                    ),
-                },
-            ],
-            format=build_derived_kpi_response_schema(profile),
-            stream=False,
-            think=False,
-            options={
-                "temperature": 0,
-                "num_ctx": _OLLAMA_CONTEXT_TOKENS,
-                "num_predict": _OLLAMA_OUTPUT_TOKENS,
-            },
-        )
+            messages=messages,
+            options=options,
+            dataset_id=dataset_id,
+        ) as measurement:
+            response = client.chat(
+                model=model,
+                messages=messages,
+                format=build_derived_kpi_response_schema(profile),
+                stream=False,
+                think=False,
+                options=options,
+            )
+            measurement.capture_response(response)
+            result = parse_derived_kpi_response(
+                _response_content(response),
+                profile=profile,
+            )
+            measurement.mark_validated()
+            return result
+    except DerivedKpiSuggestionError:
+        raise
     except Exception as error:
         raise DerivedKpiSuggestionError(
             "Local derived KPI suggestions are unavailable. Start Ollama and ensure "
             f"{model} is installed."
         ) from error
-    return parse_derived_kpi_response(_response_content(response), profile=profile)
 
 
 def build_derived_kpi_profile_summary(profile: DatasetProfile) -> dict[str, object]:

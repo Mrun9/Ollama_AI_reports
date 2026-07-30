@@ -25,6 +25,7 @@ def _configured_dataset(
     date_column: str = "date",
     categories: list[str] | None = None,
     target: str = "",
+    target_scope: str = "row",
 ) -> tuple[Path, DatasetProfile, BusinessConfiguration]:
     path = tmp_path / "dataset.csv"
     path.write_text(content, encoding="utf-8")
@@ -37,6 +38,7 @@ def _configured_dataset(
         date_column=date_column,
         category_columns=categories or [],
         target_or_benchmark=target,
+        target_scope=target_scope,
         business_objective="Evaluate the configured KPI using deterministic evidence.",
     )
     return path, profile, configuration
@@ -78,6 +80,7 @@ def test_period_percentage_and_trend_match_manual_values(tmp_path: Path) -> None
 
     report = generate_insights(path, profile=profile, configuration=configuration)
     period = _one(report, "period_change")
+    baseline = _one(report, "period_baseline_comparison")
     trend = _one(report, "trend")
 
     assert period.observation["previous_period"] == "2026-02"
@@ -88,10 +91,117 @@ def test_period_percentage_and_trend_match_manual_values(tmp_path: Path) -> None
     assert period.observation["percentage_change"] == pytest.approx(200 / 3)
     assert period.observation["direction"] == "increasing"
     assert period.observation["favorable"] is True
+    assert baseline.observation["baseline_periods"] == [
+        "2026-01",
+        "2026-02",
+    ]
+    assert baseline.observation["baseline_value"] == 45
+    assert baseline.observation["current_period"] == "2026-03"
+    assert baseline.observation["current_value"] == 100
+    assert baseline.observation["absolute_change"] == 55
+    assert baseline.observation["percentage_change"] == pytest.approx(
+        1100 / 9
+    )
     assert trend.observation["slope_per_period"] == 35
     assert trend.observation["direction"] == "increasing"
 
 
+def test_complete_dataset_target_compares_only_the_dataset_aggregate(
+    tmp_path: Path,
+) -> None:
+    path, profile, configuration = _configured_dataset(
+        tmp_path,
+        (
+            "date,segment,revenue\n"
+            "2026-01-01,A,40\n"
+            "2026-01-02,B,50\n"
+            "2026-02-01,A,60\n"
+            "2026-02-02,B,70\n"
+            "2026-03-01,A,80\n"
+            "2026-03-02,B,90\n"
+        ),
+        categories=["segment"],
+        target="350",
+        target_scope="dataset",
+    )
+
+    report = generate_insights(path, profile=profile, configuration=configuration)
+    snapshot = _one(report, "metric_snapshot")
+
+    assert snapshot.observation["current_value"] == 390
+    assert snapshot.observation["target_scope"] == "dataset"
+    assert snapshot.observation["gap_to_target"] == 40
+    assert snapshot.observation["meets_target"] is True
+    assert not any(
+        insight.type in {
+            "benchmark_breach",
+            "period_target_comparison",
+            "segment_target_comparison",
+        }
+        for insight in report.insights
+    )
+
+
+def test_period_target_compares_each_period_aggregate(tmp_path: Path) -> None:
+    path, profile, configuration = _main_dataset(tmp_path, target="70")
+    configuration = validate_business_configuration(
+        profile,
+        dataset_id=configuration.dataset_id,
+        primary_kpi="revenue",
+        kpi_direction="higher",
+        date_column="date",
+        category_columns=["segment"],
+        target_or_benchmark="70",
+        target_scope="period",
+        business_objective="Meet the revenue target every month.",
+    )
+
+    report = generate_insights(path, profile=profile, configuration=configuration)
+    comparison = _one(report, "period_target_comparison")
+
+    assert comparison.observation["target_scope"] == "period"
+    assert comparison.observation["current_period"] == "2026-03"
+    assert comparison.observation["current_value"] == 100
+    assert comparison.observation["current_gap_to_target"] == 30
+    assert comparison.observation["current_meets_target"] is True
+    assert comparison.observation["missed_period_count"] == 2
+    assert [item["value"] for item in comparison.observation["period_performance"]] == [
+        30,
+        60,
+        100,
+    ]
+    assert not any(
+        insight.type == "benchmark_breach" for insight in report.insights
+    )
+
+
+def test_segment_target_compares_each_segment_aggregate(tmp_path: Path) -> None:
+    path, profile, configuration = _main_dataset(tmp_path, target="100")
+    configuration = validate_business_configuration(
+        profile,
+        dataset_id=configuration.dataset_id,
+        primary_kpi="revenue",
+        kpi_direction="higher",
+        date_column="date",
+        category_columns=["segment"],
+        target_or_benchmark="100",
+        target_scope="segment",
+        business_objective="Meet the revenue target in every segment.",
+    )
+
+    report = generate_insights(path, profile=profile, configuration=configuration)
+    comparison = _one(report, "segment_target_comparison")
+
+    assert comparison.observation["target_scope"] == "segment"
+    assert comparison.observation["worst_segment"]["segment"] == "B"
+    assert comparison.observation["worst_segment"]["value"] == 70
+    assert comparison.observation["best_segment"]["segment"] == "A"
+    assert comparison.observation["best_segment"]["value"] == 120
+    assert comparison.observation["missed_segment_count"] == 1
+    assert not any(
+        insight.type in {"benchmark_breach", "segment_benchmark_performance"}
+        for insight in report.insights
+    )
 def test_six_months_are_compared_as_management_quarters(
     tmp_path: Path,
 ) -> None:
@@ -128,10 +238,26 @@ def test_segment_ranking_and_contributions_are_exact(tmp_path: Path) -> None:
 
     report = generate_insights(path, profile=profile, configuration=configuration)
     ranking = _one(report, "segment_ranking").observation
+    cohort = _one(report, "cohort_period_comparison").observation
     contribution = _one(report, "segment_contribution").observation
 
     assert ranking["top_segment"] == {"segment": "A", "value": 120.0, "record_count": 6}
     assert ranking["bottom_segment"] == {"segment": "B", "value": 70.0, "record_count": 6}
+    assert cohort["previous_period"] == "2026-02"
+    assert cohort["current_period"] == "2026-03"
+    assert cohort["best_performing_change"] == {
+        "cohort": "B",
+        "previous_value": 20,
+        "current_value": 40,
+        "absolute_change": 20,
+        "percentage_change": 100,
+        "direction": "increasing",
+        "favorable": True,
+        "previous_record_count": 2,
+        "current_record_count": 2,
+    }
+    assert cohort["worst_performing_change"]["cohort"] == "A"
+    assert cohort["worst_performing_change"]["percentage_change"] == 50
     assert contribution["overall_change"] == 40
     assert contribution["reconciled_percentage_total"] == 100
     by_segment = {
@@ -174,6 +300,53 @@ def test_segment_target_performance_identifies_management_priority(
     assert target_performance["best_segment"]["breach_percentage"] == pytest.approx(
         100 / 3
     )
+
+
+def test_cohort_comparison_respects_lower_is_better_direction(
+    tmp_path: Path,
+) -> None:
+    path, profile, configuration = _configured_dataset(
+        tmp_path,
+        (
+            "date,region,cost\n"
+            "2026-01-01,North,60\n"
+            "2026-01-02,North,60\n"
+            "2026-01-01,South,60\n"
+            "2026-01-02,South,60\n"
+            "2026-02-01,North,50\n"
+            "2026-02-02,North,50\n"
+            "2026-02-01,South,60\n"
+            "2026-02-02,South,60\n"
+            "2026-02-01,East,55\n"
+            "2026-02-02,East,55\n"
+            "2026-02-01,West,50\n"
+            "2026-03-01,North,40\n"
+            "2026-03-02,North,40\n"
+            "2026-03-01,South,70\n"
+            "2026-03-02,South,70\n"
+            "2026-03-01,West,45\n"
+        ),
+        primary_kpi="cost",
+        direction="lower",
+        categories=["region"],
+    )
+
+    report = generate_insights(
+        path,
+        profile=profile,
+        configuration=configuration,
+    )
+    comparison = _one(
+        report,
+        "cohort_period_comparison",
+    ).observation
+
+    assert comparison["best_performing_change"]["cohort"] == "North"
+    assert comparison["best_performing_change"]["favorable"] is True
+    assert comparison["worst_performing_change"]["cohort"] == "South"
+    assert comparison["worst_performing_change"]["favorable"] is False
+    assert comparison["cohort_count"] == 2
+    assert comparison["excluded_cohort_count"] == 2
 
 
 def test_correlation_is_association_and_constant_column_is_skipped(tmp_path: Path) -> None:
@@ -253,11 +426,19 @@ def test_missing_values_generate_exact_warning(tmp_path: Path) -> None:
     report = generate_insights(path, profile=profile, configuration=configuration)
     warning = _one(report, "missing_data_warning")
 
-    assert warning.metric == "revenue"
+    assert warning.metric == "Dataset completeness"
     assert warning.observation == {
-        "missing_count": 1,
-        "missing_percentage": 20.0,
-        "total_records": 5,
+        "affected_column_count": 1,
+        "total_column_count": 2,
+        "maximum_missing_percentage": 20.0,
+        "columns": [
+            {
+                "column": "revenue",
+                "missing_count": 1,
+                "missing_percentage": 20.0,
+                "total_records": 5,
+            }
+        ],
     }
 
 
@@ -271,11 +452,17 @@ def test_no_date_dataset_skips_all_temporal_analysis(tmp_path: Path) -> None:
 
     report = generate_insights(path, profile=profile, configuration=configuration)
     types = {insight.type for insight in report.insights}
-    skipped = _one(report, "analysis_skipped")
+    snapshot = _one(report, "metric_snapshot")
 
-    assert skipped.observation["reason"] == "no_date_column"
+    assert {
+        item["analysis"]: item["reason"]
+        for item in snapshot.observation["not_applicable_analyses"]
+    }["temporal_analyses"] == "requires_confirmed_date_column"
+    assert "analysis_skipped" not in types
     assert "period_change" not in types
+    assert "period_baseline_comparison" not in types
     assert "trend" not in types
+    assert "cohort_period_comparison" not in types
     assert "segment_contribution" not in types
 
 
@@ -377,8 +564,15 @@ def test_small_samples_warn_and_skip_unsupported_calculations(tmp_path: Path) ->
         insight for insight in report.insights if insight.type == "insufficient_data_warning"
     ]
 
-    assert any(item.observation.get("reason") == "small_dataset" for item in warnings)
-    assert any(item.observation.get("analysis") == "iqr_anomaly_detection" for item in warnings)
+    assert len(warnings) == 1
+    issues = {
+        item["analysis"]: item
+        for item in warnings[0].observation["issues"]
+    }
+    assert issues["dataset_size"]["available"] == 3
+    assert issues["dataset_size"]["required"] == 5
+    assert issues["iqr_anomaly_detection"]["available"] == 3
+    assert "recommendation" in issues["iqr_anomaly_detection"]
     assert not any(item.type == "iqr_anomaly_detection" for item in report.insights)
 
 
@@ -475,19 +669,36 @@ def test_ratio_of_sums_uses_aggregate_inputs_not_average_row_ratios(
 
     report = generate_insights(path, profile=profile, configuration=configuration)
     period = _one(report, "period_change")
-    contribution_skips = [
-        insight
-        for insight in report.insights
-        if insight.type == "analysis_skipped"
-        and insight.observation.get("analysis") == "segment_contribution"
-    ]
+    snapshot = _one(report, "metric_snapshot")
 
     # February: (400 - 200) / 400 = 50%; March: (500 - 200) / 500 = 60%.
     assert period.observation["previous_value"] == 50
     assert period.observation["current_value"] == 60
     assert period.observation["percentage_change"] == 20
     assert period.observation["aggregation"] == "formula"
-    assert len(contribution_skips) == 1
+    excluded = {
+        item["analysis"]: item["reason"]
+        for item in snapshot.observation["not_applicable_analyses"]
+    }
+    assert excluded["segment_contribution"] == "requires_additive_sum_metric"
+    assert excluded["numeric_correlation"] == "requires_row_level_kpi_values"
+    assert not any(
+        insight.type == "insufficient_data_warning"
+        and any(
+            issue["analysis"].startswith("correlation:")
+            or issue["analysis"] in {
+                "iqr_anomaly_detection",
+                "benchmark_breach",
+            }
+            for issue in insight.observation["issues"]
+        )
+        for insight in report.insights
+    )
+    assert not any(
+        insight.type == "analysis_skipped"
+        and insight.observation.get("analysis") == "segment_contribution"
+        for insight in report.insights
+    )
     assert report.metric_definition["metric_type"] == "derived"
     assert report.metric_definition["formula"] == (
         "(SUM([revenue]) - SUM([cost])) / SUM([revenue]) * 100"

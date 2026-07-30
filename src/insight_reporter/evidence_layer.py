@@ -352,6 +352,11 @@ def _kpi_definition(
         definition["formula_label"] = metric.derived_metric.formula_label
         definition["calculation_level"] = metric.derived_metric.calculation_level
         definition["aggregation"] = metric.derived_metric.aggregation
+    if metric.conditional_metric is not None:
+        definition["formula_label"] = metric.conditional_metric.formula_label
+        definition["calculation_base"] = (
+            metric.conditional_metric.calculation_base
+        )
     return definition
 
 
@@ -385,6 +390,8 @@ def _supporting_data(
             for column in profile.columns
             if column.missing_count > 0
         )
+    if insight.type == "insufficient_data_warning":
+        return _dict_rows(observation.get("issues"))
     if insight.type == "period_change":
         return (
             {
@@ -398,13 +405,23 @@ def _supporting_data(
                 "role": "current",
             },
         )
+    if insight.type == "period_baseline_comparison":
+        return _dict_rows(observation.get("period_values"))
+    if insight.type == "period_target_comparison":
+        return _dict_rows(observation.get("period_performance"))
     if insight.type == "trend":
         values = observation.get("period_values")
         return _dict_rows(values)
     if insight.type == "segment_ranking":
         return _dict_rows(observation.get("ranking"))
+    if insight.type == "segment_share":
+        return _dict_rows(observation.get("shares"))
     if insight.type == "segment_benchmark_performance":
         return _dict_rows(observation.get("segment_performance"))
+    if insight.type == "segment_target_comparison":
+        return _dict_rows(observation.get("segment_performance"))
+    if insight.type == "cohort_period_comparison":
+        return _dict_rows(observation.get("comparisons"))
     if insight.type == "segment_contribution":
         return _dict_rows(observation.get("contributions"))
     if insight.type == "iqr_anomaly_detection" and metric_configuration is not None:
@@ -485,6 +502,22 @@ def _metric_row_values(
         if metric.metric_type == "source" and metric.source is not None:
             value = _number(row.values.get(metric.source.column))
         elif (
+            metric.metric_type == "conditional_rate"
+            and metric.conditional_metric is not None
+            and metric.conditional_metric.calculation_base == "record_count"
+        ):
+            value = (
+                100.0
+                if str(
+                    row.values.get(
+                        metric.conditional_metric.condition_column,
+                        "",
+                    )
+                ).strip()
+                in set(metric.conditional_metric.included_values)
+                else 0.0
+            )
+        elif (
             metric.metric_type == "derived"
             and metric.derived_metric is not None
             and metric.derived_metric.calculation_level == "row"
@@ -535,13 +568,30 @@ def _calculation_description(insight: Insight) -> str:
     observation = insight.observation
     descriptions = {
         "missing_data_warning": (
-            f"Counted configured missing-value markers in {insight.metric} and divided "
-            "that count by all source records."
+            "Counted configured missing-value markers in every affected "
+            "column, divided each count by all source records, and consolidated "
+            "the results into one dataset-quality diagnostic."
+        ),
+        "metric_snapshot": (
+            f"Calculated {insight.metric} once over all eligible dataset "
+            "records using its configured aggregation, counted valid and "
+            "excluded records, and recorded which analysis families are "
+            "structurally applicable."
         ),
         "period_change": (
             f"Aggregated {insight.metric} for the two latest eligible periods, subtracted "
             "the previous value from the current value, and divided by the previous value "
             "for percentage change when it was non-zero."
+        ),
+        "period_baseline_comparison": (
+            f"Aggregated {insight.metric} for each eligible period, averaged up "
+            "to four immediately preceding period aggregates as the baseline, "
+            "then compared the latest period with that baseline."
+        ),
+        "period_target_comparison": (
+            f"Aggregated {insight.metric} separately for every eligible "
+            "period and compared each period aggregate with the confirmed "
+            "per-period target."
         ),
         "trend": (
             f"Aggregated {insight.metric} by eligible period and fitted an ordinary "
@@ -552,11 +602,30 @@ def _calculation_description(insight: Insight) -> str:
             f"{observation.get('category_column', 'the configured category')}, applied "
             "the configured aggregation, then sorted values from highest to lowest."
         ),
+        "segment_share": (
+            f"Summed valid {insight.metric} values by "
+            f"{observation.get('category_column', 'the configured category')}, "
+            "divided every category sum by the total categorized sum, and "
+            "reconciled the displayed shares to one hundred percent."
+        ),
+        "cohort_period_comparison": (
+            f"Grouped valid {insight.metric} values by "
+            f"{observation.get('category_column', 'the configured cohort')}, "
+            "applied the configured aggregation separately in the latest two "
+            "periods, and calculated like-for-like absolute and percentage "
+            "changes."
+        ),
         "segment_benchmark_performance": (
             f"Grouped valid {insight.metric} values by "
             f"{observation.get('category_column', 'the configured category')}, "
             "compared every row with the confirmed target, and ranked segments "
             "by the percentage of rows that missed that target."
+        ),
+        "segment_target_comparison": (
+            f"Grouped valid {insight.metric} records by "
+            f"{observation.get('category_column', 'the configured category')}, "
+            "calculated one KPI aggregate per segment, and compared every "
+            "segment aggregate with the confirmed per-segment target."
         ),
         "segment_contribution": (
             f"Calculated each segment's change in {insight.metric} between the two "
@@ -576,9 +645,15 @@ def _calculation_description(insight: Insight) -> str:
             f"Compared each valid {insight.metric} value with the confirmed benchmark and "
             "divided breach count by valid record count."
         ),
+        "metric_benchmark_comparison": (
+            f"Calculated {insight.metric} over all eligible records using its "
+            "configured conditional denominator, then subtracted the confirmed "
+            "target from the calculated percentage."
+        ),
         "insufficient_data_warning": (
-            "Compared the available eligible record count with the deterministic minimum "
-            "required for this analysis."
+            "Consolidated every unmet deterministic eligibility requirement "
+            "for this KPI, including the available amount, required amount, "
+            "unit, and a concrete data remedy."
         ),
         "analysis_skipped": (
             "Applied the deterministic preconditions for this analysis and recorded why "
@@ -611,10 +686,17 @@ def _ranking(insight: Insight) -> EvidenceRanking:
         insight.confidence, 0.35
     )
     relevance = {
+        "metric_snapshot": 0.98,
         "period_change": 1.0,
+        "cohort_period_comparison": 1.0,
         "segment_benchmark_performance": 1.0,
+        "segment_target_comparison": 1.0,
+        "period_baseline_comparison": 0.98,
+        "period_target_comparison": 1.0,
         "benchmark_breach": 0.98,
+        "metric_benchmark_comparison": 1.0,
         "segment_contribution": 0.95,
+        "segment_share": 0.96,
         "segment_ranking": 0.9,
         "trend": 0.85,
         "iqr_anomaly_detection": 0.7,
@@ -636,8 +718,25 @@ def _ranking(insight: Insight) -> EvidenceRanking:
 
 def _impact_score(insight: Insight) -> float:
     observation = insight.observation
+    if insight.type == "metric_snapshot":
+        gap = _number(observation.get("gap_to_target"))
+        if gap is not None:
+            target = abs(_number(observation.get("target")) or 0)
+            current = abs(_number(observation.get("current_value")) or 0)
+            return min(1.0, abs(gap) / max(target, current, 1.0))
+        excluded = _number(observation.get("excluded_record_count")) or 0
+        total = _number(observation.get("total_record_count")) or 0
+        completeness_signal = (
+            1.0 - min(1.0, excluded / total)
+            if total > 0
+            else 0.0
+        )
+        return 0.2 + (0.2 * completeness_signal)
     if insight.type == "missing_data_warning":
-        return _bounded(_number(observation.get("missing_percentage")), scale=100)
+        return _bounded(
+            _number(observation.get("maximum_missing_percentage")),
+            scale=100,
+        )
     if insight.type == "period_change":
         percentage = _number(observation.get("percentage_change"))
         if percentage is not None:
@@ -646,6 +745,14 @@ def _impact_score(insight: Insight) -> float:
         current = abs(_number(observation.get("current_value")) or 0)
         previous = abs(_number(observation.get("previous_value")) or 0)
         return min(1.0, change / max(current, previous, 1.0))
+    if insight.type == "period_baseline_comparison":
+        percentage = _number(observation.get("percentage_change"))
+        if percentage is not None:
+            return _bounded(abs(percentage), scale=100)
+        change = abs(_number(observation.get("absolute_change")) or 0)
+        current = abs(_number(observation.get("current_value")) or 0)
+        baseline = abs(_number(observation.get("baseline_value")) or 0)
+        return min(1.0, change / max(current, baseline, 1.0))
     if insight.type == "trend":
         return min(1.0, abs(_number(observation.get("r_squared")) or 0))
     if insight.type == "segment_ranking":
@@ -663,6 +770,21 @@ def _impact_score(insight: Insight) -> float:
             if len(values) >= 2
             else 0.0
         )
+    if insight.type == "segment_share":
+        shares = observation.get("shares")
+        if not isinstance(shares, list):
+            return 0.0
+        return _bounded(
+            max(
+                (
+                    _number(item.get("share_percentage")) or 0.0
+                    for item in shares
+                    if isinstance(item, dict)
+                ),
+                default=0.0,
+            ),
+            scale=100,
+        )
     if insight.type == "segment_contribution":
         contributions = observation.get("contributions")
         values = []
@@ -674,6 +796,30 @@ def _impact_score(insight: Insight) -> float:
                 and (number := _number(item.get("contribution_percentage"))) is not None
             ]
         return _bounded(max(values, default=0.0), scale=100)
+    if insight.type == "cohort_period_comparison":
+        comparisons = observation.get("comparisons")
+        if not isinstance(comparisons, list):
+            return 0.0
+        percentages = [
+            abs(number)
+            for item in comparisons
+            if isinstance(item, dict)
+            and (
+                number := _number(item.get("percentage_change"))
+            )
+            is not None
+        ]
+        if percentages:
+            return _bounded(max(percentages), scale=100)
+        ratios = []
+        for item in comparisons:
+            if not isinstance(item, dict):
+                continue
+            change = abs(_number(item.get("absolute_change")) or 0)
+            previous = abs(_number(item.get("previous_value")) or 0)
+            current = abs(_number(item.get("current_value")) or 0)
+            ratios.append(change / max(previous, current, 1.0))
+        return min(1.0, max(ratios, default=0.0))
     if insight.type == "segment_benchmark_performance":
         worst = observation.get("worst_segment")
         return _bounded(
@@ -682,6 +828,29 @@ def _impact_score(insight: Insight) -> float:
             else None,
             scale=100,
         )
+    if insight.type in {
+        "period_target_comparison",
+        "segment_target_comparison",
+    }:
+        target = abs(_number(observation.get("target")) or 0)
+        if insight.type == "period_target_comparison":
+            gap = abs(
+                _number(observation.get("current_gap_to_target")) or 0
+            )
+            current = abs(_number(observation.get("current_value")) or 0)
+        else:
+            worst = observation.get("worst_segment")
+            gap = (
+                abs(_number(worst.get("gap_to_target")) or 0)
+                if isinstance(worst, dict)
+                else 0
+            )
+            current = (
+                abs(_number(worst.get("value")) or 0)
+                if isinstance(worst, dict)
+                else 0
+            )
+        return min(1.0, gap / max(target, current, 1.0))
     if insight.type == "iqr_anomaly_detection":
         count = _number(observation.get("anomaly_count")) or 0
         return min(1.0, count / max(insight.record_count, 1))
@@ -689,6 +858,11 @@ def _impact_score(insight: Insight) -> float:
         return min(1.0, abs(_number(observation.get("coefficient")) or 0))
     if insight.type == "benchmark_breach":
         return _bounded(_number(observation.get("breach_percentage")), scale=100)
+    if insight.type == "metric_benchmark_comparison":
+        gap = abs(_number(observation.get("gap_to_target")) or 0)
+        target = abs(_number(observation.get("target")) or 0)
+        current = abs(_number(observation.get("current_value")) or 0)
+        return min(1.0, gap / max(target, current, 1.0))
     return 0.1 if insight.type == "insufficient_data_warning" else 0.0
 
 
@@ -711,12 +885,18 @@ def _chart_type_for(
 ) -> str | None:
     if insight.type in {"period_change", "trend"}:
         return "time_trend"
+    if insight.type == "period_baseline_comparison":
+        return "period_baseline_comparison"
     if insight.type == "segment_ranking":
         return "category_comparison"
+    if insight.type == "segment_share":
+        return "category_share"
     if insight.type == "segment_benchmark_performance":
         return "segment_target_performance"
     if insight.type == "segment_contribution":
         return "segment_contribution"
+    if insight.type == "cohort_period_comparison":
+        return "cohort_period_comparison"
     if insight.type == "iqr_anomaly_detection":
         return "distribution_iqr_outliers"
     if insight.type == "missing_data_warning" and not missing_overview_created:
@@ -762,6 +942,48 @@ def _generate_chart(
             axis.set_ylabel(_safe_label(insight.metric))
             data_columns = ("period", "value")
             record_count = len(points)
+        elif chart_type == "period_baseline_comparison":
+            points = [
+                (str(row.get("period", "")), _number(row.get("value")))
+                for row in supporting_data
+            ]
+            points = [
+                (period, value)
+                for period, value in points
+                if value is not None
+            ]
+            baseline = _number(
+                insight.observation.get("baseline_value")
+            )
+            if not points or baseline is None:
+                return _close_empty(figure, plt)
+            axis.plot(
+                range(len(points)),
+                [value for _, value in points],
+                marker="o",
+                color="#2166ac",
+            )
+            axis.axhline(
+                baseline,
+                color="#d95f02",
+                linestyle="--",
+                label="Recent-period baseline",
+            )
+            axis.set_xticks(
+                range(len(points)),
+                [_safe_label(period) for period, _ in points],
+                rotation=30,
+                ha="right",
+            )
+            axis.set_ylabel(_safe_label(insight.metric))
+            axis.legend()
+            data_columns = (
+                "period",
+                "value",
+                "role",
+                "record_count",
+            )
+            record_count = len(points)
         elif chart_type == "category_comparison":
             points = [
                 (str(row.get("segment", "")), _number(row.get("value")))
@@ -778,6 +1000,36 @@ def _generate_chart(
             )
             axis.set_xlabel(_safe_label(insight.metric))
             data_columns = ("segment", "value")
+            record_count = len(points)
+        elif chart_type == "category_share":
+            points = [
+                (
+                    str(row.get("segment", "")),
+                    _number(row.get("share_percentage")),
+                )
+                for row in supporting_data[:20]
+            ]
+            points = [
+                (label, value)
+                for label, value in points
+                if value is not None
+            ]
+            if not points:
+                return _close_empty(figure, plt)
+            points.reverse()
+            axis.barh(
+                [_safe_label(label) for label, _ in points],
+                [value for _, value in points],
+                color="#5b8c5a",
+            )
+            axis.set_xlabel("Share of categorized total (%)")
+            axis.set_xlim(0, 100)
+            data_columns = (
+                "segment",
+                "value",
+                "share_percentage",
+                "record_count",
+            )
             record_count = len(points)
         elif chart_type == "segment_contribution":
             points = [
@@ -802,6 +1054,52 @@ def _generate_chart(
             )
             axis.set_ylabel("Absolute change")
             data_columns = ("segment", "absolute_change", "contribution_percentage")
+            record_count = len(points)
+        elif chart_type == "cohort_period_comparison":
+            points = [
+                (
+                    str(row.get("cohort", "")),
+                    _number(row.get("absolute_change")),
+                    row.get("favorable"),
+                )
+                for row in supporting_data[:20]
+            ]
+            points = [
+                (label, value, favorable)
+                for label, value, favorable in points
+                if value is not None
+            ]
+            if not points:
+                return _close_empty(figure, plt)
+            points.reverse()
+            colors = [
+                (
+                    "#2a9d8f"
+                    if favorable is True
+                    else "#e76f51"
+                    if favorable is False
+                    else "#7f8c8d"
+                )
+                for _, _, favorable in points
+            ]
+            axis.barh(
+                [_safe_label(label) for label, _, _ in points],
+                [value for _, value, _ in points],
+                color=colors,
+            )
+            axis.axvline(0, color="#333333", linewidth=0.8)
+            axis.set_xlabel("Absolute change")
+            data_columns = (
+                "cohort",
+                "previous_value",
+                "current_value",
+                "absolute_change",
+                "percentage_change",
+                "direction",
+                "favorable",
+                "previous_record_count",
+                "current_record_count",
+            )
             record_count = len(points)
         elif chart_type == "segment_target_performance":
             points = [
@@ -932,8 +1230,11 @@ def _pyplot() -> Any:
 def _chart_title(chart_type: str) -> str:
     return {
         "time_trend": "Time trend",
+        "period_baseline_comparison": "Period versus recent baseline",
         "category_comparison": "Category comparison",
+        "category_share": "Category share of total",
         "segment_contribution": "Segment contribution",
+        "cohort_period_comparison": "Cohort movement by period",
         "segment_target_performance": "Segment target performance",
         "distribution_iqr_outliers": "Distribution and IQR outliers",
         "missing_data_overview": "Missing-data overview",

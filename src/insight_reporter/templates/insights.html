@@ -8,6 +8,11 @@
       body { font-family: system-ui, sans-serif; line-height: 1.45; margin: 2rem; }
       main { max-width: 1100px; margin: 0 auto; }
       article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1.5rem 0; padding: 1rem; }
+      article.diagnostic { background: #f7f7f7; border-style: dashed; }
+      article.association { background: #fbfbff; }
+      .evidence-kind { font-weight: 700; }
+      details.evidence-secondary { margin: 1rem 0; }
+      details.evidence-secondary > summary { cursor: pointer; font-weight: 700; }
       dl { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr; gap: 0.35rem 1rem; }
       dt { font-weight: 700; }
       dd { margin: 0; overflow-wrap: anywhere; }
@@ -19,6 +24,9 @@
   </head>
   <body>
     <main>
+      {% set dataset_id = report.dataset_id %}
+      {% set current_section = "kpi" %}
+      {% include "_report_project_navigation.html" %}
       <h1>Deterministic insights generated</h1>
       <p>
         {{ report.insights|length }} reproducible observations were generated with Python only.
@@ -26,14 +34,51 @@
       </p>
 
       {% if evidence %}
+        {% set counts = namespace(findings=0, associations=0, diagnostics=0) %}
+        {% for record in evidence.records %}
+          {% if record.insight_type in diagnostic_evidence_types %}
+            {% set counts.diagnostics = counts.diagnostics + 1 %}
+          {% elif record.insight_type in association_evidence_types %}
+            {% set counts.associations = counts.associations + 1 %}
+          {% else %}
+            {% set counts.findings = counts.findings + 1 %}
+          {% endif %}
+        {% endfor %}
         <p>
           {{ evidence.records|length }} evidence records let a reviewer trace every observation
           to its source and supporting values.
         </p>
+        <p>
+          <strong>{{ counts.findings }}</strong> decision-relevant findings ·
+          <strong>{{ counts.associations }}</strong> optional associations ·
+          <strong>{{ counts.diagnostics }}</strong> data or analysis diagnostics.
+          Diagnostics remain traceable but are not management findings.
+        </p>
 
         {% for record in evidence.records|sort(attribute="ranking.rank") %}
-          <article id="{{ record.id }}">
+          {% set secondary = (
+            record.insight_type in diagnostic_evidence_types
+            or record.insight_type in association_evidence_types
+          ) %}
+          {% if secondary %}
+            <details class="evidence-secondary">
+              <summary>
+                #{{ record.ranking.rank }} · {{ record.insight_type }} ·
+                {{ record.metric }}
+              </summary>
+          {% endif %}
+          <article id="{{ record.id }}"
+            class="{% if record.insight_type in diagnostic_evidence_types %}diagnostic{% elif record.insight_type in association_evidence_types %}association{% endif %}">
             <h2>#{{ record.ranking.rank }} — {{ record.insight_type }}</h2>
+            <p class="evidence-kind">
+              {% if record.insight_type in diagnostic_evidence_types %}
+                Analysis diagnostic — excluded from reports by default
+              {% elif record.insight_type in association_evidence_types %}
+                Optional descriptive association — not causal
+              {% else %}
+                Decision-relevant deterministic finding
+              {% endif %}
+            </p>
             <dl>
               <dt>Evidence ID</dt>
               <dd>{{ record.id }}</dd>
@@ -124,6 +169,9 @@
               </ul>
             {% endif %}
           </article>
+          {% if secondary %}
+            </details>
+          {% endif %}
         {% endfor %}
 
         <details>
@@ -143,7 +191,12 @@
       </details>
       <p>
         <a href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">
-          Configure report content
+          Configure and generate report
+        </a>
+      </p>
+      <p>
+        <a href="{{ url_for('core.saved_visualizations', dataset_id=report.dataset_id) }}">
+          Open dashboard
         </a>
       </p>
       <p>

@@ -7,6 +7,9 @@
   </head>
   <body>
     <main>
+      {% set dataset_id = configuration.dataset_id %}
+      {% set current_section = "kpi" %}
+      {% include "_report_project_navigation.html" %}
       <h1>Business configuration saved</h1>
       <p>The selections were validated against dataset {{ configuration.dataset_id }}.</p>
       {% if configuration_error %}
@@ -39,15 +42,33 @@
           <dl>
             <dt>Type</dt>
             <dd>{{ metric.metric_type }}</dd>
+            <dt>Aggregation</dt>
+            <dd>{{ metric.aggregation }}</dd>
+            <dt>Display format</dt>
+            <dd>{{ metric.display_format }}</dd>
+            <dt>Target scope</dt>
+            <dd>
+              {% if metric.target_scope == "row" %}Per row
+              {% elif metric.target_scope == "period" %}Per period
+              {% elif metric.target_scope == "segment" %}Per segment
+              {% else %}Complete dataset
+              {% endif %}
+            </dd>
             {% if metric.derived_metric %}
               <dt>Formula</dt>
               <dd>{{ metric.derived_metric.formula_label }}</dd>
               <dt>Calculation level</dt>
               <dd>{{ metric.derived_metric.calculation_level }}</dd>
-              <dt>Aggregation</dt>
-              <dd>{{ metric.derived_metric.aggregation }}</dd>
               <dt>Source columns</dt>
               <dd>{{ metric.derived_metric.source_columns|join(", ") }}</dd>
+            {% endif %}
+            {% if metric.conditional_metric %}
+              <dt>Conditional calculation</dt>
+              <dd>{{ metric.conditional_metric.formula_label }}</dd>
+              <dt>Calculation base</dt>
+              <dd>{{ metric.conditional_metric.calculation_base }}</dd>
+              <dt>Included values</dt>
+              <dd>{{ metric.conditional_metric.included_values|join(", ") }}</dd>
             {% endif %}
           </dl>
 
@@ -65,10 +86,56 @@
                 </option>
               </select>
             </label>
+            {% if metric.metric_type == "source" %}
+              <label>
+                Aggregation
+                <select name="aggregation">
+                  {% for aggregation in source_aggregation_options %}
+                    <option value="{{ aggregation }}"
+                      {% if metric.aggregation == aggregation %}selected{% endif %}>
+                      {{ aggregation }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label>
+                Display format
+                <select name="display_format">
+                  {% for display_format in display_format_options %}
+                    <option value="{{ display_format }}"
+                      {% if metric.display_format == display_format %}selected{% endif %}>
+                      {{ display_format }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </label>
+            {% else %}
+              <input type="hidden" name="aggregation" value="{{ metric.aggregation }}">
+              <input type="hidden" name="display_format" value="{{ metric.display_format }}">
+            {% endif %}
             <label>
               Optional target or benchmark
               <input name="target_or_benchmark" type="number" step="any"
+                {% if metric.metric_type == "conditional_rate" %}min="0" max="100"{% endif %}
                 value="{{ metric.target_or_benchmark if metric.target_or_benchmark is not none else '' }}">
+            </label>
+            <label>
+              Target applies to
+              <select name="target_scope">
+                {% for scope in target_scope_options %}
+                  {% if scope != "row" or metric.metric_type == "source"
+                    or (metric.derived_metric and metric.derived_metric.calculation_level == "row") %}
+                    <option value="{{ scope }}"
+                      {% if metric.target_scope == scope %}selected{% endif %}>
+                      {% if scope == "row" %}Each row
+                      {% elif scope == "period" %}Each period
+                      {% elif scope == "segment" %}Each segment
+                      {% else %}Complete dataset aggregate
+                      {% endif %}
+                    </option>
+                  {% endif %}
+                {% endfor %}
+              </select>
             </label>
             <button type="submit">Save KPI settings</button>
           </form>
@@ -93,6 +160,11 @@
           Add source or derived KPIs
         </a>
       </p>
+      <p>
+        <a href="{{ url_for('core.conditional_kpi_editor', dataset_id=configuration.dataset_id) }}">
+          Add a conditional rate or value-share KPI
+        </a>
+      </p>
 
       <h2>Configuration object</h2>
       <pre>{{ configuration_json }}</pre>
@@ -102,20 +174,15 @@
         action="{{ url_for('core.deterministic_insights', dataset_id=configuration.dataset_id) }}">
         <button type="submit">Generate deterministic insights</button>
       </form>
-      <h2>Manual visualizations</h2>
+      <h2>Dashboard</h2>
       <p>
-        Build report-selectable charts from configured KPIs or supplementary source columns.
-        Supplementary charts remain clearly labelled and do not become KPIs or deterministic
-        insights.
-      </p>
-      <p>
-        <a href="{{ url_for('core.visualization_builder', dataset_id=configuration.dataset_id) }}">
-          Build a manual visualization
-        </a>
+        Continue to the dashboard to build source-column visualizations or
+        use these configured KPIs as chart measures. Visualizations already
+        saved before KPI configuration remain available.
       </p>
       <p>
         <a href="{{ url_for('core.saved_visualizations', dataset_id=configuration.dataset_id) }}">
-          View saved visualizations
+          Open dashboard
         </a>
       </p>
       <h2>Report configuration</h2>
@@ -123,11 +190,18 @@
         Select the KPIs, deterministic evidence, and saved manual visualizations
         that should be available to the final report.
       </p>
-      <p>
-        <a href="{{ url_for('core.report_configuration_form', dataset_id=configuration.dataset_id) }}">
-          Configure report content
-        </a>
-      </p>
+      {% if evidence_ready %}
+        <p>
+          <a href="{{ url_for('core.report_configuration_form', dataset_id=configuration.dataset_id) }}">
+            {{ "Review report configuration" if report_configuration_ready else "Configure and generate report" }}
+          </a>
+        </p>
+      {% else %}
+        <p>
+          Generate deterministic evidence above before configuring the
+          combined report.
+        </p>
+      {% endif %}
       <p>
         <a href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">
           Return to dataset profile

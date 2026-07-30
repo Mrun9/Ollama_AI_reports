@@ -17,6 +17,8 @@
   </head>
   <body>
     <main>
+      {% set current_section = "history" %}
+      {% include "_report_project_navigation.html" %}
       <p>
         <a href="{{ url_for(
           'core.workspace_detail',

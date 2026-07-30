@@ -241,7 +241,8 @@ def test_report_configuration_selects_and_escapes_current_assets(
     script = client.get("/static/report_configuration.js")
     assert script.status_code == 200
     assert b"synchronizeEvidence" in script.data
-    assert b"evidenceInput.checked = kpiInput.checked" in script.data
+    assert b"reportEvidenceRecommended" in script.data
+    assert b"evidenceInput.checked = true" in script.data
     assert b"selectVisualizationKpis" in script.data
     assert b"visualizationInput.checked = false" in script.data
 
@@ -319,6 +320,55 @@ def test_report_configuration_selects_and_escapes_current_assets(
     package_response = client.get(f"/reports/{dataset_id}/package")
     assert package_response.status_code == 200
     assert package_response.json == package
+
+
+def test_default_report_selection_is_bounded_and_excludes_diagnostics(
+    app: Flask,
+    client: FlaskClient,
+) -> None:
+    dataset_id = _upload_and_configure(client)
+    _generate_evidence(app, client, dataset_id)
+    evidence = json.loads(
+        (
+            Path(app.config["EVIDENCE_DIR"])
+            / f"{dataset_id}.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    form = client.get(f"/reports/{dataset_id}/configure")
+    tags = re.findall(
+        rb'<input type="checkbox" name="selected_evidence_ids"[^>]*>',
+        form.data,
+    )
+    checked_ids = {
+        re.search(rb'value="([^"]+)"', tag).group(1).decode()
+        for tag in tags
+        if b"checked" in tag
+    }
+    diagnostic_types = {
+        "missing_data_warning",
+        "insufficient_data_warning",
+        "analysis_skipped",
+    }
+    diagnostic_ids = {
+        record["id"]
+        for record in evidence["records"]
+        if record["insight_type"] in diagnostic_types
+    }
+    selected_correlations = [
+        record
+        for record in evidence["records"]
+        if record["id"] in checked_ids
+        and record["insight_type"] == "numeric_correlation"
+    ]
+
+    assert form.status_code == 200
+    assert checked_ids
+    assert len(checked_ids) <= 10
+    assert checked_ids.isdisjoint(diagnostic_ids)
+    assert len(selected_correlations) <= 2
+    assert b"Data-quality and analysis diagnostics" in form.data
+    assert b"data-report-evidence-recommended=\"false\"" in form.data
 
 
 def test_invalid_selection_uses_reloadable_get_and_does_not_save(

@@ -518,7 +518,7 @@ def test_visualizations_are_format_independent(
     assert [row["value"] for row in artifact.supporting_data] == [2.0, 2.0]
 
 
-def _upload_and_configure(client: FlaskClient) -> str:
+def _upload_visualization_dataset(client: FlaskClient) -> str:
     content = (
         b"date,segment,revenue,stress\n"
         b"2026-01-01,A,100,2\n"
@@ -536,7 +536,11 @@ def _upload_and_configure(client: FlaskClient) -> str:
     )
     match = re.search(rb"<dd>([0-9a-f]{32})\.csv</dd>", uploaded.data)
     assert match is not None
-    dataset_id = match.group(1).decode("ascii")
+    return match.group(1).decode("ascii")
+
+
+def _upload_and_configure(client: FlaskClient) -> str:
+    dataset_id = _upload_visualization_dataset(client)
     configured = client.post(
         f"/configure/{dataset_id}",
         data={
@@ -552,6 +556,113 @@ def _upload_and_configure(client: FlaskClient) -> str:
     return dataset_id
 
 
+def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
+    app: Flask,
+    client: FlaskClient,
+) -> None:
+    dataset_id = _upload_visualization_dataset(client)
+
+    dashboard = client.get(f"/workspaces/{dataset_id}/dashboard")
+    builder = client.get(f"/visualizations/{dataset_id}/new")
+    assert dashboard.status_code == 200
+    assert b"<h1>Dashboard</h1>" in dashboard.data
+    assert b"No KPIs are configured yet" in dashboard.data
+    assert b"Your dashboard is empty" in dashboard.data
+    assert builder.status_code == 200
+    assert b"Start with the business question" in builder.data
+    assert b"KPIs will appear here after they are configured" in builder.data
+    assert re.search(
+        rb'value="column:revenue"\s+checked',
+        builder.data,
+    ) is not None
+    assert re.search(
+        rb'value="category_bar"\s+checked',
+        builder.data,
+    ) is not None
+    assert b"Advanced options" in builder.data
+
+    preview_post = client.post(
+        f"/visualizations/{dataset_id}/preview",
+        data={
+            "title": "Stress by segment before KPIs",
+            "purpose": "Compare source values before KPI configuration.",
+            "chart_type": "category_bar",
+            "measure_selectors": ["column:stress"],
+            "x_column": "segment",
+            "series_column": "",
+            "aggregation": "mean",
+            "date_granularity": "month",
+            "filter_column": "",
+            "filter_mode": "include",
+            "filter_values": "",
+            "date_start": "",
+            "date_end": "",
+            "sort_by": "label",
+            "sort_direction": "ascending",
+            "top_n": "10",
+            "scale": "linear",
+            "bin_count": "10",
+            "include_in_report": "yes",
+        },
+    )
+    assert preview_post.status_code == 303
+    token = preview_post.headers["Location"].rsplit("/", 1)[-1]
+    saved = client.post(
+        f"/visualizations/{dataset_id}/preview/{token}/save"
+    )
+    assert saved.status_code == 303
+    visualization_id = saved.headers["Location"].rsplit("/", 1)[-1]
+    saved_path = (
+        Path(app.config["VISUALIZATION_DIR"])
+        / dataset_id
+        / f"{visualization_id}.json"
+    )
+    assert saved_path.is_file()
+
+    configured = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["segment"],
+            "target_or_benchmark": "",
+            "business_objective": "Review revenue and saved visualizations.",
+        },
+    )
+    assert configured.status_code == 303
+
+    reopened_dashboard = client.get(
+        f"/workspaces/{dataset_id}/dashboard"
+    )
+    reopened_builder = client.get(f"/visualizations/{dataset_id}/new")
+    saved_visualization = client.get(
+        f"/visualizations/{dataset_id}/{visualization_id}"
+    )
+    assert reopened_dashboard.status_code == 200
+    assert b"Stress by segment before KPIs" in reopened_dashboard.data
+    assert b"1 configured KPI(s)" in reopened_dashboard.data
+    assert b'class="visualization-card"' in reopened_dashboard.data
+    chart_url = (
+        f"/visualizations/{dataset_id}/{visualization_id}/chart"
+    )
+    assert f'src="{chart_url}"'.encode("ascii") in reopened_dashboard.data
+    assert b'loading="lazy"' in reopened_dashboard.data
+    dashboard_chart = client.get(chart_url)
+    assert dashboard_chart.status_code == 200
+    assert dashboard_chart.data.startswith(b"\x89PNG\r\n\x1a\n")
+    assert reopened_builder.status_code == 200
+    assert b"revenue <span class=\"tag\">KPI</span>" in reopened_builder.data
+    assert saved_visualization.status_code == 200
+
+    evidence = client.post(f"/insights/{dataset_id}")
+    report_setup = client.get(f"/reports/{dataset_id}/configure")
+    assert evidence.status_code == 303
+    assert report_setup.status_code == 200
+    assert b"Stress by segment before KPIs" in report_setup.data
+    assert visualization_id.encode("ascii") in report_setup.data
+
+
 def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     app: Flask,
     client: FlaskClient,
@@ -559,9 +670,18 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     dataset_id = _upload_and_configure(client)
     builder = client.get(f"/visualizations/{dataset_id}/new")
     assert builder.status_code == 200
-    assert b"Build a manual visualization" in builder.data
-    assert b"What question should this visualization answer?" in builder.data
-    assert b"Supplementary numeric column: stress" in builder.data
+    assert b"Create a visualization" in builder.data
+    assert b"1. What do you want to understand?" in builder.data
+    assert b"2. Which number should the chart explain?" in builder.data
+    assert b"3. How should the results be organized?" in builder.data
+    assert b"4. Name the chart" in builder.data
+    assert b"What decision or question will this chart support?" in builder.data
+    assert b'value="column:stress"' in builder.data
+    assert re.search(
+        rb'value="metric:[^"]+"\s+checked',
+        builder.data,
+    ) is not None
+    assert b"visualization_builder.js" in builder.data
     assert b"Describe what you want to visualize" not in builder.data
     assert b"Generate validated preview with Ollama" not in builder.data
     assert (

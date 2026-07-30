@@ -73,8 +73,10 @@ but the model must not silently configure the analysis.
 
 - Optional local Ollama suggestions constrained by JSON Schema.
 - Compact profile metadata instead of raw dataset rows.
+- Suggested source-KPI aggregation, display format, target scope, direction,
+  dimensions, and business objective.
 - Python rejection of unknown columns, duplicate suggestions, extra fields,
-  and invented targets.
+  invalid field combinations, and invented targets.
 - A review-and-edit screen before any suggestion becomes configuration.
 
 **Result:** AI became an adviser, not the owner of the analysis. Manual
@@ -341,6 +343,225 @@ change in which quarter?” and “which region is missing its target most often
 using verified values, then states why the result deserves attention and what
 management should review next.
 
+### Milestone 6C — Period and cohort comparisons within one dataset
+
+**Problem:** The existing analysis compared only the latest two aggregate
+periods and ranked categories over the full dataset. Management could not tell
+whether the latest period was unusual relative to recent history or which
+named regions, products, departments, or other configured cohorts improved or
+deteriorated between comparable periods.
+
+**Implemented:**
+
+- A latest-period comparison against the arithmetic mean of up to four
+  immediately preceding eligible period aggregates.
+- Exact baseline periods, baseline mean/minimum/maximum, current value,
+  absolute difference, percentage difference, direction, and
+  favorable/unfavorable interpretation.
+- Like-for-like cohort movement across the latest two periods for every
+  configured category column.
+- Exact cohort names, previous/current values, absolute and percentage change,
+  direction, record support, and best/worst direction-adjusted movement.
+- The same aggregation contract used elsewhere: source KPIs, row-derived
+  metrics, ratios of sums, and aggregate formulas are recalculated within each
+  period or cohort-period group.
+- Conservative eligibility rules: a period needs at least two valid KPI
+  records, a baseline needs two prior eligible periods, and a cohort needs at
+  least two valid records in both comparison periods.
+- Dedicated period-versus-baseline and cohort-movement charts, deterministic
+  supporting tables, management-priority ranking, and verified cohort/period
+  context for report narration.
+- Descriptive limitations stating that comparisons are neither causal
+  explanations, forecasts, nor seasonal adjustments.
+
+**Result:** A report can now say that the latest quarter is above or below its
+recent multi-period baseline and identify exactly which configured cohort
+changed most favorably or unfavorably—all from one retained dataset.
+
+### Milestone 6C.1 — Configurable source KPIs and conditional business rates
+
+**Problem:** Additional source KPIs did not expose their complete semantics,
+and the formula language could not safely express category-filtered questions
+such as “what share of revenue came from new customers?” or “what percentage
+of rows were returned or cancelled?”
+
+**Implemented:**
+
+- Source KPIs now retain an explicit aggregation (`sum`, `mean`, `median`,
+  `min`, or `max`), display format (`number`, `currency`, or `percentage`),
+  direction, and optional target. These settings are available when adding a
+  KPI and when editing any saved source KPI.
+- Additive source KPIs automatically calculate reconciled composition for
+  every configured category column. Evidence retains exact category values,
+  value totals, record support, shares, and a deterministic percentage chart.
+- A separate conditional KPI builder accepts an exact categorical/boolean
+  condition and selected values from the retained dataset. It supports
+  matching-row count divided by all rows and matching numeric-value sum
+  divided by total valid value sum.
+- Record-count rates require the user to confirm that one row represents one
+  denominator event.
+- Conditional KPIs are recalculated inside the whole dataset, each eligible
+  period, and each eligible segment.
+- Configuration schema 5 introduced these semantics and the conditional
+  definition; schema 6 adds explicit target scope while retaining legacy
+  loaders.
+
+**Result:** A report can deterministically state that “New customers generated
+35.7% of Net Sales” or that “Returned and Cancelled rows represented 8.4% of
+all records,” using exact source values and management-readable names. No
+model performs the filtering, arithmetic, or category selection.
+
+### Milestone 6C.2 — Insight applicability and evidence curation
+
+**Problem:** The engine treated every potential algorithm as if it applied to
+every KPI. Aggregate formulas therefore produced multiple zero-record
+“insufficient data” records for row-only anomalies, correlations, and
+benchmark checks. Genuine eligibility failures were also emitted one at a
+time, every correlation was surfaced equally, and the report form selected
+all evidence—including diagnostics—by default.
+
+**Implemented:**
+
+- A deterministic KPI capability plan distinguishes source, row-derived,
+  aggregate-formula, additive, non-additive, and conditional metrics before
+  algorithms run.
+- Aggregate formulas no longer attempt row-level anomalies, correlations, or
+  benchmark breaches. Non-additive KPIs no longer emit a separate skipped
+  contribution record.
+- Every KPI receives a whole-dataset snapshot containing its current value,
+  aggregation, valid/excluded record counts, applicable analyses, and explicit
+  reasons for structurally unavailable analyses. Conditional snapshots also
+  retain numerator, denominator, target, and target gap.
+- Genuine sample-size failures are consolidated into one diagnostic per KPI,
+  while column-level missingness is consolidated into one dataset-quality
+  record. Every eligibility issue states the analysis, available amount,
+  required amount, unit, and a concrete remedy.
+- Evidence screens distinguish decision findings, optional non-causal
+  associations, and analysis/data diagnostics.
+- New report forms select at most ten management-relevant records by default,
+  preserve at least one finding per configured KPI when available, select at
+  most two correlations, and exclude diagnostics. Every record remains
+  manually selectable.
+
+**Result:** “Insufficient data” now means a real deterministic eligibility
+requirement was not met. It no longer means the engine attempted an analysis
+that could never apply to that KPI. Management reports begin with useful
+findings while technical diagnostics remain available for audit.
+
+### Milestone 6C.3 — Explicit target scope
+
+**Problem:** A generic “target or benchmark” did not say what the number
+applied to. A target of 100 could mean every source row, every month, every
+region, or total sales for the complete dataset. Those interpretations produce
+different calculations and different management conclusions.
+
+**Implemented:**
+
+- Every KPI now persists one explicit target scope: `row`, `period`,
+  `segment`, or `dataset`.
+- Per-row targets compare individual valid KPI values and retain the existing
+  row breach and segment breach-rate analyses. This scope is available only
+  for source KPIs and row-level formulas.
+- Per-period targets recalculate the KPI once for each eligible date period,
+  then report the latest value/gap, every period's target status, and the
+  number of periods that missed target. A date column is required.
+- Per-segment targets recalculate the KPI once for every eligible value of
+  each configured category column, then identify named best/worst segments
+  and how many segments missed target. At least one category is required.
+- Complete-dataset targets compare only the whole-dataset KPI aggregate with
+  the target. They do not silently create row, period, or segment breaches.
+- Aggregate-formula and conditional KPIs cannot use a per-row target, because
+  they have no valid row-level KPI value. They support period, segment, and
+  complete-dataset targets.
+- All source, derived, conditional, additional-KPI, and saved-KPI forms expose
+  the scope explicitly. Configuration schema 6 persists it.
+- Schemas 1–5 continue loading. Legacy source and row-formula targets migrate
+  to `row`; aggregate-formula and conditional targets migrate to `dataset`,
+  preserving their previous effective behavior.
+
+**Result:** “Regional sales target = 100” can now mean exactly 100 per region,
+while “annual sales target = 10,000” can mean exactly one complete-dataset
+comparison. Evidence and AI narration receive the selected meaning rather
+than inferring it.
+
+### Milestone 6D.0 — Report-project navigation and dashboard entry
+
+**Problem:** Manual visualization creation and the saved-visualization list
+were presented inside KPI/report configuration. The visualization routes also
+required a saved KPI configuration even when a chart used only source columns.
+This forced users through KPI setup before they could explore their data and
+made it difficult to move back and forth between KPIs and charts.
+
+**Implemented:**
+
+- The workspace report flow is presented as five persistent sections:
+  Data source, KPI configuration and deterministic evidence, Dashboard and
+  visualizations, Next actions, and Report revisions.
+- A report-level Dashboard page now owns the existing “Build a manual
+  visualization” and “View saved visualizations” actions.
+- Saved visualizations render as their actual charts in a responsive
+  Power BI/Tableau-style card grid instead of appearing only as text links.
+  Each card shows its purpose, measures, filtered record count, KPI or
+  supplementary classification, report-inclusion status, and direct
+  open/edit/regenerate actions.
+- The dashboard and manual builder are available as soon as a valid source is
+  profiled. Source-column and record-count charts no longer require a KPI
+  configuration.
+- The manual builder uses a guided, plain-language flow: choose whether to
+  see a trend, compare or rank groups, find a relationship, inspect a
+  distribution, or find outliers; then choose the number and grouping.
+- A deterministic recommendation preselects the current primary KPI (or the
+  first usable source number), an available category/date, a matching chart,
+  and a useful title. Technical calculation, filter, and display controls are
+  retained under collapsed advanced options.
+- Browser guidance hides incompatible grouping choices and restricts
+  scatter/distribution/outlier charts to one measure. Python remains the
+  authoritative validator for every submitted field.
+- A chart saved before KPI setup remains source-bound and reopens after KPIs
+  are configured. Returning to the builder automatically adds the current
+  configured KPIs to the available measure list.
+- KPI and evidence screens link back to the dashboard. Dashboard and KPI
+  screens both expose the appropriate path to deterministic evidence and
+  report configuration/generation.
+- Saved dashboard visualizations retain their existing report-inclusion flag
+  and continue contributing deterministic supporting data and chart assets to
+  report selection, narration, HTML, JSON, and PDF output.
+- The workspace danger zone keeps the existing recoverable
+  “Delete workspace and all” lifecycle action.
+
+**Result:** Users can explore visually first, configure KPIs first, or move
+between both repeatedly. Report generation still receives the final reviewed
+KPIs, deterministic evidence, and selected dashboard visualizations.
+
+### Cross-cutting instrumentation — Model-run benchmark log
+
+**Problem:** Prompt revisions could be judged only by reading their output.
+There was no persistent measurement of latency, official token use, retries,
+or validation success, so a prompt that looked better could silently be
+slower or less reliable.
+
+**Implemented:**
+
+- One append-only CSV row for every Ollama request, including failed requests
+  and validation-rejected responses.
+- Separate task and prompt-version labels for the connectivity check, source
+  configuration, derived KPI suggestions, report stories, story regeneration,
+  and the five-point summary.
+- Wall-clock request time plus Ollama-reported prompt/completion tokens,
+  model-load time, prompt-evaluation time, generation time, and throughput
+  when the local Ollama version supplies them.
+- One `workflow_run_id` shared by all story, retry, and summary calls initiated
+  by one report-generation action.
+- Prompt/response character counts and inference settings without retaining
+  prompt text, model prose, dataset values, objectives, or exception messages.
+- Safe concurrent append behavior; metrics failure never blocks the report
+  workflow.
+
+**Result:** Prompt versions can now be compared using validation rate,
+first-attempt success, median latency, token use, throughput, and retries per
+workflow. See [Model Run Metrics](docs/MODEL_RUN_METRICS.md) for the complete
+CSV contract and comparison method.
+
 ## Scope decisions and planned work
 
 - **Single-dataset scope is intentional.** Multi-file joins are not planned for
@@ -356,16 +577,25 @@ management should review next.
 - **Milestone 6A.1 — Workspace-first lifecycle controls:** implemented.
 - **Milestone 6B — More precise insight prioritization and AI diagnostics:**
   implemented.
-- **Milestone 6C — Period/cohort comparisons within one dataset:** planned;
-  this deepens analysis without adding cross-dataset joins.
+- **Milestone 6C — Period/cohort comparisons within one dataset:** implemented
+  without adding cross-dataset joins.
+- **Milestone 6C.1 — Source KPI semantics and conditional business rates:**
+  implemented.
+- **Milestone 6C.2 — Insight applicability and evidence curation:**
+  implemented.
+- **Milestone 6C.3 — Explicit target scope:** implemented.
+- **Milestone 6D.0 — Report-project navigation and dashboard entry:**
+  implemented.
 - **Milestone 6D — Report presentation improvements:** planned after the
   remaining functionality, while retaining HTML, JSON, and PDF exports.
 
-The project currently implements **Milestone 6A.1: Workspace-first project
-lifecycle** and **Milestone 6B: Management-focused insights and AI
-diagnostics**. It profiles one
-securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source
-or derived KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
+The project currently implements **Milestone 6D.0: report-project navigation
+and dashboard entry**, building on explicit target scope, insight
+applicability, configurable source and conditional KPIs,
+the workspace lifecycle,
+period/cohort comparisons, and management-focused reporting. It profiles one
+securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source,
+derived, or conditional KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
 every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
 evidence; lets users configure, review, and save validated KPI or supplementary charts; and creates
 a source-bound selection of the trusted KPIs, evidence, and charts. It then builds a bounded,
@@ -428,13 +658,16 @@ print-ready HTML, and verified PDF downloads.
 - Optional one-to-three configuration suggestions from local Ollama
 - Repeatable additional source-KPI suggestions after the primary configuration is saved
 - Configured KPI names excluded from later Ollama suggestion schemas and profile context
-- User-reviewed AI prefilling of KPI direction and shared date, category, and business-objective
-  context
+- User-reviewed AI prefilling of KPI aggregation, display format, direction,
+  target scope, and shared date, category, and business-objective context
 - JSON-schema-constrained model responses with a configurable report temperature
-- Python rejection of hallucinated columns, extra fields, duplicate suggestions, and invented targets
+- Python rejection of hallucinated columns, extra fields, duplicate suggestions,
+  invalid target-scope context, and invented targets
 - Model confidence and evidence-based rationale displayed as advisory information
 - Select-and-edit flow that prefills the existing manual configuration form
 - Graceful manual fallback when Ollama or the configured model is unavailable
+- Append-only per-request model benchmark CSV with prompt versions, validation
+  outcomes, latency, official Ollama token counts, and retry grouping
 - User confirmation of KPI direction, dimensions, target, and business objective
 - On-demand generation of at most two derived-KPI options that never runs automatically
 - Suggested date, category, KPI direction, dataset-mean benchmark, and business objective for each
@@ -449,14 +682,30 @@ print-ready HTML, and verified PDF downloads.
 - One-to-five KPI registry with one primary KPI and optional additional KPIs
 - Additive source-KPI flow that retains the current primary and all existing KPIs
 - Duplicate derived-KPI names rejected instead of silently replacing an existing KPI
-- Per-KPI direction and optional target or benchmark
+- Per-KPI direction, optional target or benchmark, and explicit row/period/
+  segment/complete-dataset target scope
+- Per-source-KPI sum, mean, median, minimum, or maximum aggregation and number,
+  currency, or percentage display format
+- Conditional record-rate and value-share KPIs configured from exact retained
+  category values
 - Ability to change the primary KPI or remove a non-primary KPI
-- Version-4 source-table-aware configuration with backward-compatible version-1 through version-3
-  loading
+- Version-6 source-table-aware configuration with backward-compatible
+  version-1 through version-5 loading
 - Validated JSON configuration under `instance/configurations/`
 - Python-only missing-data warnings and explicit analysis-skip warnings
+- Per-KPI applicability planning that prevents row-only algorithms from
+  running against aggregate or conditional KPIs
+- Whole-dataset KPI snapshots with valid/excluded record support and
+  deterministic analysis coverage
+- One consolidated, actionable insufficiency diagnostic per KPI
 - Deterministic period-over-period KPI change and linear trend observations
+- Latest-period comparison against up to four preceding eligible periods
+- Like-for-like named cohort movement across the latest two periods
 - Top/bottom segment rankings and reconciled segment contributions to change
+- Named, reconciled category-share findings for non-negative additive source
+  KPIs
+- Scope-aware KPI target comparisons at row, period, segment, or complete
+  dataset level
 - Tukey 1.5-IQR anomaly detection
 - Pearson correlations labelled strictly as associations
 - Row-level target or benchmark breach counts and percentages
@@ -466,8 +715,9 @@ print-ready HTML, and verified PDF downloads.
 - Source filename, format, SHA-256 hash, and selected Excel worksheet in every evidence record
 - KPI definition, source columns, filters, periods, calculation description, and supporting table
 - Reproducible impact, confidence, relevance, combined-score, and rank values
-- Automatic time-trend, category-comparison, segment-contribution, IQR-distribution, and
-  missing-data charts
+- Automatic time-trend, period-baseline, category-comparison, category-share,
+  cohort-movement, segment-contribution, IQR-distribution, and missing-data
+  charts
 - Randomized chart filenames and validated chart serving from non-public `instance/charts/`
 - Versioned evidence JSON under `instance/evidence/`
 - Evidence generation for CSV, JSON, XLSX, source KPIs, derived KPIs, and one-to-five KPI registries
@@ -492,8 +742,11 @@ print-ready HTML, and verified PDF downloads.
 - Report title, objective, audience, tone, detail level, and user-labelled notes
 - Selection of one or more configured KPIs, ranked evidence records, and report-included manual
   charts
-- KPI-to-evidence checkbox synchronization: selecting a KPI selects its evidence, while
-  deselecting it clears and disables those records
+- KPI-to-evidence checkbox synchronization: selecting a KPI selects its
+  recommended evidence, while deselecting it clears and disables all of that
+  KPI's records
+- Management-first default evidence selection capped at ten records, with at
+  most two associations and no diagnostics selected automatically
 - KPI-visualization dependency synchronization: selecting a KPI chart selects its required KPI,
   while deselecting that KPI removes incompatible chart selections
 - Validation that selected evidence belongs to a selected KPI and selected charts remain
@@ -587,17 +840,29 @@ After source selection, review the deterministic profile. For a workbook with
 multiple visible worksheets, choose one worksheet before profiling.
 Click
 **Generate AI suggestions** only when suggestions are wanted. Select **Use this suggestion** to
-prefill the manual form, review or edit every field, and then confirm the final configuration.
+prefill the manual form with the proposed aggregation, display format, direction,
+target scope, dimensions, and objective. Review or edit every field, enter a
+target only when the business supplies one, and then confirm the final
+configuration. Ollama never invents the numeric target.
 Existing numeric columns always remain selectable. Click **Suggest two derived KPIs** for two
 formula-plus-configuration options, or **Build a derived KPI manually** to start without Ollama.
 Edit the formula or configuration fields and recalculate the Python preview before confirming it.
-The saved configuration page can change the primary KPI and each KPI's direction or benchmark.
-From the saved-configuration page, select **Generate deterministic insights** to run the Python-only
-engine and review the ranked evidence cards, supporting tables, charts, and JSON artifacts.
-Select **Build a manual visualization** to configure an additional chart from validated fields and
-settings. The optional question field records what the user wants the chart to answer. Previewed
-charts are not retained until explicitly saved. A saved supplementary chart may be included in the
+The saved configuration page can change the primary KPI and each KPI's
+direction, benchmark, or target scope.
+Open **Dashboard** immediately after source profiling to build a chart from
+source columns or record count, or configure KPIs first. Returning to the
+dashboard after KPI configuration preserves existing charts and adds the
+configured KPIs as chart measures. Every saved chart is displayed directly on
+the dashboard in a responsive card; click the chart to open its detailed
+supporting data and provenance. The guided builder opens with a recommended
+chart ready to preview; choose a plain-language goal, number, and grouping,
+and open **Advanced options** only when needed. The optional visualization question records
+what the user wants the chart to answer. Previewed charts are not retained
+until explicitly saved. A saved supplementary chart may be included in the
 final report, but remains labelled as supplementary rather than KPI evidence.
+From the KPI page, select **Generate deterministic insights** to run the
+Python-only engine and review ranked evidence cards, supporting tables, charts,
+and JSON artifacts.
 Select **Configure report content** to choose the KPIs, deterministic evidence, and report-included
 manual charts that should be handed to later report generation. The saved review page displays the
 source metadata and artifact fingerprints that bind those selections to their current definitions.
@@ -646,6 +911,9 @@ workspace name and optional description
               optional derived KPI suggestion -> restricted Python validation/preview
                                               -> user confirmation
                                               -> derived KPI configuration
+              optional conditional KPI -> exact category-value selection
+                                       -> Python numerator/denominator validation
+                                       -> conditional KPI configuration
                                   -> Python deterministic insight engine
                                   -> deterministic insight JSON
                                   -> ranked evidence records and Python charts
@@ -675,11 +943,13 @@ Expected application routes:
 GET   /
 GET   /workspaces
 GET   /workspaces/<dataset_id>
+GET   /workspaces/<dataset_id>/dashboard
 GET   /workspaces/<dataset_id>/source
 GET   /upload
 GET   /dataset/<dataset_id>
 GET   /dataset/<dataset_id>/sheet
 GET   /derived/<dataset_id>
+GET   /conditional/<dataset_id>
 GET   /configuration/<dataset_id>
 GET   /insights/<dataset_id>
 GET   /evidence/<dataset_id>/<evidence_id>/chart
@@ -721,6 +991,7 @@ POST  /suggest-derived/<dataset_id>
 POST  /review-derived/<dataset_id>
 POST  /configure/<dataset_id>
 POST  /configure-derived/<dataset_id>
+POST  /configure-conditional/<dataset_id>
 POST  /configuration/<dataset_id>/primary
 POST  /configuration/<dataset_id>/metric
 POST  /configuration/<dataset_id>/remove
@@ -769,17 +1040,46 @@ New users should begin with the worked examples and decision guide in
 - Every evidence report stores the derived formula, aggregation, display format, null policies, and
   actual source columns.
 
+## Conditional KPI and category-share rules
+
+- Use a normal source KPI when the measure is one numeric column summarized by
+  sum, mean, median, minimum, or maximum.
+- When that KPI uses `sum`, every configured category can produce a named
+  composition insight such as region, product, or customer-type revenue share.
+  Shares are generated only when the total is positive and every segment value
+  is non-negative.
+- Use the conditional KPI builder when the numerator depends on exact values
+  inside a categorical or boolean column.
+- A record-count KPI is `matching rows / all rows × 100`. Missing condition
+  values stay in the denominator, and the user must confirm that one row is
+  the intended event.
+- A value-share KPI is
+  `matching value sum / all valid value sum × 100`. Rows with invalid measure
+  values are excluded from both value sums.
+- Condition values are selected from bounded exact values read by Python.
+  Ollama cannot invent a category label or change the selection.
+- A zero denominator produces `null`, not zero. Optional targets must be
+  between 0 and 100 and remain user-provided.
+- The same definition is recalculated within eligible periods and segments;
+  percentages are never summed or averaged across groups.
+- See [Derived KPI Formula Guide](FORMULA_GUIDE.md) for worked configurations
+  for New-vs-Returning revenue and Return/Cancellation Rate.
+
 ## Automatic evidence and chart rules
 
 - Evidence IDs are deterministic hashes of immutable dataset and insight identity fields. Chart
   filenames are separately randomized and never derived from uploaded filenames or labels.
-- Each deterministic insight has exactly one evidence record, including warnings and analyses that
-  were skipped safely.
+- Each deterministic finding has one evidence record. Genuine unmet
+  eligibility requirements are consolidated into one diagnostic record per
+  KPI; structurally inapplicable algorithms are disclosed in the KPI snapshot
+  instead of being mislabelled as insufficient data.
 - Evidence records retain the safe internal source filename, format, full SHA-256 hash, and selected
   worksheet for XLSX sources.
 - Supporting data comes from the deterministic insight output or from the exact row-level values
   used by its Python calculation. Correlations include sufficient statistics that reproduce the
   Pearson coefficient.
+- Every KPI has a whole-dataset snapshot with valid/excluded record support
+  and an explicit capability plan.
 - Impact, confidence, and relevance use documented Python scoring rules on a zero-to-one scale.
   The combined score is `0.5 × impact + 0.2 × confidence + 0.3 × relevance`; rank ties use the
   stable evidence ID.
@@ -830,8 +1130,11 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 - At least one configured KPI must be selected. Up to five configured KPIs are supported.
 - Evidence is optional. KPI evidence must belong to a selected KPI; dataset-wide evidence such as
   missing-data warnings may be selected independently.
-- In the report form, selecting a KPI initially selects all of its deterministic evidence.
-  Individual evidence records may then be removed; deselecting the KPI clears all of them.
+- A new report form initially selects at most ten management-relevant records,
+  including a finding for each KPI when available and at most two
+  correlations. Diagnostics are unselected. Selecting a KPI later selects
+  only its recommended evidence; every other record remains manually
+  selectable.
 - Manual charts are optional and must already be saved with **Include in report** enabled.
 - Charts that use configured KPI measures must use KPIs selected for the report.
 - Each manual chart displays its required report KPIs. Selecting the chart selects those KPIs;
@@ -925,12 +1228,24 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 
 ## Deterministic calculation rules
 
-- Existing source-column KPIs use sum aggregation for period and segment calculations. Confirmed
-  derived KPIs use their validated row-result aggregation or explicit aggregate formula.
+- Source-column KPIs use their saved sum, mean, median, minimum, or maximum
+  aggregation for dataset, period, and segment calculations. Confirmed derived
+  KPIs use their validated row-result aggregation or explicit aggregate
+  formula.
+- Conditional KPIs recalculate their numerator and denominator inside every
+  analysis group. Record rates use rows; value shares use valid numeric sums.
 - Every configured KPI is analyzed independently and every insight includes its stable metric ID.
 - Calendar years are used for at least 24 distinct months, calendar quarters
   for 6–23 months, calendar months for 2–5 months, and calendar days otherwise.
 - Period change requires two comparison periods with at least two valid KPI records each.
+- The recent-period baseline requires a current period plus at least two prior
+  eligible periods and uses no more than the immediately preceding four.
+- Cohort-period comparison requires at least two shared cohorts, with at least
+  two valid KPI records for each cohort in both periods. Cohorts seen in only
+  one period are counted as excluded rather than treated as zero.
+- Favorable cohort movement follows the configured KPI direction: an increase
+  is favorable for higher-is-better KPIs and a decrease is favorable for
+  lower-is-better KPIs.
 - Trend requires at least three eligible periods and is descriptive, not causal.
 - Segment rankings exclude segments with fewer than two valid KPI records.
 - Contribution percentages use every categorized segment in the last two periods and are adjusted
@@ -939,11 +1254,17 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 - Anomalies use inclusive quartiles and Tukey's 1.5-IQR fences with at least four valid records.
 - Correlations use pairwise-complete Pearson coefficients with at least three pairs and are always
   labelled as associations.
-- Benchmark breaches are evaluated per non-missing KPI row according to whether higher or lower is
-  configured as better.
-- When a target and category are configured, target breaches are also grouped
-  by segment so the report can name the best and worst target-attainment
-  segments and quantify their average gap and breach percentage.
+- A `row` target is evaluated per non-missing KPI row according to whether
+  higher or lower is better. When categories exist, row breach rates are also
+  grouped by segment.
+- A `period` target is compared with one recalculated KPI aggregate per
+  eligible period; it requires a confirmed date column.
+- A `segment` target is compared with one recalculated KPI aggregate per
+  eligible category value; it requires a confirmed category column.
+- A `dataset` target is compared only with the complete-dataset KPI
+  aggregate.
+- Conditional and aggregate-formula KPIs support period, segment, and dataset
+  targets but reject row scope.
 - Missing configured dates cause temporal analysis to be skipped; dates are never imputed.
 
 ## Test and lint
@@ -989,8 +1310,8 @@ data.
 - Configuration selections are checked against inferred candidates and actual column names.
 - Configuration filenames are derived only from server-generated dataset IDs.
 - Saved configurations are revalidated against the retained dataset and SHA-256 hash before use.
-- Version-1 through version-3 configurations remain loadable and are migrated in memory; new
-  configurations use version 4.
+- Version-1 through version-4 configurations remain loadable and are migrated
+  in memory; new configurations use version 5.
 - Persisted formulas include a source-qualified expression tree and are reparsed and compared when
   loaded, so tampering is rejected.
 - Insight calculations never call Ollama and never delegate arithmetic to a language model.
@@ -1036,8 +1357,11 @@ This standalone check is optional and separate from the Flask workflow.
 - Exactly one visible worksheet is analyzed from an Excel workbook.
 - Type inference is heuristic and must be confirmed by the user.
 - Empty strings and the markers `NA`, `N/A`, `null`, `none`, and `NaN` count as missing.
-- Derived formulas do not yet support joins, rolling windows, forecasting, conditionals, or custom
-  code.
+- Derived formula text does not support joins, rolling windows, forecasting,
+  arbitrary `IF` expressions, or custom code. Approved exact-category
+  conditions are available through the separate conditional KPI builder.
+- Record-count conditional KPIs count rows, not distinct orders, customers, or
+  tickets. Distinct-count denominators are not implemented.
 - Configuration-suggestion confidence is advisory and not a calibrated probability. Generated
   report confidence is instead deterministic evidence strength based on record support.
 - Suggestions depend on the semantic ability of the selected local model and require human review.

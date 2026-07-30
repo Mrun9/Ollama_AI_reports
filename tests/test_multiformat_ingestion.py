@@ -372,7 +372,7 @@ def test_json_configuration_and_insights_remain_format_independent(
             Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
         ).read_text(encoding="utf-8")
     )
-    assert configuration["schema_version"] == 4
+    assert configuration["schema_version"] == 6
     assert configuration["sources"][0]["format"] == "json"
     assert configuration["sources"][0]["table_name"] is None
     assert b"period_change" in insights.data

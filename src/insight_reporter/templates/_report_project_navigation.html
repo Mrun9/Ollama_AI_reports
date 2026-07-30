@@ -1,0 +1,33 @@
+<nav aria-label="Report project" style="margin: 1rem 0;">
+  <a href="{{ url_for('core.workspace_detail', dataset_id=dataset_id) }}#data-source"
+    {% if current_section == "source" %}aria-current="page"{% endif %}>
+    1. Data source
+  </a>
+  ·
+  {% if configuration %}
+    <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}"
+      {% if current_section == "kpi" %}aria-current="page"{% endif %}>
+      2. KPI &amp; evidence
+    </a>
+  {% else %}
+    <a href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}"
+      {% if current_section == "kpi" %}aria-current="page"{% endif %}>
+      2. KPI &amp; evidence
+    </a>
+  {% endif %}
+  ·
+  <a href="{{ url_for('core.saved_visualizations', dataset_id=dataset_id) }}"
+    {% if current_section == "dashboard" %}aria-current="page"{% endif %}>
+    3. Dashboard
+  </a>
+  ·
+  <a href="{{ url_for('core.workspace_detail', dataset_id=dataset_id) }}#next-actions"
+    {% if current_section == "next" %}aria-current="page"{% endif %}>
+    4. Next actions
+  </a>
+  ·
+  <a href="{{ url_for('core.generated_report_history', dataset_id=dataset_id) }}"
+    {% if current_section == "history" %}aria-current="page"{% endif %}>
+    5. Report revisions
+  </a>
+</nav>

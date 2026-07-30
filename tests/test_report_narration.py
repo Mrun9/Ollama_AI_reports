@@ -1,5 +1,6 @@
 """Milestone 5B.1 synthesis trust-boundary and persistence tests."""
 
+import csv
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -9,6 +10,7 @@ import pytest
 from insight_reporter.manual_visualization_evidence import (
     ManualVisualizationEvidence,
 )
+from insight_reporter.model_run_metrics import model_metrics_csv_path
 from insight_reporter.report_generation_package import (
     ReportGenerationPackage,
 )
@@ -207,8 +209,11 @@ def _package(*, record_count: int = 5) -> ReportGenerationPackage:
     )
 
 
-def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
+def test_narration_synthesizes_story_packs_and_is_traceable(
+    tmp_path: Path,
+) -> None:
     client = FakeClient()
+    metrics_dir = tmp_path / "metrics"
 
     report = generate_narrated_report(
         _package(),
@@ -216,6 +221,7 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
         host="http://127.0.0.1:11434",
         timeout_seconds=120,
         client=client,
+        metrics_dir=metrics_dir,
     )
 
     assert len(client.calls) == 3
@@ -266,6 +272,18 @@ def test_narration_synthesizes_story_packs_and_is_traceable() -> None:
     assert client.calls[0]["options"]["num_ctx"] == 4_096
     assert client.calls[0]["options"]["temperature"] == 0.35
     assert report.report_settings["narration_temperature"] == 0.35
+    with model_metrics_csv_path(metrics_dir).open(
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        metric_rows = list(csv.DictReader(handle))
+    assert [row["task_type"] for row in metric_rows] == [
+        "report_story",
+        "report_story",
+        "executive_summary",
+    ]
+    assert len({row["workflow_run_id"] for row in metric_rows}) == 1
+    assert all(row["status"] == "validated" for row in metric_rows)
     assert report.generation_diagnostics == {
         "schema_version": 1,
         "story_pack_count": 2,
@@ -462,6 +480,50 @@ def test_product_names_are_retained_as_verified_business_context() -> None:
     assert all(
         "Widget Pro" in point.text for point in report.executive_summary
     )
+
+
+def test_cohort_comparison_prioritizes_named_management_change() -> None:
+    package = _package(record_count=1)
+    record = dict(package.deterministic_evidence[0])
+    record["insight_type"] = "cohort_period_comparison"
+    record["observation"] = {
+        "category_column": "region",
+        "previous_period": "2026-Q1",
+        "current_period": "2026-Q2",
+        "best_performing_change": {
+            "cohort": "North",
+            "previous_value": 100,
+            "current_value": 140,
+            "absolute_change": 40,
+            "percentage_change": 40,
+        },
+        "worst_performing_change": {
+            "cohort": "South",
+            "previous_value": 100,
+            "current_value": 70,
+            "absolute_change": -30,
+            "percentage_change": -30,
+        },
+    }
+    package = replace(package, deterministic_evidence=(record,))
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+
+    story = report.stories[0]
+    assert story.section == "segment_analysis"
+    assert [
+        context["value"] for context in story.business_context
+    ] == ["2026-Q1", "2026-Q2", "North", "South"]
+    assert story.fact_references[0].path == (
+        "facts.worst_performing_change.percentage_change"
+    )
+    assert story.fact_references[0].value == -30
 
 
 def test_executive_summary_accepts_verified_quarter_and_region_context() -> None:

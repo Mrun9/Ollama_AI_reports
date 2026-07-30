@@ -64,6 +64,7 @@ The default data directory is controlled by the application configuration. Withi
 | Generated report | `generated_reports/<dataset_id>/V####-<report_id>.json` | Report generation | HTML, JSON, PDF, publishing |
 | Historical report charts | `generated_report_assets/<dataset_id>/V####-<report_id>/` | Report version save | Historical HTML and PDF |
 | Published-report state | Generated-report metadata/artifact state | Publishing routes | Published report view |
+| Model-run benchmark | `model_run_metrics/model_runs.csv` | Every measured Ollama request | Offline prompt-performance comparison |
 | Recoverably deleted source | `trash/sources/<dataset_id>/` | Source archive route | Source restore route |
 
 Exact roots are initialized in `src/insight_reporter/app.py`; callers should
@@ -207,14 +208,24 @@ This stage helps the user configure the dataset; it does not silently apply busi
    row-free model context.
 2. `configuration_suggestions.generate_configuration_suggestions()` builds
    the request and asks Ollama for JSON constrained by
-   `build_suggestion_response_schema()`.
+   `build_suggestion_response_schema()`. Each proposal includes a source KPI,
+   aggregation, display format, direction, target scope, date/category
+   context, objective, confidence, and rationale. The target itself is
+   required to be null.
 3. `configuration_suggestions.parse_suggestion_response()` parses the
    untrusted JSON and revalidates every suggestion and referenced column.
-4. Valid suggestions are placed into temporary navigation state so they can survive the redirect.
+   Supported-value checks are deterministic; period scope also requires a
+   date column and segment scope requires a category column.
+4. `model_run_metrics` appends the request duration, official token fields
+   when available, prompt version, and validation outcome without copying the
+   prompt or response.
+5. Valid suggestions are placed into temporary navigation state so they can survive the redirect.
 
 **Output**
 
-- Suggested dimensions, measures, time columns, and related configuration fields shown to the user.
+- Suggested KPI semantics and context shown to the user in an editable review
+  form.
+- Numeric targets remain empty until supplied by the user.
 - No saved business configuration until the user reviews and submits the form.
 
 If Ollama is unavailable or returns invalid JSON, the application reports the failure and keeps the manual configuration path usable.
@@ -226,11 +237,14 @@ This stage turns raw columns into explicitly approved business semantics.
 **Browser input**
 
 - Business objective.
-- Selected dimensions.
-- Selected measures.
+- Selected date/category dimensions.
+- Selected source measures.
+- For each source KPI: sum/mean/median/min/max aggregation, number/currency/
+  percentage display format, higher/lower direction, optional target, and
+  whether the target applies per row, period, segment, or complete dataset.
 - Optional time column.
 - Optional existing/source KPI choices.
-- Optional derived KPI definitions.
+- Optional derived or conditional KPI definitions.
 
 **Transformation**
 
@@ -238,7 +252,10 @@ This stage turns raw columns into explicitly approved business semantics.
 2. Submitted columns are checked against the current dataset.
 3. Names, aggregation choices, and KPI definitions are normalized.
 4. `business_config.BusinessConfiguration` and its nested value objects validate the complete configuration.
-5. The validated configuration is serialized to JSON.
+5. Source settings stay editable on the saved configuration page. Calculated
+   KPI aggregation/format fields remain locked to their definitions.
+6. The validated schema-6 configuration is serialized to JSON. Schemas 1–5
+   are migrated in memory with their previous target meaning preserved.
 
 **Output**
 
@@ -271,6 +288,45 @@ A derived KPI lets the user define a metric calculated from existing columns or 
 
 Formulas are parsed by application code; they are not passed to Python `eval`.
 
+### 6B. Optional conditional percentage KPI
+
+Use this path when a numerator is defined by exact values inside a category
+column rather than arithmetic over numeric columns.
+
+**Browser input**
+
+- KPI name.
+- Calculation base: record count or numeric value sum.
+- One categorical/boolean condition column.
+- One to twenty exact values displayed from that column.
+- A numeric value column for value-share calculations.
+- Row-grain confirmation for record-count rates.
+- Direction, optional 0–100 target, role, and shared analysis context.
+
+**Transformation**
+
+1. `condition_value_options()` reads bounded exact retained values for the
+   checkbox UI.
+2. The route accepts values only from the selected condition column.
+3. `validate_conditional_metric()` checks the real values, column roles, and
+   row-grain confirmation.
+4. `validate_conditional_business_configuration()` adds the canonical KPI to
+   the one-to-five registry.
+5. `evaluate_conditional_metric()` later calculates either matching rows
+   divided by all rows or matching value sum divided by total valid value sum.
+
+**Output**
+
+- A schema-1 conditional definition nested in the schema-5 business
+  configuration.
+- Percentage display format and conditional-rate aggregation fixed by the
+  definition.
+- No Ollama call.
+
+For example, selecting `Customer_Type = New` and value `Net_Sales` calculates
+New revenue divided by all valid Net Sales. Selecting `Status = Returned,
+Cancelled` with record count calculates those rows divided by all rows.
+
 ### 7. Deterministic insight generation
 
 This is the main analytical stage and the source of report facts.
@@ -283,19 +339,61 @@ This is the main analytical stage and the source of report facts.
 
 **Transformation**
 
-`insight_engine.generate_insights()` applies deterministic analytical templates that fit the approved columns and data types. Depending on the configuration, it can produce findings such as:
+1. `_metric_capabilities()` first classifies the KPI as row-level or
+   aggregate-only and additive or non-additive. It also considers whether
+   confirmed date/category fields exist.
+2. `_add_metric_snapshot()` calculates one whole-dataset value, valid/excluded
+   support, conditional numerator/denominator values where applicable, and
+   explicit analysis coverage.
+3. Target scope determines the comparison unit: `row` compares individual
+   values; `period` recalculates one aggregate per eligible period; `segment`
+   recalculates one aggregate per eligible category value; and `dataset`
+   compares only the whole-dataset aggregate.
+4. Only structurally valid algorithms run. Aggregate formulas do not attempt
+   row anomalies, correlations, or row benchmark breaches.
+5. Genuine unmet sample requirements are collected and emitted as one
+   actionable diagnostic per KPI rather than many near-identical records.
+   Missing columns are similarly consolidated into one dataset-quality
+   diagnostic.
 
-- aggregate KPI values;
+`insight_engine.generate_insights()` then applies deterministic analytical
+templates that fit the approved columns and data types. Depending on the
+configuration, it can produce findings such as:
+
+- whole-dataset KPI snapshots;
 - dimension rankings;
 - contribution/share findings;
+- named shares of additive source KPIs by configured category;
 - time trends;
 - change and volatility signals;
 - concentration or distribution observations;
 - comparisons involving derived KPIs.
+- conditional record rates or value shares recalculated within each eligible
+  dataset, period, segment, and cohort-period group;
 - per-region or per-segment target attainment, including the worst segment,
   average target gap, and breach percentage.
+- per-period aggregate target status, including the current period gap and
+  count of missed periods;
+- per-segment aggregate target status, including exact category values,
+  best/worst segment, and count of missed segments;
+- complete-dataset current-versus-target status without unintended row or
+  group comparisons;
+- the latest eligible period versus the mean of up to four preceding eligible
+  periods, including the exact baseline range and difference;
+- like-for-like movement for named category cohorts across the latest two
+  periods, including exact previous/current values, absolute/percentage
+  change, direction, and best/worst direction-adjusted movement.
 
 Each finding includes structured values and provenance instead of only prose.
+Configured category columns supply cohort membership; the engine never guesses
+a cohort field. A cohort is included only when it has at least two valid KPI
+records in both periods, so absence is not silently converted to zero.
+
+“Not applicable” and “insufficient data” are deliberately different:
+structurally unavailable algorithms appear in the KPI snapshot capability
+plan, while insufficient diagnostics are produced only when an applicable
+analysis lacks the required number of records, periods, segments, cohorts, or
+pairs.
 
 **Output**
 
@@ -303,6 +401,13 @@ Each finding includes structured values and provenance instead of only prose.
 - An insight page that lets the user inspect the calculated results.
 
 AI does not calculate these values. This boundary is important: narration can change wording, but the numerical evidence is reproducible.
+
+An additive source KPI's category-share observation retains each exact
+category name, value, record count, and reconciled percentage. A conditional
+target observation retains the numerator, denominator, selected target scope,
+and the corresponding aggregate comparisons. This is how management
+narration can name actual products,
+regions, customer types, or statuses without sending raw rows to Ollama.
 
 ### 8. Evidence and chart generation
 
@@ -315,10 +420,14 @@ The evidence layer converts insights into report-ready factual units.
 
 **Transformation**
 
-1. `evidence_layer.generate_evidence()` selects a suitable evidence representation for each supported insight.
+1. `evidence_layer.generate_evidence()` selects a suitable evidence
+   representation for each supported insight.
 2. Table or chart-ready values are normalized.
 3. Chart assets are rendered where a visualization is appropriate.
 4. Provenance connects each evidence item to its originating insight and source columns.
+5. The browser labels ordinary findings, optional non-causal associations, and
+   diagnostics separately. Consolidated diagnostic issues become readable
+   rows containing available, required, unit, and recommendation fields.
 
 **Output**
 
@@ -327,31 +436,68 @@ The evidence layer converts insights into report-ready factual units.
 - Evidence records that can be selected for the final report.
 
 An evidence item is more than an image: it is a structured claim, its supporting values, and optional visual presentation.
+For 6C, supporting tables preserve the exact baseline period aggregates or
+cohort comparison rows. Dedicated charts show the current period against its
+recent baseline and each cohort's absolute movement, colored by whether that
+movement agrees with the configured KPI direction. Category-share evidence
+adds horizontal percentage bars whose labels are the exact retained category
+values.
 
-### 9. Optional manual visualization
+When the user opens a new report configuration, Python selects at most ten
+management findings by rank, preserves one finding per configured KPI when
+possible, includes at most two correlations, and excludes diagnostics.
+Selecting a KPI later selects only evidence marked as recommended. All
+associations and diagnostics remain manually selectable for specialist or
+appendix use.
 
-The manual builder covers questions that are useful to the user but are not automatically selected by the insight templates.
+### 9. Dashboard and optional manual visualization
+
+The dashboard is available after source profiling and does not require KPI
+configuration. It covers questions that are useful to the user but are not
+automatically selected by the insight templates.
 
 **Browser input**
 
-- Chart type.
-- Dimension/category field.
-- Measure/value field.
-- Aggregation.
+- A plain-language goal: trend, group comparison/ranking, relationship,
+  distribution, or spread/outliers.
+- The business number to explain.
+- The date, category, or numeric field used to organize or compare results.
+- An editable recommended title and optional decision/question.
+- Optional advanced aggregation.
 - Optional filters, grouping, sorting, limits, and display choices.
 
 **Transformation**
 
-1. `visualization_builder.parse_visualization_spec()` validates and bounds the submitted form values.
-2. `visualization_builder.build_visualization()` resolves the selected fields, applies the requested aggregation and transformations, and renders a draft chart.
-3. The preview is rendered without yet making it report evidence.
-4. On confirmation, the specification and its generated chart are persisted.
-5. `manual_visualization_evidence.generate_manual_visualization_evidence()` converts the confirmed chart into evidence with provenance.
+1. `_default_visualization_form()` preselects a deterministic starting point
+   from the reviewed primary KPI or first usable source number and an
+   available category/date field.
+2. The guided browser layer maps the selected business goal to the existing
+   chart type and shows only compatible grouping choices. Advanced controls
+   remain available but collapsed.
+3. `visualization_builder.parse_visualization_spec()` validates and bounds
+   the submitted form values independently of browser guidance.
+4. `visualization_builder.build_visualization()` resolves source-column and
+   record-count measures without a KPI configuration. When configuration
+   exists, it also resolves current KPI measures. Python applies the requested
+   aggregation and transformations and renders a draft chart.
+5. The preview is rendered without yet making it report evidence.
+6. On confirmation, the specification and its generated chart are persisted.
+7. The dashboard reloads the validated visualization artifacts and displays
+   their actual saved PNGs in responsive cards through the protected chart
+   route.
+8. `manual_visualization_evidence.generate_manual_visualization_evidence()` converts the confirmed chart into evidence with provenance.
+
+A chart saved before KPI configuration remains valid because it is bound to
+the immutable source metadata and its selected source columns. When the user
+later returns from KPI configuration, saved charts remain listed and the
+builder adds the newly configured KPIs to its measure choices. Report
+selection can then combine KPIs, deterministic evidence, and dashboard charts.
 
 **Output**
 
 - A saved visualization specification.
-- A chart asset.
+- A chart asset rendered directly on the dashboard, with its purpose,
+  measures, classification, report status, and management actions.
 - A manual evidence item available during report selection.
 
 ### 10. Report configuration
@@ -430,7 +576,9 @@ This stage changes structured evidence into readable report prose.
    stories and their Python fact catalog. Each point must say what happened,
    why it matters, and what management should review next. It must quote an
    exact selected value and can name only supplied periods, quarters, regions,
-   segments, or benchmark conditions. If that output fails validation,
+   segments, cohorts, or benchmark conditions. Period-baseline and
+   cohort-movement evidence uses the same fact-reference validation as every
+   other numerical claim. If that output fails validation,
    `_deterministic_executive_summary()` supplies an explicitly labelled
    fallback.
    When cited evidence contains verified business context, the finding must
@@ -441,6 +589,10 @@ This stage changes structured evidence into readable report prose.
    active grounding safeguards.
 7. Saved-report validation rechecks the complete artifact before HTML, JSON,
    or PDF rendering.
+8. Every story attempt and executive-summary attempt appends one model-metrics
+   row. Calls from the same report-generation action share a
+   `workflow_run_id`; rejected repair attempts remain visible rather than
+   being hidden inside the final successful result.
 
 **Output**
 
@@ -681,10 +833,13 @@ The application log should contain technical diagnostics, while the browser rece
 | Column absent from configuration | `dataset_profile.py` type inference | Source-suggestion validation |
 | Derived KPI cannot save | `formula_engine.py` parse/validation result | `derived_metrics.py` definition validation |
 | Insight numbers look wrong | Saved business configuration | `insight_engine.py` calculation and source rows |
+| Period baseline is absent | Number of eligible date groups and valid KPI records | `_add_period_baseline_comparison` minimums |
+| Expected cohort is absent | Its record counts in both latest periods | Configured category column and cohort exclusion count |
 | Chart disagrees with insight | Evidence JSON values | Evidence chart transformation |
 | Manual chart is unavailable in report setup | Saved visualization specification | `manual_visualization_evidence.py` conversion |
 | Report selection disappears | Report configuration validation | Evidence identity/fingerprint compatibility |
 | AI report fails to generate | Ollama availability and returned JSON | Narration validation/retry logs |
+| Prompt revision is slower or less reliable | `model_run_metrics/model_runs.csv` grouped by task, prompt version, model, and workflow | Validation rate, first-attempt success, median latency/token use, and retry count |
 | Five-point summary is vague | Selected evidence quality and ordering | Executive-summary prompt/validator |
 | HTML and PDF differ | Generated report version loaded by each route | `report_pdf.py` rendering support |
 | Old report appears after editing configuration | Upstream/downstream fingerprints | Package and report regeneration path |

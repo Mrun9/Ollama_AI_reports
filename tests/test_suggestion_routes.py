@@ -42,14 +42,20 @@ def _suggestion(
     primary_kpi: str = "revenue",
     direction: str = "higher",
     title: str = "Revenue performance",
+    aggregation: str = "sum",
+    display_format: str = "currency",
+    target_scope: str = "period",
 ) -> ConfigurationSuggestion:
     return ConfigurationSuggestion(
         title=title,
         primary_kpi=primary_kpi,
         kpi_direction=direction,
+        aggregation=aggregation,
+        display_format=display_format,
         date_column="date",
         category_columns=("region",),
         target_or_benchmark=None,
+        target_scope=target_scope,
         business_objective=objective,
         confidence=0.91,
         rationale=("Revenue is a valid numeric KPI candidate.",),
@@ -102,6 +108,9 @@ def test_generate_suggestions_displays_validated_cards(
     assert response.status_code == 200
     assert b"Suggested configurations" in response.data
     assert b"Revenue performance" in response.data
+    assert b"<dd>sum</dd>" in response.data
+    assert b"<dd>currency</dd>" in response.data
+    assert b"Each period" in response.data
     assert b"91%" in response.data
     assert b"Use this suggestion" in response.data
     assert b"1 invalid AI suggestion(s)" in response.data
@@ -138,9 +147,12 @@ def test_use_suggestion_prefills_existing_editable_form(client: FlaskClient) -> 
         data={
             "primary_kpi": "revenue",
             "kpi_direction": "higher",
+            "aggregation": "sum",
+            "display_format": "currency",
             "date_column": "date",
             "category_columns": ["region"],
             "target_or_benchmark": "",
+            "target_scope": "period",
             "business_objective": "Evaluate regional revenue performance.",
         },
         follow_redirects=True,
@@ -216,6 +228,9 @@ def test_ai_can_suggest_and_review_an_additional_source_kpi(
         primary_kpi="cost",
         direction="lower",
         title="Cost control",
+        aggregation="mean",
+        display_format="currency",
+        target_scope="segment",
     )
 
     def suggest(*_args, **kwargs):  # type: ignore[no-untyped-def]
@@ -236,14 +251,19 @@ def test_ai_can_suggest_and_review_an_additional_source_kpi(
     assert captured["excluded_kpis"] == ("revenue",)
     assert b"Suggested additional KPI configurations" in suggested.data
     assert b"Review and add this KPI" in suggested.data
+    assert b'<input type="hidden" name="aggregation" value="mean">' in suggested.data
+    assert b'<input type="hidden" name="target_scope" value="segment">' in suggested.data
     reviewed = client.post(
         f"/review-suggestion/{dataset_id}",
         data={
             "primary_kpi": "cost",
             "kpi_direction": "lower",
+            "aggregation": "mean",
+            "display_format": "currency",
             "date_column": "date",
             "category_columns": ["region"],
             "target_or_benchmark": "",
+            "target_scope": "segment",
             "business_objective": (
                 "Control operating costs by region over time."
             ),
@@ -253,6 +273,9 @@ def test_ai_can_suggest_and_review_an_additional_source_kpi(
     assert reviewed.status_code == 200
     assert b"Additional KPI suggestion loaded" in reviewed.data
     assert re.search(rb'value="cost"[^>]*checked', reviewed.data) is not None
+    assert re.search(rb'value="mean"[^>]*selected', reviewed.data) is not None
+    assert re.search(rb'value="currency"[^>]*selected', reviewed.data) is not None
+    assert re.search(rb'value="segment"[^>]*selected', reviewed.data) is not None
     assert b"Control operating costs by region over time." in reviewed.data
 
     added = client.post(
@@ -260,6 +283,9 @@ def test_ai_can_suggest_and_review_an_additional_source_kpi(
         data={
             "source_kpis": ["cost"],
             "kpi_direction": "lower",
+            "aggregation": "mean",
+            "display_format": "currency",
+            "target_scope": "segment",
             "context_submitted": "yes",
             "date_column": "date",
             "category_columns": ["region"],
@@ -286,3 +312,6 @@ def test_ai_can_suggest_and_review_an_additional_source_kpi(
     assert payload["business_objective"] == (
         "Control operating costs by region over time."
     )
+    assert payload["metrics"][1]["aggregation"] == "mean"
+    assert payload["metrics"][1]["display_format"] == "currency"
+    assert payload["metrics"][1]["target_scope"] == "segment"

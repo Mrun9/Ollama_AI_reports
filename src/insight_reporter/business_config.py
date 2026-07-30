@@ -8,6 +8,11 @@ import secrets
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from insight_reporter.conditional_metrics import (
+    ConditionalMetric,
+    ConditionalMetricError,
+    load_conditional_metric,
+)
 from insight_reporter.dataset_profile import DatasetProfile
 from insight_reporter.dataset_view import (
     ColumnReference,
@@ -25,6 +30,9 @@ from insight_reporter.derived_metrics import (
 )
 
 _DIRECTIONS = frozenset({"higher", "lower"})
+SOURCE_AGGREGATIONS = ("sum", "mean", "median", "min", "max")
+DISPLAY_FORMATS = ("number", "currency", "percentage")
+TARGET_SCOPES = ("row", "period", "segment", "dataset")
 _MAX_OBJECTIVE_CHARACTERS = 2_000
 _MAX_METRICS = 5
 _V1_CONFIGURATION_KEYS = frozenset(
@@ -67,12 +75,17 @@ class MetricConfiguration:
     metric_type: str
     kpi_direction: str
     target_or_benchmark: float | None
-    display_format: str
+    target_scope: str = "row"
+    aggregation: str = "sum"
+    display_format: str = "number"
     source: ColumnReference | None = None
     derived_metric: DerivedMetric | None = None
+    conditional_metric: ConditionalMetric | None = None
 
     @property
     def source_columns(self) -> tuple[str, ...]:
+        if self.conditional_metric is not None:
+            return self.conditional_metric.source_columns
         if self.derived_metric is not None:
             return self.derived_metric.source_columns
         return (self.source.column,) if self.source is not None else ()
@@ -84,11 +97,18 @@ class MetricConfiguration:
             "metric_type": self.metric_type,
             "kpi_direction": self.kpi_direction,
             "target_or_benchmark": self.target_or_benchmark,
+            "target_scope": self.target_scope,
+            "aggregation": self.aggregation,
             "display_format": self.display_format,
             "source": self.source.to_dict() if self.source is not None else None,
             "derived_metric": (
                 self.derived_metric.to_dict()
                 if self.derived_metric is not None
+                else None
+            ),
+            "conditional_metric": (
+                self.conditional_metric.to_dict()
+                if self.conditional_metric is not None
                 else None
             ),
         }
@@ -130,12 +150,20 @@ class BusinessConfiguration:
         return self.primary_metric.target_or_benchmark
 
     @property
+    def target_scope(self) -> str:
+        return self.primary_metric.target_scope
+
+    @property
     def metric_type(self) -> str:
         return self.primary_metric.metric_type
 
     @property
     def derived_metric(self) -> DerivedMetric | None:
         return self.primary_metric.derived_metric
+
+    @property
+    def conditional_metric(self) -> ConditionalMetric | None:
+        return self.primary_metric.conditional_metric
 
     @property
     def date_column(self) -> str | None:
@@ -152,7 +180,7 @@ class BusinessConfiguration:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schema_version": 4,
+            "schema_version": 6,
             "dataset_id": self.dataset_id,
             "sources": [source.to_dict() for source in self.sources],
             "relationships": list(self.relationships),
@@ -182,6 +210,9 @@ def validate_business_configuration(
     business_objective: str,
     secondary_kpis: list[str] | None = None,
     existing_configuration: BusinessConfiguration | None = None,
+    aggregation: str = "sum",
+    display_format: str = "number",
+    target_scope: str = "row",
 ) -> BusinessConfiguration:
     """Create or update a source-KPI registry from actual profile candidates."""
 
@@ -205,6 +236,9 @@ def validate_business_configuration(
                 if column == primary_kpi
                 else None
             ),
+            aggregation=aggregation if column == primary_kpi else "sum",
+            display_format=display_format if column == primary_kpi else "number",
+            target_scope=target_scope if column == primary_kpi else "row",
         )
         for column in selected
     )
@@ -212,7 +246,7 @@ def validate_business_configuration(
         tuple(
             metric
             for metric in existing_configuration.metrics
-            if metric.metric_type == "derived"
+            if metric.metric_type != "source"
         )
         if existing_configuration is not None
         else ()
@@ -245,6 +279,7 @@ def validate_derived_business_configuration(
     business_objective: str,
     existing_configuration: BusinessConfiguration | None = None,
     metric_role: str = "primary",
+    target_scope: str | None = None,
 ) -> BusinessConfiguration:
     """Add a revalidated formula to a source-aware KPI registry."""
 
@@ -271,6 +306,11 @@ def validate_derived_business_configuration(
         safe_metric,
         direction=kpi_direction,
         target=_parse_optional_target(target_or_benchmark),
+        target_scope=(
+            target_scope
+            if target_scope is not None
+            else _default_target_scope("derived", safe_metric)
+        ),
     )
     existing_metrics = existing_configuration.metrics if existing_configuration else ()
     same_name = next(
@@ -312,6 +352,81 @@ def validate_derived_business_configuration(
     )
 
 
+def validate_conditional_business_configuration(
+    profile: DatasetProfile,
+    *,
+    dataset_id: str,
+    conditional_metric: ConditionalMetric,
+    kpi_direction: str,
+    date_column: str,
+    category_columns: list[str],
+    target_or_benchmark: str,
+    business_objective: str,
+    existing_configuration: BusinessConfiguration | None = None,
+    metric_role: str = "secondary",
+    target_scope: str = "dataset",
+) -> BusinessConfiguration:
+    """Add an already value-validated conditional percentage KPI."""
+
+    source = _single_source(profile, dataset_id)
+    try:
+        safe_metric = load_conditional_metric(
+            profile,
+            conditional_metric.to_dict(),
+            source_id=source.source_id,
+        )
+    except ConditionalMetricError as error:
+        raise BusinessConfigurationError(str(error)) from error
+    if kpi_direction not in _DIRECTIONS:
+        raise BusinessConfigurationError(
+            "KPI direction must be either higher or lower."
+        )
+    if metric_role not in {"primary", "secondary"}:
+        raise BusinessConfigurationError(
+            "Conditional KPI role must be primary or secondary."
+        )
+    target = _parse_optional_target(target_or_benchmark)
+    _validate_percentage_target(target)
+    metric = _conditional_registry_metric(
+        source,
+        safe_metric,
+        direction=kpi_direction,
+        target=target,
+        target_scope=target_scope,
+    )
+    existing_metrics = (
+        existing_configuration.metrics
+        if existing_configuration is not None
+        else ()
+    )
+    if any(
+        item.name.casefold() == metric.name.casefold()
+        for item in existing_metrics
+    ):
+        raise BusinessConfigurationError(
+            f'A KPI named "{metric.name}" already exists. Use a unique name.'
+        )
+    metrics = (*existing_metrics, metric)
+    if len(metrics) > _MAX_METRICS:
+        raise BusinessConfigurationError(
+            f"The KPI registry supports at most {_MAX_METRICS} metrics."
+        )
+    primary_metric_id = (
+        metric.metric_id
+        if existing_configuration is None or metric_role == "primary"
+        else existing_configuration.primary_metric_id
+    )
+    return _build_configuration(
+        profile,
+        dataset_id=dataset_id,
+        metrics=metrics,
+        primary_metric_id=primary_metric_id,
+        date_column=date_column,
+        category_columns=category_columns,
+        business_objective=business_objective,
+    )
+
+
 def add_source_metrics(
     profile: DatasetProfile,
     *,
@@ -322,6 +437,10 @@ def add_source_metrics(
     date_column: str | None = None,
     category_columns: list[str] | None = None,
     business_objective: str | None = None,
+    target_or_benchmark: str = "",
+    aggregation: str = "sum",
+    display_format: str = "number",
+    target_scope: str = "row",
 ) -> BusinessConfiguration:
     """Append source-column KPIs without rebuilding the existing registry."""
 
@@ -383,7 +502,10 @@ def add_source_metrics(
             source,
             column,
             direction=kpi_direction,
-            target=None,
+            target=_parse_optional_target(target_or_benchmark),
+            aggregation=aggregation,
+            display_format=display_format,
+            target_scope=target_scope,
         )
         for column in source_columns
     )
@@ -448,8 +570,11 @@ def update_metric_settings(
     *,
     kpi_direction: str,
     target_or_benchmark: str,
+    aggregation: str | None = None,
+    display_format: str | None = None,
+    target_scope: str | None = None,
 ) -> BusinessConfiguration:
-    """Update direction and optional benchmark for one configured KPI."""
+    """Update presentation and evaluation settings for one configured KPI."""
 
     if kpi_direction not in _DIRECTIONS:
         raise BusinessConfigurationError("KPI direction must be either higher or lower.")
@@ -459,18 +584,47 @@ def update_metric_settings(
     for metric in configuration.metrics:
         if metric.metric_id == metric_id:
             found = True
+            if metric.metric_type == "conditional_rate":
+                _validate_percentage_target(target)
+            selected_aggregation = (
+                metric.aggregation if aggregation is None else aggregation
+            )
+            selected_display_format = (
+                metric.display_format
+                if display_format is None
+                else display_format
+            )
+            selected_target_scope = (
+                metric.target_scope if target_scope is None else target_scope
+            )
+            _validate_metric_semantics(
+                metric.metric_type,
+                selected_aggregation,
+                selected_display_format,
+                derived_metric=metric.derived_metric,
+            )
+            _validate_target_scope(
+                metric.metric_type,
+                selected_target_scope,
+                derived_metric=metric.derived_metric,
+            )
             metrics.append(
                 replace(
                     metric,
                     kpi_direction=kpi_direction,
                     target_or_benchmark=target,
+                    target_scope=selected_target_scope,
+                    aggregation=selected_aggregation,
+                    display_format=selected_display_format,
                 )
             )
         else:
             metrics.append(metric)
     if not found:
         raise BusinessConfigurationError("Selected KPI is not configured.")
-    return replace(configuration, metrics=tuple(metrics))
+    updated = replace(configuration, metrics=tuple(metrics))
+    _validate_target_scope_context(updated)
+    return updated
 
 
 def save_business_configuration(
@@ -501,7 +655,7 @@ def save_business_configuration(
 def load_business_configuration(
     path: Path, *, profile: DatasetProfile
 ) -> BusinessConfiguration:
-    """Load v1-v4 configurations and migrate legacy forms in memory."""
+    """Load v1-v6 configurations and migrate legacy forms in memory."""
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -512,7 +666,7 @@ def load_business_configuration(
     version = payload.get("schema_version")
     if version in {1, 2}:
         return _load_legacy_configuration(payload, profile=profile)
-    if version not in {3, 4} or set(payload) != _REGISTRY_CONFIGURATION_KEYS:
+    if version not in {3, 4, 5, 6} or set(payload) != _REGISTRY_CONFIGURATION_KEYS:
         raise BusinessConfigurationError("Saved business configuration version is unsupported.")
     return _load_registry_configuration(payload, profile=profile)
 
@@ -559,8 +713,8 @@ def _build_configuration(
         raise BusinessConfigurationError(
             f"Business objective must be at most {_MAX_OBJECTIVE_CHARACTERS} characters."
         )
-    return BusinessConfiguration(
-        schema_version=4,
+    configuration = BusinessConfiguration(
+        schema_version=6,
         dataset_id=dataset_id,
         sources=(source,),
         relationships=(),
@@ -576,6 +730,8 @@ def _build_configuration(
         ),
         business_objective=objective,
     )
+    _validate_target_scope_context(configuration)
+    return configuration
 
 
 def _single_source(profile: DatasetProfile, dataset_id: str) -> SourceManifest:
@@ -601,9 +757,19 @@ def _source_metric(
     *,
     direction: str,
     target: float | None,
+    aggregation: str = "sum",
+    display_format: str = "number",
+    target_scope: str = "row",
 ) -> MetricConfiguration:
     if direction not in _DIRECTIONS:
         raise BusinessConfigurationError("KPI direction must be either higher or lower.")
+    _validate_metric_semantics(
+        "source",
+        aggregation,
+        display_format,
+        derived_metric=None,
+    )
+    _validate_target_scope("source", target_scope, derived_metric=None)
     reference = ColumnReference(source.source_id, column)
     return MetricConfiguration(
         metric_id=_metric_id(
@@ -613,7 +779,9 @@ def _source_metric(
         metric_type="source",
         kpi_direction=direction,
         target_or_benchmark=target,
-        display_format="number",
+        target_scope=target_scope,
+        aggregation=aggregation,
+        display_format=display_format,
         source=reference,
     )
 
@@ -624,7 +792,9 @@ def _derived_registry_metric(
     *,
     direction: str,
     target: float | None,
+    target_scope: str,
 ) -> MetricConfiguration:
+    _validate_target_scope("derived", target_scope, derived_metric=metric)
     return MetricConfiguration(
         metric_id=_metric_id(
             {
@@ -637,8 +807,38 @@ def _derived_registry_metric(
         metric_type="derived",
         kpi_direction=direction,
         target_or_benchmark=target,
+        target_scope=target_scope,
+        aggregation=metric.aggregation,
         display_format=metric.display_format,
         derived_metric=metric,
+    )
+
+
+def _conditional_registry_metric(
+    source: SourceManifest,
+    metric: ConditionalMetric,
+    *,
+    direction: str,
+    target: float | None,
+    target_scope: str,
+) -> MetricConfiguration:
+    _validate_target_scope("conditional_rate", target_scope, derived_metric=None)
+    return MetricConfiguration(
+        metric_id=_metric_id(
+            {
+                "metric_type": "conditional_rate",
+                "source_id": source.source_id,
+                "definition": metric.to_dict(),
+            }
+        ),
+        name=metric.name,
+        metric_type="conditional_rate",
+        kpi_direction=direction,
+        target_or_benchmark=target,
+        target_scope=target_scope,
+        aggregation="conditional_rate",
+        display_format="percentage",
+        conditional_metric=metric,
     )
 
 
@@ -662,6 +862,9 @@ def _revalidate_registry_metric(
             metric.source.column,
             direction=metric.kpi_direction,
             target=target,
+            aggregation=metric.aggregation,
+            display_format=metric.display_format,
+            target_scope=metric.target_scope,
         )
     elif metric.metric_type == "derived" and metric.derived_metric is not None:
         try:
@@ -677,6 +880,27 @@ def _revalidate_registry_metric(
             derived,
             direction=metric.kpi_direction,
             target=target,
+            target_scope=metric.target_scope,
+        )
+    elif (
+        metric.metric_type == "conditional_rate"
+        and metric.conditional_metric is not None
+    ):
+        _validate_percentage_target(target)
+        try:
+            conditional = load_conditional_metric(
+                profile,
+                metric.conditional_metric.to_dict(),
+                source_id=source.source_id,
+            )
+        except ConditionalMetricError as error:
+            raise BusinessConfigurationError(str(error)) from error
+        safe = _conditional_registry_metric(
+            source,
+            conditional,
+            direction=metric.kpi_direction,
+            target=target,
+            target_scope=metric.target_scope,
         )
     else:
         raise BusinessConfigurationError("Configured KPI definition is invalid.")
@@ -728,7 +952,12 @@ def _load_registry_configuration(
     if not isinstance(metrics_payload, list):
         raise BusinessConfigurationError("Saved metric registry is invalid.")
     metrics = tuple(
-        _load_metric(item, profile=profile, source=sources[0])
+        _load_metric(
+            item,
+            profile=profile,
+            source=sources[0],
+            configuration_version=int(payload["schema_version"]),
+        )
         for item in metrics_payload
     )
     try:
@@ -758,7 +987,11 @@ def _load_registry_configuration(
 
 
 def _load_metric(
-    payload: object, *, profile: DatasetProfile, source: SourceManifest
+    payload: object,
+    *,
+    profile: DatasetProfile,
+    source: SourceManifest,
+    configuration_version: int,
 ) -> MetricConfiguration:
     expected = {
         "metric_id",
@@ -766,23 +999,51 @@ def _load_metric(
         "metric_type",
         "kpi_direction",
         "target_or_benchmark",
+        "target_scope",
+        "aggregation",
         "display_format",
         "source",
         "derived_metric",
+        "conditional_metric",
     }
-    if not isinstance(payload, dict) or set(payload) != expected:
+    v3_v4_expected = expected - {
+        "aggregation",
+        "conditional_metric",
+        "target_scope",
+    }
+    v5_expected = expected - {"target_scope"}
+    if not isinstance(payload, dict):
+        raise BusinessConfigurationError("Saved metric has an invalid shape.")
+    payload_keys = set(payload)
+    if configuration_version < 5:
+        allowed_shapes = (v3_v4_expected, v5_expected, expected)
+    elif configuration_version == 5:
+        allowed_shapes = (v5_expected, expected)
+    else:
+        allowed_shapes = (expected,)
+    if payload_keys not in allowed_shapes:
         raise BusinessConfigurationError("Saved metric has an invalid shape.")
     metric_id = payload.get("metric_id")
     name = payload.get("name")
     metric_type = payload.get("metric_type")
     direction = payload.get("kpi_direction")
     display_format = payload.get("display_format")
+    aggregation = payload.get("aggregation")
     target = payload.get("target_or_benchmark")
+    target_scope = payload.get("target_scope")
     if not all(
         isinstance(value, str)
-        for value in (metric_id, name, metric_type, direction, display_format)
+        for value in (
+            metric_id,
+            name,
+            metric_type,
+            direction,
+            display_format,
+        )
     ):
         raise BusinessConfigurationError("Saved metric contains invalid text.")
+    if aggregation is not None and not isinstance(aggregation, str):
+        raise BusinessConfigurationError("Saved metric aggregation is invalid.")
     if direction not in _DIRECTIONS:
         raise BusinessConfigurationError("Saved metric direction is invalid.")
     if isinstance(target, bool) or (
@@ -792,7 +1053,12 @@ def _load_metric(
     safe_target = None if target is None else float(target)
     if safe_target is not None and not math.isfinite(safe_target):
         raise BusinessConfigurationError("Saved metric target is invalid.")
-    if metric_type == "source":
+    if (
+        metric_type == "source"
+        and payload.get("derived_metric") is None
+        and payload.get("conditional_metric") is None
+    ):
+        selected_aggregation = aggregation or "sum"
         try:
             reference = load_column_reference(payload.get("source"), sources=(source,))
         except DatasetViewError as error:
@@ -800,9 +1066,21 @@ def _load_metric(
         if reference.column not in profile.kpi_candidates:
             raise BusinessConfigurationError("Saved source KPI is not measurable.")
         metric = _source_metric(
-            source, reference.column, direction=direction, target=safe_target
+            source,
+            reference.column,
+            direction=direction,
+            target=safe_target,
+            aggregation=selected_aggregation,
+            display_format=display_format,
+            target_scope=(
+                target_scope if isinstance(target_scope, str) else "row"
+            ),
         )
-    elif metric_type == "derived" and payload.get("source") is None:
+    elif (
+        metric_type == "derived"
+        and payload.get("source") is None
+        and payload.get("conditional_metric") is None
+    ):
         try:
             derived = load_derived_metric(
                 profile, payload.get("derived_metric"), source_id=source.source_id
@@ -810,17 +1088,147 @@ def _load_metric(
         except DerivedMetricError as error:
             raise BusinessConfigurationError(str(error)) from error
         metric = _derived_registry_metric(
-            source, derived, direction=direction, target=safe_target
+            source,
+            derived,
+            direction=direction,
+            target=safe_target,
+            target_scope=(
+                target_scope
+                if isinstance(target_scope, str)
+                else _default_target_scope("derived", derived)
+            ),
+        )
+    elif (
+        metric_type == "conditional_rate"
+        and payload.get("source") is None
+        and payload.get("derived_metric") is None
+    ):
+        try:
+            conditional = load_conditional_metric(
+                profile,
+                payload.get("conditional_metric"),
+                source_id=source.source_id,
+            )
+        except ConditionalMetricError as error:
+            raise BusinessConfigurationError(str(error)) from error
+        metric = _conditional_registry_metric(
+            source,
+            conditional,
+            direction=direction,
+            target=safe_target,
+            target_scope=(
+                target_scope if isinstance(target_scope, str) else "dataset"
+            ),
         )
     else:
         raise BusinessConfigurationError("Saved metric type is invalid.")
+    expected_aggregation = aggregation or metric.aggregation
     if (
         metric.metric_id != metric_id
         or metric.name != name
+        or metric.aggregation != expected_aggregation
         or metric.display_format != display_format
     ):
         raise BusinessConfigurationError("Saved metric identity is invalid.")
     return metric
+
+
+def _validate_metric_semantics(
+    metric_type: str,
+    aggregation: str,
+    display_format: str,
+    *,
+    derived_metric: DerivedMetric | None,
+) -> None:
+    if display_format not in DISPLAY_FORMATS:
+        raise BusinessConfigurationError(
+            "KPI display format must be number, currency, or percentage."
+        )
+    if metric_type == "source":
+        if aggregation not in SOURCE_AGGREGATIONS:
+            raise BusinessConfigurationError(
+                "Source KPI aggregation must be sum, mean, median, min, or max."
+            )
+        return
+    if (
+        metric_type != "derived"
+        or derived_metric is None
+        or aggregation != derived_metric.aggregation
+        or display_format != derived_metric.display_format
+    ):
+        if (
+            metric_type == "conditional_rate"
+            and derived_metric is None
+            and aggregation == "conditional_rate"
+            and display_format == "percentage"
+        ):
+            return
+        raise BusinessConfigurationError(
+            "Calculated KPI aggregation and display format must match its definition."
+        )
+
+
+def _default_target_scope(
+    metric_type: str,
+    derived_metric: DerivedMetric | None,
+) -> str:
+    """Preserve legacy target behavior when loading pre-scope configurations."""
+
+    if (
+        metric_type == "derived"
+        and derived_metric is not None
+        and derived_metric.calculation_level == "row"
+    ):
+        return "row"
+    return "dataset"
+
+
+def _validate_target_scope(
+    metric_type: str,
+    target_scope: str,
+    *,
+    derived_metric: DerivedMetric | None,
+) -> None:
+    if target_scope not in TARGET_SCOPES:
+        raise BusinessConfigurationError(
+            "Target scope must be row, period, segment, or complete dataset."
+        )
+    row_compatible = metric_type == "source" or (
+        metric_type == "derived"
+        and derived_metric is not None
+        and derived_metric.calculation_level == "row"
+    )
+    if target_scope == "row" and not row_compatible:
+        raise BusinessConfigurationError(
+            "Per-row targets are available only for source KPIs and "
+            "row-level calculated KPIs."
+        )
+
+
+def _validate_target_scope_context(
+    configuration: BusinessConfiguration,
+) -> None:
+    """Require the grouping input needed to evaluate each active target."""
+
+    for metric in configuration.metrics:
+        if metric.target_or_benchmark is None:
+            continue
+        if metric.target_scope == "period" and configuration.date_reference is None:
+            raise BusinessConfigurationError(
+                f'The period target for "{metric.name}" requires a date column.'
+            )
+        if metric.target_scope == "segment" and not configuration.category_references:
+            raise BusinessConfigurationError(
+                f'The segment target for "{metric.name}" requires at least one '
+                "category column."
+            )
+
+
+def _validate_percentage_target(target: float | None) -> None:
+    if target is not None and not 0 <= target <= 100:
+        raise BusinessConfigurationError(
+            "A conditional percentage KPI target must be between 0 and 100."
+        )
 
 
 def _load_legacy_configuration(

@@ -7,6 +7,8 @@
   </head>
   <body>
     <main>
+      {% set current_section = "kpi" %}
+      {% include "_report_project_navigation.html" %}
       <h1>Dataset accepted</h1>
       <dl>
         <dt>Dataset ID</dt>
@@ -102,8 +104,9 @@
         <h2>AI-assisted additional KPI suggestions</h2>
         <p>
           Ask {{ suggestion_model }} for another set of suggestions using only unconfigured
-          source KPI candidates. Each option includes direction, date/category context,
-          business objective, confidence, and rationale. Nothing is added automatically.
+          source KPI candidates. Each option includes aggregation, display
+          format, direction, target scope, date/category context, business
+          objective, confidence, and rationale. Nothing is added automatically.
         </p>
         {% if configuration.metrics|length >= 5 %}
           <p>The KPI registry already contains the maximum of five KPIs.</p>
@@ -159,12 +162,24 @@
               <dd>{{ suggestion.primary_kpi }}</dd>
               <dt>Direction</dt>
               <dd>{{ suggestion.kpi_direction }}</dd>
+              <dt>Aggregation</dt>
+              <dd>{{ suggestion.aggregation }}</dd>
+              <dt>Display format</dt>
+              <dd>{{ suggestion.display_format }}</dd>
               <dt>Date column</dt>
               <dd>{{ suggestion.date_column or "None" }}</dd>
               <dt>Categories</dt>
               <dd>{{ suggestion.category_columns|join(", ") or "None" }}</dd>
               <dt>Target</dt>
               <dd>Not invented; enter one during review if appropriate.</dd>
+              <dt>Target scope</dt>
+              <dd>
+                {% if suggestion.target_scope == "row" %}Each row
+                {% elif suggestion.target_scope == "period" %}Each period
+                {% elif suggestion.target_scope == "segment" %}Each segment
+                {% else %}Complete dataset aggregate
+                {% endif %}
+              </dd>
               <dt>Business objective</dt>
               <dd>{{ suggestion.business_objective }}</dd>
               <dt>Model confidence</dt>
@@ -181,11 +196,14 @@
               action="{{ url_for('core.review_suggestion', dataset_id=dataset_id) }}">
               <input type="hidden" name="primary_kpi" value="{{ suggestion.primary_kpi }}">
               <input type="hidden" name="kpi_direction" value="{{ suggestion.kpi_direction }}">
+              <input type="hidden" name="aggregation" value="{{ suggestion.aggregation }}">
+              <input type="hidden" name="display_format" value="{{ suggestion.display_format }}">
               <input type="hidden" name="date_column" value="{{ suggestion.date_column or '' }}">
               {% for column in suggestion.category_columns %}
                 <input type="hidden" name="category_columns" value="{{ column }}">
               {% endfor %}
               <input type="hidden" name="target_or_benchmark" value="">
+              <input type="hidden" name="target_scope" value="{{ suggestion.target_scope }}">
               <input type="hidden" name="business_objective"
                 value="{{ suggestion.business_objective }}">
               <button type="submit">
@@ -220,6 +238,7 @@
           <input type="hidden" name="date_column" value="">
           <input type="hidden" name="benchmark_strategy" value="none">
           <input type="hidden" name="target_or_benchmark" value="">
+          <input type="hidden" name="target_scope" value="row">
           <input type="hidden" name="business_objective" value="">
           <button type="submit">Build a derived KPI manually</button>
         </form>
@@ -297,6 +316,8 @@
               <input type="hidden" name="benchmark_strategy"
                 value="{{ suggestion.benchmark_strategy }}">
               <input type="hidden" name="target_or_benchmark" value="">
+              <input type="hidden" name="target_scope"
+                value="{{ 'row' if suggestion.metric.calculation_level == 'row' else 'dataset' }}">
               <input type="hidden" name="business_objective"
                 value="{{ suggestion.business_objective }}">
               <button type="submit">Review this derived KPI</button>
@@ -304,6 +325,17 @@
           </section>
         {% endfor %}
       {% endif %}
+
+      <h2>Conditional rates and value shares</h2>
+      <p>
+        Build percentages such as returned or cancelled records divided by all
+        records, or new-customer revenue divided by total revenue.
+      </p>
+      <p>
+        <a href="{{ url_for('core.conditional_kpi_editor', dataset_id=dataset_id) }}">
+          Build a conditional percentage KPI
+        </a>
+      </p>
 
       <h2>
         {{ "Add source KPIs" if configuration else "Confirm business configuration" }}
@@ -351,7 +383,60 @@
             </fieldset>
 
             <p>
-              Targets and directions can be edited independently after the KPIs are added.
+              These settings apply to every KPI selected in this submission. Add
+              KPIs one at a time when they require different semantics.
+            </p>
+
+            <p>
+              <label for="additional-aggregation">Aggregation</label>
+              <select id="additional-aggregation" name="aggregation" required>
+                {% for aggregation in source_aggregation_options %}
+                  <option value="{{ aggregation }}"
+                    {% if (
+                      form_data.get('aggregation', 'sum')
+                      if form_data else 'sum'
+                    ) == aggregation %}selected{% endif %}>
+                    {{ aggregation }}
+                  </option>
+                {% endfor %}
+              </select>
+            </p>
+
+            <p>
+              <label for="additional-display-format">Display format</label>
+              <select id="additional-display-format" name="display_format" required>
+                {% for display_format in display_format_options %}
+                  <option value="{{ display_format }}"
+                    {% if (
+                      form_data.get('display_format', 'number')
+                      if form_data else 'number'
+                    ) == display_format %}selected{% endif %}>
+                    {{ display_format }}
+                  </option>
+                {% endfor %}
+              </select>
+            </p>
+
+            <p>
+              <label for="additional-target">Optional target or benchmark</label>
+              <input id="additional-target" name="target_or_benchmark"
+                type="number" step="any"
+                value="{{ form_data.get('target_or_benchmark', '') if form_data else '' }}">
+            </p>
+            <p>
+              <label for="additional-target-scope">Target applies to</label>
+              <select id="additional-target-scope" name="target_scope" required>
+                {% for scope in target_scope_options %}
+                  <option value="{{ scope }}"
+                    {% if (form_data.get('target_scope', 'row') if form_data else 'row') == scope %}selected{% endif %}>
+                    {% if scope == "row" %}Each row
+                    {% elif scope == "period" %}Each period
+                    {% elif scope == "segment" %}Each segment
+                    {% else %}Complete dataset aggregate
+                    {% endif %}
+                  </option>
+                {% endfor %}
+              </select>
             </p>
 
             <h3>Shared analysis context</h3>
@@ -464,6 +549,36 @@
           </fieldset>
 
           <p>
+            <label for="source-aggregation">Primary KPI aggregation</label>
+            <select id="source-aggregation" name="aggregation" required>
+              {% for aggregation in source_aggregation_options %}
+                <option value="{{ aggregation }}"
+                  {% if (
+                    form_data.get('aggregation', 'sum')
+                    if form_data else 'sum'
+                  ) == aggregation %}selected{% endif %}>
+                  {{ aggregation }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          <p>
+            <label for="source-display-format">Primary KPI display format</label>
+            <select id="source-display-format" name="display_format" required>
+              {% for display_format in display_format_options %}
+                <option value="{{ display_format }}"
+                  {% if (
+                    form_data.get('display_format', 'number')
+                    if form_data else 'number'
+                  ) == display_format %}selected{% endif %}>
+                  {{ display_format }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+
+          <p>
             <label for="date_column">Date column</label>
             <select id="date_column" name="date_column">
               <option value="">No date column</option>
@@ -499,6 +614,25 @@
             <label for="target_or_benchmark">Optional target or benchmark</label>
             <input id="target_or_benchmark" name="target_or_benchmark" type="number" step="any"
               value="{{ form_data.get('target_or_benchmark', '') if form_data else '' }}">
+          </p>
+          <p>
+            <label for="target-scope">Target applies to</label>
+            <select id="target-scope" name="target_scope" required>
+              {% for scope in target_scope_options %}
+                <option value="{{ scope }}"
+                  {% if (form_data.get('target_scope', 'row') if form_data else 'row') == scope %}selected{% endif %}>
+                  {% if scope == "row" %}Each row
+                  {% elif scope == "period" %}Each period
+                  {% elif scope == "segment" %}Each segment
+                  {% else %}Complete dataset aggregate
+                  {% endif %}
+                </option>
+              {% endfor %}
+            </select>
+            <small>
+              Period targets need a date column; segment targets need at least
+              one category column.
+            </small>
           </p>
 
           <p>

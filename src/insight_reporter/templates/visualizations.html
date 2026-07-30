@@ -3,47 +3,327 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Saved Visualizations | AI Insight Reporter</title>
+    <title>Dashboard | AI Insight Reporter</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --dashboard-background: #f4f7fb;
+        --panel-background: #ffffff;
+        --panel-border: #d8e0ec;
+        --text-muted: #536174;
+        --accent: #2563eb;
+        --accent-dark: #1d4ed8;
+        --kpi: #0f766e;
+        --supplementary: #7c3aed;
+      }
+      * { box-sizing: border-box; }
+      body {
+        background: var(--dashboard-background);
+        color: #172033;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 0;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 1440px;
+        padding: 1.5rem clamp(1rem, 3vw, 3rem) 3rem;
+      }
+      a { color: var(--accent-dark); }
+      .dashboard-header {
+        align-items: end;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: space-between;
+        margin: 1.25rem 0;
+      }
+      .dashboard-header h1 { margin: 0; }
+      .dashboard-header p {
+        color: var(--text-muted);
+        margin: 0.35rem 0 0;
+        max-width: 52rem;
+      }
+      .primary-action {
+        background: var(--accent);
+        border-radius: 0.45rem;
+        color: white;
+        display: inline-block;
+        font-weight: 650;
+        padding: 0.65rem 0.9rem;
+        text-decoration: none;
+      }
+      .primary-action:hover { background: var(--accent-dark); }
+      .dashboard-status,
+      .report-panel,
+      .empty-dashboard {
+        background: var(--panel-background);
+        border: 1px solid var(--panel-border);
+        border-radius: 0.65rem;
+        margin: 1rem 0;
+        padding: 1rem 1.15rem;
+      }
+      .dashboard-status p,
+      .report-panel p { margin: 0.4rem 0; }
+      .dashboard-heading {
+        align-items: baseline;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        justify-content: space-between;
+        margin-top: 2rem;
+      }
+      .dashboard-heading h2 { margin: 0; }
+      .dashboard-heading p {
+        color: var(--text-muted);
+        margin: 0;
+      }
+      .visualization-grid {
+        display: grid;
+        gap: 1.25rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+        margin: 1rem 0 2rem;
+      }
+      .visualization-card {
+        background: var(--panel-background);
+        border: 1px solid var(--panel-border);
+        border-radius: 0.75rem;
+        box-shadow: 0 0.25rem 0.8rem rgb(31 47 74 / 8%);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .card-header { padding: 1rem 1rem 0.75rem; }
+      .card-header h3 {
+        font-size: 1.05rem;
+        margin: 0 0 0.25rem;
+      }
+      .card-header p {
+        color: var(--text-muted);
+        margin: 0;
+      }
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.65rem;
+      }
+      .badge {
+        background: #e8eef7;
+        border-radius: 999px;
+        color: #35435a;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.2rem 0.55rem;
+      }
+      .badge-kpi { background: #ccfbf1; color: var(--kpi); }
+      .badge-supplementary {
+        background: #ede9fe;
+        color: var(--supplementary);
+      }
+      .badge-report { background: #dbeafe; color: #1d4ed8; }
+      .chart-frame {
+        align-items: center;
+        background: #ffffff;
+        border-block: 1px solid #e7ecf3;
+        display: flex;
+        justify-content: center;
+        margin: 0;
+        min-height: 20rem;
+        padding: 0.75rem;
+      }
+      .chart-frame a {
+        display: block;
+        width: 100%;
+      }
+      .chart-frame img {
+        display: block;
+        height: auto;
+        margin: 0 auto;
+        max-height: 30rem;
+        max-width: 100%;
+        object-fit: contain;
+        width: 100%;
+      }
+      .card-details {
+        color: var(--text-muted);
+        display: grid;
+        gap: 0.25rem;
+        grid-template-columns: max-content minmax(0, 1fr);
+        margin: 0;
+        padding: 0.85rem 1rem;
+      }
+      .card-details dt { font-weight: 700; }
+      .card-details dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      .card-actions {
+        align-items: center;
+        border-top: 1px solid #e7ecf3;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.8rem;
+        margin-top: auto;
+        padding: 0.8rem 1rem;
+      }
+      .card-actions form { margin: 0; }
+      .card-actions button {
+        background: transparent;
+        border: 0;
+        color: var(--accent-dark);
+        cursor: pointer;
+        font: inherit;
+        padding: 0;
+        text-decoration: underline;
+      }
+      @media (max-width: 40rem) {
+        main { padding-inline: 0.8rem; }
+        .chart-frame { min-height: 13rem; }
+      }
+    </style>
   </head>
   <body>
     <main>
-      <h1>Saved manual visualizations</h1>
-      <p>
-        KPI and supplementary visualizations are listed separately in their saved metadata.
-        Only charts marked for report inclusion should be considered by the final report builder.
-      </p>
-      <p>
-        <a href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
-          Build a manual visualization
-        </a>
-      </p>
+      {% set current_section = "dashboard" %}
+      {% include "_report_project_navigation.html" %}
 
+      <header class="dashboard-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p>
+            View saved charts together in one management dashboard. You can
+            start before configuring KPIs; configured KPIs automatically
+            become available as visualization measures.
+          </p>
+        </div>
+        <a class="primary-action"
+          href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
+          + Build visualization
+        </a>
+      </header>
+
+      <section class="dashboard-status" aria-label="Dashboard status">
+        {% if configuration %}
+          <p>
+            <strong>{{ configuration.metrics|length }} configured KPI(s)</strong>
+            are available in the visualization builder.
+          </p>
+        {% else %}
+          <p>
+            No KPIs are configured yet. Source-column and record-count
+            visualizations are available now.
+            <a href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}">
+              Configure KPIs
+            </a>
+            whenever you are ready.
+          </p>
+        {% endif %}
+      </section>
+
+      <div class="dashboard-heading" id="saved-visualizations">
+        <h2>Saved visualizations</h2>
+        <p>{{ visualizations|length }} chart(s) on this dashboard</p>
+      </div>
       {% if visualizations %}
-        <ul>
+        <section class="visualization-grid" aria-label="Saved dashboard charts">
           {% for artifact in visualizations %}
-            <li>
-              <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
-                {{ artifact.spec.title }}
-              </a>
-              — {{ artifact.classification }}
-              — {{ "included in report" if artifact.spec.include_in_report else "not included in report" }}
-            </li>
+            <article class="visualization-card">
+              <header class="card-header">
+                <div class="badges">
+                  <span class="badge {{ 'badge-kpi' if artifact.classification == 'kpi' else 'badge-supplementary' }}">
+                    {{ "KPI" if artifact.classification == "kpi" else "Supplementary" }}
+                  </span>
+                  <span class="badge">{{ artifact.chart.chart_type|replace("_", " ") }}</span>
+                  {% if artifact.spec.include_in_report %}
+                    <span class="badge badge-report">Included in report</span>
+                  {% endif %}
+                </div>
+                <h3>{{ artifact.spec.title }}</h3>
+                <p>{{ artifact.spec.purpose or "No business question provided." }}</p>
+              </header>
+
+              <figure class="chart-frame">
+                <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                  <img
+                    src="{{ url_for('core.saved_visualization_chart', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}"
+                    alt="{{ artifact.chart.alt_text }}"
+                    loading="lazy"
+                  >
+                </a>
+              </figure>
+
+              <dl class="card-details">
+                <dt>Measures</dt>
+                <dd>{{ artifact.measures|map(attribute="label")|join(", ") }}</dd>
+                <dt>Records</dt>
+                <dd>{{ artifact.filtered_record_count }}</dd>
+                <dt>Report</dt>
+                <dd>
+                  {{ "Included" if artifact.spec.include_in_report else "Not included" }}
+                </dd>
+              </dl>
+
+              <footer class="card-actions">
+                <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                  Open details
+                </a>
+                <a href="{{ url_for('core.visualization_builder', dataset_id=dataset_id, edit=artifact.visualization_id) }}">
+                  Edit
+                </a>
+                <form method="post"
+                  action="{{ url_for('core.regenerate_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                  <button type="submit">Regenerate</button>
+                </form>
+              </footer>
+            </article>
           {% endfor %}
-        </ul>
+        </section>
       {% else %}
-        <p>No manual visualizations have been saved for this dataset.</p>
+        <section class="empty-dashboard">
+          <h3>Your dashboard is empty</h3>
+          <p>
+            Create and save a visualization to display its chart here.
+          </p>
+          <a class="primary-action"
+            href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
+            Build the first visualization
+          </a>
+        </section>
       {% endif %}
 
-      <p>
-        <a href="{{ url_for('core.report_configuration_form', dataset_id=dataset_id) }}">
-          Configure report content
-        </a>
-      </p>
-      <p>
-        <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
-          Return to saved configuration
-        </a>
-      </p>
+      <section class="report-panel">
+        <h2>Continue to report</h2>
+        {% if not configuration %}
+          <p>
+            Configure at least one KPI and generate deterministic evidence
+            before creating the combined management report.
+          </p>
+          <p>
+            <a href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}">
+              Configure KPIs
+            </a>
+          </p>
+        {% elif not evidence_ready %}
+          <p>Generate deterministic evidence before configuring report content.</p>
+          <form method="post"
+            action="{{ url_for('core.deterministic_insights', dataset_id=dataset_id) }}">
+            <button type="submit">Generate deterministic evidence</button>
+          </form>
+        {% else %}
+          <p>
+            KPI configuration and deterministic evidence are ready. Select
+            which KPIs, evidence, and dashboard visualizations should enter the
+            next report revision.
+          </p>
+          <p>
+            <a href="{{ url_for('core.report_configuration_form', dataset_id=dataset_id) }}">
+              {{ "Review report configuration" if report_configuration_ready else "Configure and generate report" }}
+            </a>
+          </p>
+        {% endif %}
+      </section>
     </main>
   </body>
 </html>

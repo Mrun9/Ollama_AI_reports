@@ -140,6 +140,7 @@ def test_on_demand_suggestion_review_confirmation_and_insights_workflow(
         "date_column": "date",
         "category_columns": ["region"],
         "target_or_benchmark": "50",
+        "target_scope": "period",
         "business_objective": "Evaluate profit by region over time.",
     }
     configured = client.post(
@@ -152,9 +153,10 @@ def test_on_demand_suggestion_review_confirmation_and_insights_workflow(
     assert b"Formula" in configured.data
     configuration_path = Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
     payload = json.loads(configuration_path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 4
+    assert payload["schema_version"] == 6
     assert payload["metrics"][0]["metric_type"] == "derived"
     assert payload["metrics"][0]["name"] == "Profit"
+    assert payload["metrics"][0]["target_scope"] == "period"
     assert payload["metrics"][0]["derived_metric"]["schema_version"] == 2
 
     insights = client.post(f"/insights/{dataset_id}", follow_redirects=True)
@@ -293,6 +295,8 @@ def test_multiple_source_kpis_can_be_edited_and_reordered(
             "metric_id": cost["metric_id"],
             "kpi_direction": "lower",
             "target_or_benchmark": "100",
+            "aggregation": "mean",
+            "display_format": "currency",
         },
         follow_redirects=True,
     )
@@ -311,3 +315,5 @@ def test_multiple_source_kpis_can_be_edited_and_reordered(
     )
     assert saved_cost["kpi_direction"] == "lower"
     assert saved_cost["target_or_benchmark"] == 100
+    assert saved_cost["aggregation"] == "mean"
+    assert saved_cost["display_format"] == "currency"

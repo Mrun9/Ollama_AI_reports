@@ -18,6 +18,9 @@
   </head>
   <body>
     <main>
+      {% set dataset_id = artifact.dataset_id %}
+      {% set current_section = "dashboard" %}
+      {% include "_report_project_navigation.html" %}
       <h1>{{ artifact.spec.title }}</h1>
       {% if preview_token %}
         <p><strong>Validated preview:</strong> save it to retain this visualization.</p>
@@ -170,12 +173,7 @@
 
       <p>
         <a href="{{ url_for('core.saved_visualizations', dataset_id=artifact.dataset_id) }}">
-          View saved visualizations
-        </a>
-      </p>
-      <p>
-        <a href="{{ url_for('core.saved_configuration', dataset_id=artifact.dataset_id) }}">
-          Return to saved configuration
+          Return to dashboard
         </a>
       </p>
     </main>

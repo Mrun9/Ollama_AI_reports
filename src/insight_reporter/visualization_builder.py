@@ -17,6 +17,7 @@ from insight_reporter.business_config import (
     BusinessConfiguration,
     MetricConfiguration,
 )
+from insight_reporter.conditional_metrics import evaluate_conditional_metric
 from insight_reporter.dataset_profile import ColumnType, DatasetProfile
 from insight_reporter.dataset_view import DatasetRow, DatasetView
 from insight_reporter.derived_metrics import (
@@ -298,13 +299,24 @@ def build_visualization(
     view: DatasetView,
     *,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
     spec: VisualizationSpec,
     chart_dir: Path,
     assistant_metadata: dict[str, object] | None = None,
+    dataset_id: str | None = None,
 ) -> VisualizationArtifact:
     """Validate a visualization, calculate its data, and render a draft chart."""
 
+    resolved_dataset_id = (
+        configuration.dataset_id
+        if configuration is not None
+        else dataset_id
+    )
+    if (
+        resolved_dataset_id is None
+        or _DATASET_ID.fullmatch(resolved_dataset_id) is None
+    ):
+        raise VisualizationError("Visualization dataset ID is invalid.")
     _validate_dataset(view, profile, configuration)
     assistant = _validate_assistant_metadata(assistant_metadata)
     measures = tuple(
@@ -350,7 +362,12 @@ def build_visualization(
         supporting_data=supporting_data,
         chart_dir=chart_dir,
     )
-    source_columns = _source_columns(spec, measures, configuration)
+    source_columns = _source_columns(
+        spec,
+        measures,
+        profile,
+        configuration,
+    )
     classification = (
         "kpi"
         if all(measure.public.role == "configured_kpi" for measure in measures)
@@ -359,7 +376,7 @@ def build_visualization(
     return VisualizationArtifact(
         schema_version=3,
         visualization_id=None,
-        dataset_id=configuration.dataset_id,
+        dataset_id=resolved_dataset_id,
         classification=classification,
         source=_source_metadata(view),
         spec=spec,
@@ -398,7 +415,7 @@ def load_preview(
     dataset_id: str,
     preview_dir: Path,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
 ) -> VisualizationArtifact:
     """Load and fully revalidate one unexpired draft."""
 
@@ -454,7 +471,7 @@ def load_visualization(
     dataset_id: str,
     visualization_dir: Path,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
 ) -> VisualizationArtifact:
     """Load and revalidate one saved visualization."""
 
@@ -479,7 +496,7 @@ def list_visualizations(
     dataset_id: str,
     visualization_dir: Path,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
 ) -> tuple[VisualizationArtifact, ...]:
     """Load every valid saved visualization for one dataset."""
 
@@ -542,7 +559,7 @@ def spec_to_form(artifact: VisualizationArtifact) -> dict[str, object]:
 def _resolve_measure(
     selector: str,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
     spec: VisualizationSpec,
 ) -> _ResolvedMeasure:
     if selector == "count:records":
@@ -589,6 +606,10 @@ def _resolve_measure(
             column=column_name,
         )
     if selector.startswith("metric:"):
+        if configuration is None:
+            raise VisualizationError(
+                "Configure KPIs before selecting a KPI visualization measure."
+            )
         metric_id = selector.removeprefix("metric:")
         metric = next(
             (item for item in configuration.metrics if item.metric_id == metric_id),
@@ -599,14 +620,24 @@ def _resolve_measure(
         formula = (
             metric.derived_metric.formula_label
             if metric.derived_metric is not None
+            else metric.conditional_metric.formula_label
+            if metric.conditional_metric is not None
             else None
         )
         level = (
             metric.derived_metric.calculation_level
             if metric.derived_metric is not None
+            else "aggregate"
+            if metric.conditional_metric is not None
             else "row"
         )
-        if metric.derived_metric is not None and level == "aggregate":
+        if metric.conditional_metric is not None:
+            if spec.aggregation != "configured":
+                raise VisualizationError(
+                    "Conditional KPIs must use their configured rate calculation."
+                )
+            aggregation = "conditional_rate"
+        elif metric.derived_metric is not None and level == "aggregate":
             aggregation = "formula"
         elif spec.chart_type in {"scatter", "histogram", "box"}:
             aggregation = "row_value"
@@ -615,7 +646,7 @@ def _resolve_measure(
         elif metric.derived_metric is not None:
             aggregation = metric.derived_metric.aggregation
         else:
-            aggregation = "sum"
+            aggregation = metric.aggregation
         return _ResolvedMeasure(
             public=VisualizationMeasure(
                 selector=selector,
@@ -636,7 +667,7 @@ def _validate_compatibility(
     spec: VisualizationSpec,
     measures: tuple[_ResolvedMeasure, ...],
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
 ) -> None:
     chart_type = spec.chart_type
     if chart_type == "time_line":
@@ -704,12 +735,15 @@ def _validate_compatibility(
             "Logarithmic scale is supported for line, bar, and scatter charts."
         )
     if spec.date_start is not None or spec.date_end is not None:
-        date_column = configuration.date_column
-        if chart_type == "time_line":
-            date_column = spec.x_column
+        date_column = _date_filter_column(
+            spec,
+            profile,
+            configuration,
+        )
         if date_column is None:
             raise VisualizationError(
-                "Date filters require a configured or selected date column."
+                "Date filters require a selected time axis, a configured date "
+                "column, or exactly one detected date column."
             )
         if (
             spec.date_start is not None
@@ -728,7 +762,7 @@ def _filter_rows(
     rows: tuple[DatasetRow, ...],
     spec: VisualizationSpec,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
 ) -> tuple[DatasetRow, ...]:
     actual_filter_values: set[str] = set()
     if spec.filter_column is not None:
@@ -741,7 +775,7 @@ def _filter_rows(
             raise VisualizationError(
                 "One or more category filter values do not exist in the dataset."
             )
-    date_column = spec.x_column if spec.chart_type == "time_line" else configuration.date_column
+    date_column = _date_filter_column(spec, profile, configuration)
     filtered: list[DatasetRow] = []
     for row in rows:
         if spec.filter_column is not None and spec.filter_values:
@@ -916,6 +950,14 @@ def _group_measure_value(
     if measure.count_records:
         return float(len(rows))
     metric = measure.metric
+    if (
+        metric is not None
+        and metric.conditional_metric is not None
+    ):
+        return evaluate_conditional_metric(
+            metric.conditional_metric,
+            tuple(dict(row.values) for row in rows),
+        ).percentage
     if (
         metric is not None
         and metric.derived_metric is not None
@@ -1146,7 +1188,7 @@ def _load_artifact(
     *,
     dataset_id: str,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
     allow_draft: bool,
 ) -> VisualizationArtifact:
     try:
@@ -1158,7 +1200,10 @@ def _load_artifact(
         or payload.get("schema_version") not in {1, 2, 3}
     ):
         raise VisualizationError("Saved visualization has an invalid shape.")
-    if payload.get("dataset_id") != dataset_id or configuration.dataset_id != dataset_id:
+    if payload.get("dataset_id") != dataset_id or (
+        configuration is not None
+        and configuration.dataset_id != dataset_id
+    ):
         raise VisualizationError("Saved visualization belongs to another dataset.")
     visualization_id = payload.get("visualization_id")
     if visualization_id is None:
@@ -1217,7 +1262,12 @@ def _load_artifact(
     if classification != expected_classification:
         raise VisualizationError("Saved visualization classification is invalid.")
     source_columns = payload.get("source_columns")
-    expected_source_columns = _source_columns(spec, measures, configuration)
+    expected_source_columns = _source_columns(
+        spec,
+        measures,
+        profile,
+        configuration,
+    )
     if not isinstance(source_columns, list) or not all(
         isinstance(column, str) and profile.column(column) is not None
         for column in source_columns
@@ -1308,14 +1358,19 @@ def _validate_assistant_metadata(
 def _source_columns(
     spec: VisualizationSpec,
     measures: tuple[_ResolvedMeasure, ...],
-    configuration: BusinessConfiguration,
+    profile: DatasetProfile,
+    configuration: BusinessConfiguration | None,
 ) -> tuple[str, ...]:
     columns: list[str] = []
     for value in (
         spec.x_column,
         spec.series_column,
         spec.filter_column,
-        configuration.date_column if spec.date_start or spec.date_end else None,
+        (
+            _date_filter_column(spec, profile, configuration)
+            if spec.date_start or spec.date_end
+            else None
+        ),
     ):
         if value is not None and value not in columns:
             columns.append(value)
@@ -1340,7 +1395,7 @@ def _source_metadata(view: DatasetView) -> dict[str, object]:
 def _validate_dataset(
     view: DatasetView,
     profile: DatasetProfile,
-    configuration: BusinessConfiguration,
+    configuration: BusinessConfiguration | None,
 ) -> None:
     if len(view.sources) != 1:
         raise VisualizationError(
@@ -1349,11 +1404,28 @@ def _validate_dataset(
     source = view.sources[0]
     if (
         source.sha256 != profile.source_sha256
-        or source.sha256 != configuration.source_sha256
+        or (
+            configuration is not None
+            and source.sha256 != configuration.source_sha256
+        )
     ):
         raise VisualizationError(
             "Visualization inputs do not refer to the same immutable dataset."
         )
+
+
+def _date_filter_column(
+    spec: VisualizationSpec,
+    profile: DatasetProfile,
+    configuration: BusinessConfiguration | None,
+) -> str | None:
+    if spec.chart_type == "time_line":
+        return spec.x_column
+    if configuration is not None and configuration.date_column is not None:
+        return configuration.date_column
+    if len(profile.date_candidates) == 1:
+        return profile.date_candidates[0]
+    return None
 
 
 def _dataset_visualization_dir(

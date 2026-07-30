@@ -4,27 +4,36 @@ import json
 import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from ollama import Client
 
 from insight_reporter.business_config import (
+    DISPLAY_FORMATS,
+    SOURCE_AGGREGATIONS,
+    TARGET_SCOPES,
     BusinessConfigurationError,
     validate_business_configuration,
 )
 from insight_reporter.dataset_profile import DatasetProfile
+from insight_reporter.model_run_metrics import measure_model_run
 
 _MAX_PROFILE_JSON_CHARACTERS = 50_000
 _MAX_RESPONSE_CHARACTERS = 100_000
 _MAX_SUGGESTIONS = 3
+_PROMPT_VERSION = "configuration_suggestions.v2"
 _SUGGESTION_KEYS = frozenset(
     {
         "title",
         "primary_kpi",
         "kpi_direction",
+        "aggregation",
+        "display_format",
         "date_column",
         "category_columns",
         "target_or_benchmark",
+        "target_scope",
         "business_objective",
         "confidence",
         "rationale",
@@ -78,9 +87,21 @@ def _response_schema(
                             "type": "string",
                             "enum": ["higher", "lower"],
                         },
+                        "aggregation": {
+                            "type": "string",
+                            "enum": list(SOURCE_AGGREGATIONS),
+                        },
+                        "display_format": {
+                            "type": "string",
+                            "enum": list(DISPLAY_FORMATS),
+                        },
                         "date_column": date_column,
                         "category_columns": category_columns,
                         "target_or_benchmark": {"type": "null"},
+                        "target_scope": {
+                            "type": "string",
+                            "enum": list(TARGET_SCOPES),
+                        },
                         "business_objective": {"type": "string"},
                         "confidence": {"type": "number"},
                         "rationale": {
@@ -92,9 +113,12 @@ def _response_schema(
                         "title",
                         "primary_kpi",
                         "kpi_direction",
+                        "aggregation",
+                        "display_format",
                         "date_column",
                         "category_columns",
                         "target_or_benchmark",
+                        "target_scope",
                         "business_objective",
                         "confidence",
                         "rationale",
@@ -135,6 +159,14 @@ Use only the supplied KPI, date, and category candidate column names exactly as 
 When no date candidates exist, return null; when no category candidates exist, return [].
 Return one to three distinct, useful suggestions using the required JSON schema.
 Never invent a numeric target or benchmark; target_or_benchmark must always be null.
+Select an aggregation and display format that match the KPI's business meaning.
+Use sum for additive totals, mean or median for per-record measures, and min or max only when an
+extreme value is itself decision-relevant. Use currency only for clearly monetary measures and
+percentage only for columns already representing percentages; otherwise use number.
+Select target_scope as row for per-record thresholds, period for a recurring target when a date
+column is selected, segment for the same target applied to each selected category value, or dataset
+for one complete-dataset aggregate. Never select period without a date column or segment without a
+category column.
 Never invent trends, causality, desired target values, or business facts absent from the profile.
 Keep objectives generic and concise, and explain suggestions using only supplied profile evidence.
 You are advisory: Python validation and human confirmation determine the final configuration."""
@@ -153,9 +185,12 @@ class ConfigurationSuggestion:
     title: str
     primary_kpi: str
     kpi_direction: str
+    aggregation: str
+    display_format: str
     date_column: str | None
     category_columns: tuple[str, ...]
     target_or_benchmark: None
+    target_scope: str
     business_objective: str
     confidence: float
     rationale: tuple[str, ...]
@@ -176,6 +211,7 @@ def generate_configuration_suggestions(
     timeout_seconds: int,
     client: _ChatClient | None = None,
     excluded_kpis: tuple[str, ...] = (),
+    metrics_dir: Path | None = None,
 ) -> SuggestionBatch:
     """Ask local Ollama for structured suggestions, then validate every field."""
 
@@ -203,40 +239,54 @@ def generate_configuration_suggestions(
     if client is None:
         client = Client(host=host, timeout=float(timeout_seconds))
 
-    try:
-        response = client.chat(
-            model=model,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": (
-                        "Propose configurations for this JSON dataset profile. "
-                        "Do not infer from any information outside it.\n" + profile_json
-                    ),
-                },
-            ],
-            format=build_suggestion_response_schema(
-                profile,
-                kpi_candidates=available_kpis,
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                "Propose configurations for this JSON dataset profile. "
+                "Do not infer from any information outside it.\n" + profile_json
             ),
-            stream=False,
-            think=False,
-            options={"temperature": 0},
-        )
+        },
+    ]
+    options = {"temperature": 0}
+    try:
+        with measure_model_run(
+            metrics_dir=metrics_dir,
+            task_type="configuration_suggestions",
+            prompt_version=_PROMPT_VERSION,
+            model=model,
+            messages=messages,
+            options=options,
+            dataset_id=dataset_id,
+        ) as measurement:
+            response = client.chat(
+                model=model,
+                messages=messages,
+                format=build_suggestion_response_schema(
+                    profile,
+                    kpi_candidates=available_kpis,
+                ),
+                stream=False,
+                think=False,
+                options=options,
+            )
+            measurement.capture_response(response)
+            result = parse_suggestion_response(
+                _response_content(response),
+                profile=profile,
+                dataset_id=dataset_id,
+                allowed_kpis=available_kpis,
+            )
+            measurement.mark_validated()
+            return result
+    except ConfigurationSuggestionError:
+        raise
     except Exception as error:
         raise ConfigurationSuggestionError(
             "Local Ollama suggestions are unavailable. Start Ollama and ensure "
             f"{model} is installed."
         ) from error
-
-    content = _response_content(response)
-    return parse_suggestion_response(
-        content,
-        profile=profile,
-        dataset_id=dataset_id,
-        allowed_kpis=available_kpis,
-    )
 
 
 def build_profile_summary(
@@ -323,8 +373,11 @@ def parse_suggestion_response(
         signature = (
             suggestion.primary_kpi,
             suggestion.kpi_direction,
+            suggestion.aggregation,
+            suggestion.display_format,
             suggestion.date_column,
             suggestion.category_columns,
+            suggestion.target_scope,
             suggestion.business_objective.casefold(),
         )
         if signature in signatures:
@@ -361,6 +414,15 @@ def _validate_suggestion(
     kpi_direction = _bounded_string(
         value.get("kpi_direction"), field="direction", maximum=20
     )
+    aggregation = _bounded_string(
+        value.get("aggregation"), field="aggregation", maximum=20
+    )
+    display_format = _bounded_string(
+        value.get("display_format"), field="display format", maximum=20
+    )
+    target_scope = _bounded_string(
+        value.get("target_scope"), field="target scope", maximum=20
+    )
 
     raw_date = value.get("date_column")
     if raw_date is not None and not isinstance(raw_date, str):
@@ -373,6 +435,14 @@ def _validate_suggestion(
     ):
         raise ConfigurationSuggestionError("Category columns must be a list of names.")
     category_columns = [column.strip() for column in raw_categories]
+    if target_scope == "period" and not date_column:
+        raise ConfigurationSuggestionError(
+            "A period target scope requires a suggested date column."
+        )
+    if target_scope == "segment" and not category_columns:
+        raise ConfigurationSuggestionError(
+            "A segment target scope requires a suggested category column."
+        )
 
     if value.get("target_or_benchmark") is not None:
         raise ConfigurationSuggestionError("AI suggestions may not invent targets.")
@@ -411,14 +481,20 @@ def _validate_suggestion(
         category_columns=category_columns,
         target_or_benchmark="",
         business_objective=business_objective,
+        aggregation=aggregation,
+        display_format=display_format,
+        target_scope=target_scope,
     )
     return ConfigurationSuggestion(
         title=title,
         primary_kpi=validated.primary_kpi,
         kpi_direction=validated.kpi_direction,
+        aggregation=validated.primary_metric.aggregation,
+        display_format=validated.primary_metric.display_format,
         date_column=validated.date_column,
         category_columns=validated.category_columns,
         target_or_benchmark=None,
+        target_scope=validated.target_scope,
         business_objective=validated.business_objective,
         confidence=float(confidence),
         rationale=rationale,

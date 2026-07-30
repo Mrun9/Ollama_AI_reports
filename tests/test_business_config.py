@@ -63,7 +63,7 @@ def test_valid_user_selections_create_configuration(tmp_path: Path) -> None:
     assert configuration.target_or_benchmark == 150
     assert configuration.business_objective == "Increase regional revenue."
     assert configuration.source_sha256 == profile.source_sha256
-    assert configuration.schema_version == 4
+    assert configuration.schema_version == 6
     assert len(configuration.metrics) == 1
     assert configuration.metric_type == "source"
     assert configuration.derived_metric is None
@@ -159,7 +159,7 @@ def test_version_one_source_configuration_remains_supported(tmp_path: Path) -> N
 
     loaded = load_business_configuration(path, profile=profile)
 
-    assert loaded.schema_version == 4
+    assert loaded.schema_version == 6
     assert loaded.metric_type == "source"
     assert loaded.primary_kpi == "revenue"
 
@@ -184,7 +184,7 @@ def test_version_two_source_configuration_remains_supported(tmp_path: Path) -> N
 
     loaded = load_business_configuration(path, profile=profile)
 
-    assert loaded.schema_version == 4
+    assert loaded.schema_version == 6
     assert loaded.metric_type == "source"
     assert loaded.primary_kpi == "revenue"
 
@@ -202,7 +202,7 @@ def test_version_three_registry_configuration_remains_supported(
 
     loaded = load_business_configuration(path, profile=profile)
 
-    assert loaded.schema_version == 4
+    assert loaded.schema_version == 6
     assert loaded.primary_kpi == "revenue"
 
 
@@ -385,6 +385,50 @@ def test_source_metrics_are_appended_without_reselecting_primary(
     assert configuration.metrics[1].kpi_direction == "lower"
 
 
+def test_source_metric_semantics_are_saved_and_edited_independently(
+    tmp_path: Path,
+) -> None:
+    configuration = validate_business_configuration(
+        **_valid_arguments(_profile(tmp_path)),  # type: ignore[arg-type]
+        aggregation="mean",
+        display_format="currency",
+    )
+    metric = configuration.primary_metric
+
+    assert metric.aggregation == "mean"
+    assert metric.display_format == "currency"
+
+    updated = update_metric_settings(
+        configuration,
+        metric.metric_id,
+        kpi_direction="lower",
+        target_or_benchmark="25",
+        aggregation="median",
+        display_format="percentage",
+    )
+
+    assert updated.primary_metric.aggregation == "median"
+    assert updated.primary_metric.display_format == "percentage"
+    assert updated.primary_metric.target_or_benchmark == 25
+
+
+@pytest.mark.parametrize(
+    ("aggregation", "display_format"),
+    [("count", "number"), ("sum", "html")],
+)
+def test_invalid_source_metric_semantics_are_rejected(
+    tmp_path: Path,
+    aggregation: str,
+    display_format: str,
+) -> None:
+    with pytest.raises(BusinessConfigurationError):
+        validate_business_configuration(
+            **_valid_arguments(_profile(tmp_path)),  # type: ignore[arg-type]
+            aggregation=aggregation,
+            display_format=display_format,
+        )
+
+
 def test_different_derived_formula_cannot_silently_replace_same_name(
     tmp_path: Path,
 ) -> None:
@@ -456,3 +500,91 @@ def test_different_derived_formula_cannot_silently_replace_same_name(
         "revenue",
         "Profit",
     ]
+
+
+def test_target_scope_is_persisted_and_can_be_edited(tmp_path: Path) -> None:
+    profile = _profile(tmp_path)
+    configuration = validate_business_configuration(
+        **_valid_arguments(profile),  # type: ignore[arg-type]
+        target_scope="segment",
+    )
+
+    assert configuration.target_scope == "segment"
+    assert configuration.to_dict()["metrics"][0]["target_scope"] == "segment"  # type: ignore[index]
+
+    updated = update_metric_settings(
+        configuration,
+        configuration.primary_metric_id,
+        kpi_direction="higher",
+        target_or_benchmark="120",
+        target_scope="period",
+    )
+
+    assert updated.target_scope == "period"
+
+
+def test_target_scope_requires_its_grouping_context(tmp_path: Path) -> None:
+    profile = _profile(tmp_path)
+    arguments = _valid_arguments(profile)
+    arguments["date_column"] = ""
+    arguments["target_scope"] = "period"
+    with pytest.raises(BusinessConfigurationError, match="requires a date"):
+        validate_business_configuration(**arguments)  # type: ignore[arg-type]
+
+    arguments = _valid_arguments(profile)
+    arguments["category_columns"] = []
+    arguments["target_scope"] = "segment"
+    with pytest.raises(BusinessConfigurationError, match="requires at least one"):
+        validate_business_configuration(**arguments)  # type: ignore[arg-type]
+
+
+def test_aggregate_formula_rejects_per_row_target(tmp_path: Path) -> None:
+    path = tmp_path / "aggregate-target.csv"
+    path.write_text(
+        "date,region,revenue,cost\n"
+        "2026-01-01,North,100,60\n"
+        "2026-01-02,South,120,70\n",
+        encoding="utf-8",
+    )
+    profile = profile_csv(path)
+    metric = validate_formula_metric(
+        profile,
+        name="Margin",
+        formula="(SUM([revenue]) - SUM([cost])) / SUM([revenue]) * 100",
+        calculation_level="aggregate",
+        aggregation="formula",
+        display_format="percentage",
+        source_id=source_id_from_hash(profile.source_sha256),
+    )
+
+    with pytest.raises(BusinessConfigurationError, match="Per-row targets"):
+        validate_derived_business_configuration(
+            profile,
+            dataset_id="d" * 32,
+            derived_metric=metric,
+            kpi_direction="higher",
+            date_column="date",
+            category_columns=["region"],
+            target_or_benchmark="25",
+            target_scope="row",
+            business_objective="Protect margin.",
+        )
+
+
+def test_version_five_target_scope_is_migrated_by_metric_level(
+    tmp_path: Path,
+) -> None:
+    profile = _profile(tmp_path)
+    configuration = validate_business_configuration(
+        **_valid_arguments(profile)  # type: ignore[arg-type]
+    )
+    payload = configuration.to_dict()
+    payload["schema_version"] = 5
+    payload["metrics"][0].pop("target_scope")  # type: ignore[index,union-attr]
+    path = tmp_path / "version-five.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_business_configuration(path, profile=profile)
+
+    assert loaded.schema_version == 6
+    assert loaded.target_scope == "row"

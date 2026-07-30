@@ -17,8 +17,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const synchronizeEvidence = (kpiInput, selectAll) => {
     for (const evidenceInput of evidenceFor(kpiInput.dataset.reportKpi)) {
       evidenceInput.disabled = !kpiInput.checked;
-      if (!kpiInput.checked || selectAll) {
-        evidenceInput.checked = kpiInput.checked;
+      if (!kpiInput.checked) {
+        evidenceInput.checked = false;
+      } else if (
+        selectAll &&
+        evidenceInput.dataset.reportEvidenceRecommended === "true"
+      ) {
+        evidenceInput.checked = true;
       }
     }
   };
