@@ -16,6 +16,7 @@ _ARTIFACT_DIRECTORIES = (
     ("EVIDENCE_DIR", "evidence"),
     ("CHART_DIR", "charts"),
     ("VISUALIZATION_DIR", "visualizations"),
+    ("VISUALIZATION_INSIGHT_DIR", "visualization_insights"),
     ("REPORT_CONFIGURATION_DIR", "report_configurations"),
     ("REPORT_PACKAGE_DIR", "report_packages"),
     ("GENERATED_REPORT_DIR", "generated_reports"),

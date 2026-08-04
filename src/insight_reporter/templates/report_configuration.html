@@ -70,7 +70,7 @@
         <p>No deterministic evidence was selected.</p>
       {% endif %}
 
-      <h2>Selected manual visualizations</h2>
+      <h2>Selected automated visualizations</h2>
       {% if selected_visualizations %}
         <ul>
           {% for artifact in selected_visualizations %}
@@ -90,7 +90,28 @@
           {% endfor %}
         </ul>
       {% else %}
-        <p>No manual visualization was selected.</p>
+        <p>No manual visualization was selected from the automated builder.</p>
+      {% endif %}
+
+      <h2>Selected manual-board visualizations</h2>
+      {% if selected_manual_boards %}
+        <ul>
+          {% for artifact in selected_manual_boards %}
+            <li>
+              <a href="{{ url_for('core.saved_manual_visualization', dataset_id=report.dataset_id, visualization_id=artifact.visualization_id) }}">
+                {{ artifact.title }}
+              </a>
+              · {{ artifact.chart_type|replace("_", " ") }}
+              · {{ artifact.preview.get("record_count", 0) }} source record(s)
+              <p>
+                Fields: {{ artifact.fields.values()|select|join(", ") }}.
+                Python-calculated chart evidence is included for report insight generation.
+              </p>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No manual-board visualization was selected.</p>
       {% endif %}
 
       <h2>User notes</h2>

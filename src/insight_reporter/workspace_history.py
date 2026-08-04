@@ -36,6 +36,7 @@ class WorkspaceDirectories:
     insight_dir: Path
     evidence_dir: Path
     visualization_dir: Path
+    visualization_insight_dir: Path
     report_configuration_dir: Path
     report_package_dir: Path
     generated_report_dir: Path
@@ -64,10 +65,7 @@ class WorkspaceRecord:
 
     @property
     def has_source(self) -> bool:
-        return (
-            self.internal_filename is not None
-            and self.source_archived_at is None
-        )
+        return self.internal_filename is not None and self.source_archived_at is None
 
     @property
     def is_archived(self) -> bool:
@@ -188,21 +186,13 @@ def attach_workspace_source(
         workspace_dir=workspace_dir,
     )
     if record.is_archived:
-        raise WorkspaceHistoryError(
-            "Restore the workspace before adding a data source."
-        )
+        raise WorkspaceHistoryError("Restore the workspace before adding a data source.")
     if record.has_source:
-        raise WorkspaceHistoryError(
-            "This workspace already has a data source."
-        )
+        raise WorkspaceHistoryError("This workspace already has a data source.")
     if record.source_archived_at is not None:
-        raise WorkspaceHistoryError(
-            "Restore the archived data source before replacing it."
-        )
+        raise WorkspaceHistoryError("Restore the archived data source before replacing it.")
     if Path(upload.internal_filename).stem != dataset_id:
-        raise WorkspaceHistoryError(
-            "Uploaded source does not belong to this workspace."
-        )
+        raise WorkspaceHistoryError("Uploaded source does not belong to this workspace.")
     updated = replace(
         record,
         schema_version=2,
@@ -281,15 +271,11 @@ def rename_workspace_source(
     )
     _require_active_workspace(record)
     if not record.has_source:
-        raise WorkspaceHistoryError(
-            "This workspace has no active data source."
-        )
+        raise WorkspaceHistoryError("This workspace has no active data source.")
     updated = replace(
         record,
         schema_version=2,
-        original_filename=_clean_original_filename(
-            name if isinstance(name, str) else None
-        ),
+        original_filename=_clean_original_filename(name if isinstance(name, str) else None),
         updated_at=datetime.now(UTC).isoformat(),
     )
     _save_workspace_record(updated, workspace_dir=workspace_dir)
@@ -360,20 +346,14 @@ def archive_workspace_source(
         raise WorkspaceHistoryError("This workspace has no active data source.")
     source_path = upload_dir / record.internal_filename
     if not source_path.is_file():
-        raise WorkspaceHistoryError(
-            "The retained data source is unavailable."
-        )
+        raise WorkspaceHistoryError("The retained data source is unavailable.")
     source_trash_dir = trash_dir / "sources" / dataset_id
     source_trash_dir.mkdir(parents=True, exist_ok=True)
     destination = source_trash_dir / source_path.name
     selection = upload_dir / f"{dataset_id}.selection.json"
     selection_destination = source_trash_dir / selection.name
-    if destination.exists() or (
-        selection.is_file() and selection_destination.exists()
-    ):
-        raise WorkspaceHistoryError(
-            "A recoverable copy of this data source already exists."
-        )
+    if destination.exists() or (selection.is_file() and selection_destination.exists()):
+        raise WorkspaceHistoryError("A recoverable copy of this data source already exists.")
     selection_moved = False
     try:
         source_path.replace(destination)
@@ -419,13 +399,8 @@ def restore_workspace_source(
         workspace_dir=workspace_dir,
     )
     _require_active_workspace(record)
-    if (
-        record.source_archived_at is None
-        or record.internal_filename is None
-    ):
-        raise WorkspaceHistoryError(
-            "This workspace has no archived data source."
-        )
+    if record.source_archived_at is None or record.internal_filename is None:
+        raise WorkspaceHistoryError("This workspace has no archived data source.")
     source_trash_dir = trash_dir / "sources" / dataset_id
     source_path = source_trash_dir / record.internal_filename
     destination = upload_dir / record.internal_filename
@@ -436,9 +411,7 @@ def restore_workspace_source(
         or destination.exists()
         or (selection.is_file() and selection_destination.exists())
     ):
-        raise WorkspaceHistoryError(
-            "The archived data source cannot be restored safely."
-        )
+        raise WorkspaceHistoryError("The archived data source cannot be restored safely.")
     upload_dir.mkdir(parents=True, exist_ok=True)
     selection_moved = False
     try:
@@ -451,9 +424,7 @@ def restore_workspace_source(
             selection_destination.replace(selection)
         if destination.is_file() and not source_path.exists():
             destination.replace(source_path)
-        raise WorkspaceHistoryError(
-            "The archived data source could not be restored."
-        ) from error
+        raise WorkspaceHistoryError("The archived data source could not be restored.") from error
     updated = replace(
         record,
         schema_version=2,
@@ -468,9 +439,7 @@ def restore_workspace_source(
         if destination.is_file() and not source_path.exists():
             destination.replace(source_path)
         raise
-    if source_trash_dir.is_dir() and not tuple(
-        source_trash_dir.iterdir()
-    ):
+    if source_trash_dir.is_dir() and not tuple(source_trash_dir.iterdir()):
         source_trash_dir.rmdir()
     return updated
 
@@ -518,9 +487,7 @@ def archive_workspace_report(
     _require_active_workspace(record)
     if report_id in record.archived_report_ids:
         raise WorkspaceHistoryError("This report is already archived.")
-    archived = tuple(
-        dict.fromkeys((*record.archived_report_ids, report_id))
-    )
+    archived = tuple(dict.fromkeys((*record.archived_report_ids, report_id)))
     updated = replace(
         record,
         schema_version=2,
@@ -550,9 +517,7 @@ def restore_workspace_report(
     updated = replace(
         record,
         schema_version=2,
-        archived_report_ids=tuple(
-            item for item in record.archived_report_ids if item != report_id
-        ),
+        archived_report_ids=tuple(item for item in record.archived_report_ids if item != report_id),
         updated_at=datetime.now(UTC).isoformat(),
     )
     _save_workspace_record(updated, workspace_dir=workspace_dir)
@@ -573,9 +538,7 @@ def load_workspace_record(
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise WorkspaceHistoryError(
-            "Workspace metadata is unreadable."
-        ) from error
+        raise WorkspaceHistoryError("Workspace metadata is unreadable.") from error
     return _parse_workspace_record(payload, expected_dataset_id=dataset_id)
 
 
@@ -595,33 +558,21 @@ def get_workspace_summary(
         )
     except WorkspaceHistoryError:
         record = None
-        warning = (
-            "Saved workspace metadata is invalid; safe source metadata is "
-            "shown instead."
-        )
+        warning = "Saved workspace metadata is invalid; safe source metadata is shown instead."
     source_path = _source_path(directories.upload_dir, dataset_id)
     if record is None:
         if source_path is None:
             return None
         record = _legacy_workspace_record(source_path)
         if warning is None:
-            warning = (
-                "This dataset predates Milestone 6A, so its original filename "
-                "is unavailable."
-            )
+            warning = "This dataset predates Milestone 6A, so its original filename is unavailable."
     elif record.has_source:
         if source_path is None:
-            warning = (
-                "Workspace metadata references a source that is unavailable."
-            )
+            warning = "Workspace metadata references a source that is unavailable."
         elif record.internal_filename != source_path.name:
-            warning = (
-                "Saved workspace metadata does not match the retained source."
-            )
+            warning = "Saved workspace metadata does not match the retained source."
     elif source_path is not None:
-        warning = (
-            "A retained source exists but is not attached to this workspace."
-        )
+        warning = "A retained source exists but is not attached to this workspace."
 
     versions, runs, archived_runs = _report_counts(
         directories.generated_report_dir,
@@ -713,15 +664,11 @@ def _workspace_stage(
         return "source_required", "No data source selected"
     if report_version_count:
         return "report_generated", "Report generated"
-    if (
-        directories.report_package_dir / f"{dataset_id}.json"
-    ).is_file() or (
+    if (directories.report_package_dir / f"{dataset_id}.json").is_file() or (
         directories.report_configuration_dir / f"{dataset_id}.json"
     ).is_file():
         return "report_configured", "Report configured"
-    if (
-        directories.evidence_dir / f"{dataset_id}.json"
-    ).is_file() or (
+    if (directories.evidence_dir / f"{dataset_id}.json").is_file() or (
         directories.insight_dir / f"{dataset_id}.json"
     ).is_file():
         return "insights_generated", "Insights generated"
@@ -737,9 +684,7 @@ def _save_workspace_record(
 ) -> Path:
     workspace_dir.mkdir(parents=True, exist_ok=True)
     final_path = workspace_dir / f"{record.dataset_id}.json"
-    temporary_path = workspace_dir / (
-        f".{record.dataset_id}.{secrets.token_hex(8)}.part"
-    )
+    temporary_path = workspace_dir / (f".{record.dataset_id}.{secrets.token_hex(8)}.part")
     encoded = json.dumps(
         record.to_dict(),
         ensure_ascii=False,
@@ -751,9 +696,7 @@ def _save_workspace_record(
         temporary_path.replace(final_path)
     except OSError as error:
         temporary_path.unlink(missing_ok=True)
-        raise WorkspaceHistoryError(
-            "Workspace metadata could not be saved."
-        ) from error
+        raise WorkspaceHistoryError("Workspace metadata could not be saved.") from error
     return final_path
 
 
@@ -763,9 +706,7 @@ def _parse_workspace_record(
     expected_dataset_id: str,
 ) -> WorkspaceRecord:
     if not isinstance(payload, dict):
-        raise WorkspaceHistoryError(
-            "Workspace metadata has an invalid schema."
-        )
+        raise WorkspaceHistoryError("Workspace metadata has an invalid schema.")
     if payload.get("schema_version") == 1:
         return _parse_legacy_workspace_record(
             payload,
@@ -789,9 +730,7 @@ def _parse_workspace_record(
         "archived_report_ids",
     }
     if set(payload) != expected_fields or payload.get("schema_version") != 2:
-        raise WorkspaceHistoryError(
-            "Workspace metadata version is unsupported."
-        )
+        raise WorkspaceHistoryError("Workspace metadata version is unsupported.")
     dataset_id = _validated_record_identity(
         payload.get("dataset_id"),
         expected_dataset_id=expected_dataset_id,
@@ -809,41 +748,26 @@ def _parse_workspace_record(
     )
     if any(value is not None for value in source_values):
         if any(value is None for value in source_values):
-            raise WorkspaceHistoryError(
-                "Workspace source metadata is incomplete."
-            )
+            raise WorkspaceHistoryError("Workspace source metadata is incomplete.")
         source_format = _validated_source_format(source_format)
         if internal_filename != f"{dataset_id}.{source_format}":
-            raise WorkspaceHistoryError(
-                "Workspace source identity is invalid."
-            )
+            raise WorkspaceHistoryError("Workspace source identity is invalid.")
         source_sha256 = _validated_source_sha256(source_sha256)
         size_bytes = _validated_source_size(size_bytes)
         if not isinstance(raw_original_filename, str):
-            raise WorkspaceHistoryError(
-                "Workspace source label is invalid."
-            )
+            raise WorkspaceHistoryError("Workspace source label is invalid.")
         original_filename = _clean_original_filename(raw_original_filename)
     else:
-        if (
-            raw_original_filename is not None
-            or payload.get("source_archived_at") is not None
-        ):
-            raise WorkspaceHistoryError(
-                "Workspace source metadata is incomplete."
-            )
+        if raw_original_filename is not None or payload.get("source_archived_at") is not None:
+            raise WorkspaceHistoryError("Workspace source metadata is incomplete.")
         original_filename = None
     report_names = _validated_report_names(payload.get("report_names"))
-    archived_report_ids = _validated_report_ids(
-        payload.get("archived_report_ids")
-    )
+    archived_report_ids = _validated_report_ids(payload.get("archived_report_ids"))
     return WorkspaceRecord(
         schema_version=2,
         dataset_id=dataset_id,
         name=_clean_workspace_name(payload.get("name")),
-        description=_clean_workspace_description(
-            payload.get("description")
-        ),
+        description=_clean_workspace_description(payload.get("description")),
         original_filename=original_filename,
         internal_filename=internal_filename,
         source_format=source_format,
@@ -852,9 +776,7 @@ def _parse_workspace_record(
         created_at=_validated_timestamp(payload.get("created_at")),
         updated_at=_validated_timestamp(payload.get("updated_at")),
         archived_at=_optional_timestamp(payload.get("archived_at")),
-        source_archived_at=_optional_timestamp(
-            payload.get("source_archived_at")
-        ),
+        source_archived_at=_optional_timestamp(payload.get("source_archived_at")),
         report_names=report_names,
         archived_report_ids=archived_report_ids,
     )
@@ -877,18 +799,14 @@ def _parse_legacy_workspace_record(
         "created_at",
     }
     if set(payload) != expected_fields:
-        raise WorkspaceHistoryError(
-            "Workspace metadata has an invalid schema."
-        )
+        raise WorkspaceHistoryError("Workspace metadata has an invalid schema.")
     dataset_id = _validated_record_identity(
         payload.get("dataset_id"),
         expected_dataset_id=expected_dataset_id,
     )
     source_format = _validated_source_format(payload.get("source_format"))
     if payload.get("internal_filename") != f"{dataset_id}.{source_format}":
-        raise WorkspaceHistoryError(
-            "Workspace source identity is invalid."
-        )
+        raise WorkspaceHistoryError("Workspace source identity is invalid.")
     created_at = _validated_timestamp(payload.get("created_at"))
     return WorkspaceRecord(
         schema_version=1,
@@ -902,9 +820,7 @@ def _parse_legacy_workspace_record(
         ),
         internal_filename=f"{dataset_id}.{source_format}",
         source_format=source_format,
-        source_sha256=_validated_source_sha256(
-            payload.get("source_sha256")
-        ),
+        source_sha256=_validated_source_sha256(payload.get("source_sha256")),
         size_bytes=_validated_source_size(payload.get("size_bytes")),
         created_at=created_at,
         updated_at=created_at,
@@ -930,9 +846,7 @@ def _workspace_record_or_fallback(
         record = None
     if record is None and fallback_record is not None:
         if fallback_record.dataset_id != dataset_id:
-            raise WorkspaceHistoryError(
-                "Workspace fallback identity is invalid."
-            )
+            raise WorkspaceHistoryError("Workspace fallback identity is invalid.")
         record = fallback_record
     if record is None:
         raise WorkspaceHistoryError("Workspace metadata is unavailable.")
@@ -955,9 +869,7 @@ def _required_workspace_record(
 
 def _require_active_workspace(record: WorkspaceRecord) -> None:
     if record.is_archived:
-        raise WorkspaceHistoryError(
-            "Restore the workspace before changing its contents."
-        )
+        raise WorkspaceHistoryError("Restore the workspace before changing its contents.")
 
 
 def _legacy_workspace_record(source_path: Path) -> WorkspaceRecord:
@@ -1003,12 +915,11 @@ def _last_activity(
         paths.append(source_path)
     for directory in (
         directories.visualization_dir / dataset_id,
+        directories.visualization_insight_dir / dataset_id,
         directories.generated_report_dir / dataset_id,
     ):
         if directory.is_dir():
-            paths.extend(
-                path for path in directory.iterdir() if path.is_file()
-            )
+            paths.extend(path for path in directory.iterdir() if path.is_file())
     existing = [path.stat().st_mtime for path in paths if path.is_file()]
     if not existing:
         return datetime.now(UTC).isoformat()
@@ -1027,19 +938,10 @@ def _report_counts(
     matches = [
         match
         for path in dataset_dir.iterdir()
-        if path.is_file()
-        and (match := _REPORT_FILENAME.fullmatch(path.name)) is not None
+        if path.is_file() and (match := _REPORT_FILENAME.fullmatch(path.name)) is not None
     ]
-    active = [
-        match
-        for match in matches
-        if match.group(2) not in archived_report_ids
-    ]
-    archived_runs = {
-        match.group(2)
-        for match in matches
-        if match.group(2) in archived_report_ids
-    }
+    active = [match for match in matches if match.group(2) not in archived_report_ids]
+    archived_runs = {match.group(2) for match in matches if match.group(2) in archived_report_ids}
     return (
         len(active),
         len({match.group(2) for match in active}),
@@ -1054,9 +956,7 @@ def _source_path(upload_dir: Path, dataset_id: str) -> Path | None:
         if (path := upload_dir / f"{dataset_id}.{extension}").is_file()
     )
     if len(matches) > 1:
-        raise WorkspaceHistoryError(
-            "Workspace source identity is ambiguous."
-        )
+        raise WorkspaceHistoryError("Workspace source identity is ambiguous.")
     return matches[0] if matches else None
 
 
@@ -1077,21 +977,14 @@ def _clean_original_filename(value: str | None) -> str:
     if not value:
         return "Unnamed dataset"
     basename = re.split(r"[/\\]", value)[-1].strip()
-    cleaned = "".join(
-        character if character.isprintable() else " "
-        for character in basename
-    )
+    cleaned = "".join(character if character.isprintable() else " " for character in basename)
     cleaned = " ".join(cleaned.split())
-    return (
-        cleaned or "Unnamed dataset"
-    )[:_MAX_ORIGINAL_FILENAME_CHARACTERS]
+    return (cleaned or "Unnamed dataset")[:_MAX_ORIGINAL_FILENAME_CHARACTERS]
 
 
 def _workspace_name(original_filename: str, dataset_id: str) -> str:
     candidate = Path(original_filename).stem.strip()
-    return _clean_workspace_name(
-        candidate or f"Dataset {dataset_id[:8]}"
-    )
+    return _clean_workspace_name(candidate or f"Dataset {dataset_id[:8]}")
 
 
 def _clean_workspace_name(value: object) -> str:
@@ -1131,17 +1024,12 @@ def _clean_bounded_text(
     if not isinstance(value, str):
         raise WorkspaceHistoryError(f"{label} is required.")
     cleaned = " ".join(
-        "".join(
-            character if character.isprintable() else " "
-            for character in value
-        ).split()
+        "".join(character if character.isprintable() else " " for character in value).split()
     )
     if not cleaned and not allow_empty:
         raise WorkspaceHistoryError(f"{label} is required.")
     if len(cleaned) > maximum:
-        raise WorkspaceHistoryError(
-            f"{label} must be at most {maximum} characters."
-        )
+        raise WorkspaceHistoryError(f"{label} must be at most {maximum} characters.")
     return cleaned
 
 
@@ -1151,55 +1039,36 @@ def _validated_record_identity(
     expected_dataset_id: str,
 ) -> str:
     if value != expected_dataset_id or not isinstance(value, str):
-        raise WorkspaceHistoryError(
-            "Workspace metadata identity is invalid."
-        )
+        raise WorkspaceHistoryError("Workspace metadata identity is invalid.")
     _validate_dataset_id(value)
     return value
 
 
 def _validated_source_format(value: object) -> str:
     if not isinstance(value, str) or value not in _SOURCE_EXTENSIONS:
-        raise WorkspaceHistoryError(
-            "Workspace source format is invalid."
-        )
+        raise WorkspaceHistoryError("Workspace source format is invalid.")
     return value
 
 
 def _validated_source_sha256(value: object) -> str:
-    if (
-        not isinstance(value, str)
-        or re.fullmatch(r"[0-9a-f]{64}", value) is None
-    ):
-        raise WorkspaceHistoryError(
-            "Workspace source fingerprint is invalid."
-        )
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise WorkspaceHistoryError("Workspace source fingerprint is invalid.")
     return value
 
 
 def _validated_source_size(value: object) -> int:
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or value <= 0
-    ):
-        raise WorkspaceHistoryError(
-            "Workspace source size is invalid."
-        )
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise WorkspaceHistoryError("Workspace source size is invalid.")
     return value
 
 
 def _validated_report_names(value: object) -> dict[str, str]:
     if not isinstance(value, dict):
-        raise WorkspaceHistoryError(
-            "Workspace report names are invalid."
-        )
+        raise WorkspaceHistoryError("Workspace report names are invalid.")
     names: dict[str, str] = {}
     for report_id, name in value.items():
         if not isinstance(report_id, str):
-            raise WorkspaceHistoryError(
-                "Workspace report identity is invalid."
-            )
+            raise WorkspaceHistoryError("Workspace report identity is invalid.")
         _validate_report_id(report_id)
         names[report_id] = _clean_report_name(name)
     return names
@@ -1211,9 +1080,7 @@ def _validated_report_ids(value: object) -> tuple[str, ...]:
         or len(value) != len(set(value))
         or any(not isinstance(item, str) for item in value)
     ):
-        raise WorkspaceHistoryError(
-            "Workspace archived reports are invalid."
-        )
+        raise WorkspaceHistoryError("Workspace archived reports are invalid.")
     for report_id in value:
         _validate_report_id(report_id)
     return tuple(value)
@@ -1221,19 +1088,13 @@ def _validated_report_ids(value: object) -> tuple[str, ...]:
 
 def _validated_timestamp(value: object) -> str:
     if not isinstance(value, str):
-        raise WorkspaceHistoryError(
-            "Workspace timestamp is invalid."
-        )
+        raise WorkspaceHistoryError("Workspace timestamp is invalid.")
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError as error:
-        raise WorkspaceHistoryError(
-            "Workspace timestamp is invalid."
-        ) from error
+        raise WorkspaceHistoryError("Workspace timestamp is invalid.") from error
     if parsed.tzinfo is None:
-        raise WorkspaceHistoryError(
-            "Workspace timestamp is invalid."
-        )
+        raise WorkspaceHistoryError("Workspace timestamp is invalid.")
     return parsed.isoformat()
 
 
@@ -1245,9 +1106,7 @@ def _optional_timestamp(value: object) -> str | None:
 
 def _validate_dataset_id(dataset_id: str) -> None:
     if _DATASET_ID.fullmatch(dataset_id) is None:
-        raise WorkspaceHistoryError(
-            "Workspace dataset ID is invalid."
-        )
+        raise WorkspaceHistoryError("Workspace dataset ID is invalid.")
 
 
 def _validate_report_id(report_id: str) -> None:

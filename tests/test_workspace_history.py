@@ -40,6 +40,7 @@ def _directories(tmp_path: Path) -> WorkspaceDirectories:
         insight_dir=tmp_path / "insights",
         evidence_dir=tmp_path / "evidence",
         visualization_dir=tmp_path / "visualizations",
+        visualization_insight_dir=tmp_path / "visualization_insights",
         report_configuration_dir=tmp_path / "report_configurations",
         report_package_dir=tmp_path / "report_packages",
         generated_report_dir=tmp_path / "generated_reports",
@@ -85,11 +86,12 @@ def test_workspace_metadata_is_versioned_safe_and_renameable(
     assert created.original_filename == "Quarterly Sales.csv"
     assert loaded == created
     assert renamed.name == "Executive reporting workspace"
-    assert json.loads(
-        (directories.workspace_dir / f"{dataset_id}.json").read_text(
-            encoding="utf-8"
-        )
-    )["schema_version"] == 2
+    assert (
+        json.loads((directories.workspace_dir / f"{dataset_id}.json").read_text(encoding="utf-8"))[
+            "schema_version"
+        ]
+        == 2
+    )
 
 
 def test_empty_workspace_can_be_created_before_source_selection(
@@ -155,9 +157,7 @@ def test_schema_one_workspace_is_read_and_migrated_on_edit(
     assert loaded.schema_version == 1
     assert migrated.schema_version == 2
     assert migrated.description == "Adopted by 6A.1"
-    assert json.loads(
-        metadata_path.read_text(encoding="utf-8")
-    )["schema_version"] == 2
+    assert json.loads(metadata_path.read_text(encoding="utf-8"))["schema_version"] == 2
 
 
 def test_workspace_source_report_and_workspace_lifecycle_is_recoverable(
@@ -201,12 +201,7 @@ def test_workspace_source_report_and_workspace_lifecycle_is_recoverable(
     assert renamed_source.original_filename == "FY26 sales.csv"
     assert archived_source.source_archived_at is not None
     assert not source.exists()
-    assert (
-        directories.trash_dir
-        / "sources"
-        / record.dataset_id
-        / source.name
-    ).is_file()
+    assert (directories.trash_dir / "sources" / record.dataset_id / source.name).is_file()
 
     restored_source = restore_workspace_source(
         record.dataset_id,
@@ -240,9 +235,7 @@ def test_workspace_source_report_and_workspace_lifecycle_is_recoverable(
     assert restored_source.has_source
     assert source.is_file()
     assert renamed_report.report_names[report_id] == "Board sales brief"
-    assert (
-        report_dir / f"V0001-{report_id}.json"
-    ).read_text(encoding="utf-8") == "{}"
+    assert (report_dir / f"V0001-{report_id}.json").read_text(encoding="utf-8") == "{}"
     assert archived_report.archived_report_ids == (report_id,)
     assert archived_summary is not None
     assert archived_summary.report_run_count == 0
@@ -261,12 +254,15 @@ def test_workspace_source_report_and_workspace_lifecycle_is_recoverable(
     assert restored_report.archived_report_ids == ()
     assert archived_workspace.is_archived
     assert list_workspace_summaries(directories=directories) == ()
-    assert len(
-        list_workspace_summaries(
-            directories=directories,
-            include_archived=True,
+    assert (
+        len(
+            list_workspace_summaries(
+                directories=directories,
+                include_archived=True,
+            )
         )
-    ) == 1
+        == 1
+    )
 
     restored_workspace = restore_workspace(
         record.dataset_id,
@@ -325,9 +321,7 @@ def test_source_archive_rolls_back_when_metadata_save_fails(
         )
 
     assert source.is_file()
-    assert not (
-        directories.trash_dir / "sources" / dataset_id / source.name
-    ).exists()
+    assert not (directories.trash_dir / "sources" / dataset_id / source.name).exists()
 
 
 def test_workspace_summary_reconstructs_progress_and_legacy_uploads(
@@ -386,10 +380,13 @@ def test_workspace_summary_reconstructs_progress_and_legacy_uploads(
         fallback_record=legacy.record,
     )
     assert adopted.name == "Adopted legacy workspace"
-    assert load_workspace_record(
-        legacy_id,
-        workspace_dir=directories.workspace_dir,
-    ) == adopted
+    assert (
+        load_workspace_record(
+            legacy_id,
+            workspace_dir=directories.workspace_dir,
+        )
+        == adopted
+    )
     assert {item.record.dataset_id for item in all_workspaces} == {
         current_id,
         legacy_id,
@@ -415,13 +412,9 @@ def test_upload_creates_reopenable_workspace(
     match = re.search(r"/dataset/([0-9a-f]{32})$", response.headers["Location"])
     assert match is not None
     dataset_id = match.group(1)
-    metadata_path = (
-        Path(app.config["WORKSPACE_DIR"]) / f"{dataset_id}.json"
-    )
+    metadata_path = Path(app.config["WORKSPACE_DIR"]) / f"{dataset_id}.json"
     assert metadata_path.is_file()
-    assert json.loads(metadata_path.read_text(encoding="utf-8"))["name"] == (
-        "regional-sales"
-    )
+    assert json.loads(metadata_path.read_text(encoding="utf-8"))["name"] == ("regional-sales")
 
     history = client.get("/workspaces")
     detail = client.get(f"/workspaces/{dataset_id}")
@@ -442,9 +435,7 @@ def test_upload_creates_reopenable_workspace(
     assert b"Open dashboard" in detail.data
     assert b"Delete workspace and all recoverably" in detail.data
     assert renamed.status_code == 303
-    assert b"Regional performance" in client.get(
-        f"/workspaces/{dataset_id}"
-    ).data
+    assert b"Regional performance" in client.get(f"/workspaces/{dataset_id}").data
 
 
 def test_workspace_first_route_creates_then_attaches_a_source(
@@ -486,9 +477,7 @@ def test_workspace_first_route_creates_then_attaches_a_source(
     assert source_form.status_code == 200
     assert attached.status_code == 303
     assert attached.headers["Location"] == f"/dataset/{dataset_id}"
-    assert (
-        Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv"
-    ).is_file()
+    assert (Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv").is_file()
     record = load_workspace_record(
         dataset_id,
         workspace_dir=Path(app.config["WORKSPACE_DIR"]),
@@ -509,9 +498,7 @@ def test_workspace_first_route_creates_then_attaches_a_source(
     assert deleted.status_code == 303
     assert b"moved to recoverable trash" in deleted_detail.data
     assert restored.status_code == 303
-    assert (
-        Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv"
-    ).is_file()
+    assert (Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv").is_file()
 
 
 def test_workspace_metadata_failure_rolls_back_uploaded_source(

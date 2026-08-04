@@ -22,6 +22,8 @@ Every model request is logged, including:
 - the command-line Ollama connectivity check;
 - configuration suggestions;
 - derived-KPI suggestions;
+- visualization suggestions;
+- visualization insights;
 - each report-story attempt;
 - single-story regeneration attempts; and
 - each five-point executive-summary attempt.
@@ -43,7 +45,7 @@ model task fail.
 | `run_id` | Unique ID for one Ollama request |
 | `workflow_run_id` | ID shared by requests from one higher-level operation |
 | `started_at_utc` | Request start time in UTC |
-| `task_type` | `ollama_connectivity_check`, `configuration_suggestions`, `derived_kpi_suggestions`, `report_story`, `report_story_regeneration`, or `executive_summary` |
+| `task_type` | `ollama_connectivity_check`, `configuration_suggestions`, `derived_kpi_suggestions`, `visualization_suggestions`, `visualization_insights`, `report_story`, `report_story_regeneration`, or `executive_summary` |
 | `prompt_version` | Explicit version label for the prompt contract |
 | `dataset_id` | Workspace/dataset identity when available |
 | `report_id` | Existing report identity for story regeneration; blank during initial report generation because the immutable report ID is allocated afterward |
@@ -92,6 +94,8 @@ constant in the owning module:
 
 - `_PROMPT_VERSION` in `configuration_suggestions.py`;
 - `_PROMPT_VERSION` in `derived_kpi_suggestions.py`;
+- `_PROMPT_VERSION` in `visualization_suggestions.py`;
+- `_PROMPT_VERSION` in `visualization_insights.py`;
 - `_STORY_PROMPT_VERSION` in `report_narration.py`; or
 - `_SUMMARY_PROMPT_VERSION` in `report_narration.py`.
 - `PROMPT_VERSION` in `scripts/check_ollama.py`.

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Build a Visualization | AI Insight Reporter</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        color: #172033;
+        background: #f5f7fb;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      .page-shell {
+        width: min(980px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 1.5rem 0 3rem;
+      }
+      .intro { max-width: 720px; }
+      .intro h1 { margin-bottom: 0.45rem; }
+      .intro p { color: #526079; line-height: 1.55; }
+      .choice-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.25rem;
+        margin-top: 1.75rem;
+      }
+      .choice-card {
+        display: flex;
+        flex-direction: column;
+        min-height: 260px;
+        padding: 1.5rem;
+        border: 1px solid #d8e0ed;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 10px 30px rgb(29 45 75 / 8%);
+      }
+      .choice-card h2 { margin: 0 0 0.55rem; }
+      .choice-card p { color: #526079; line-height: 1.55; }
+      .choice-card ul { padding-left: 1.2rem; color: #334155; line-height: 1.6; }
+      .choice-card a {
+        display: inline-block;
+        align-self: flex-start;
+        margin-top: auto;
+        padding: 0.72rem 1rem;
+        border-radius: 9px;
+        color: #fff;
+        background: #2457d6;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .choice-card.manual a { background: #0f766e; }
+      .back-link { margin-top: 1.5rem; }
+      @media (max-width: 700px) {
+        .choice-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page-shell">
+      {% set current_section = "dashboard" %}
+      {% include "_report_project_navigation.html" %}
+      <header class="intro">
+        <h1>Build a visualization</h1>
+        <p>
+          Choose how you want to create the chart. Each option opens its own
+          builder and saves to the same dashboard.
+        </p>
+      </header>
+
+      <section class="choice-grid" aria-label="Visualization builder options">
+        <article class="choice-card">
+          <h2>Automated Visualization</h2>
+          <p>
+            Use the guided builder to choose a business question, measures,
+            grouping, filters, and a validated chart recommendation.
+          </p>
+          <ul>
+            <li>Guided chart configuration</li>
+            <li>Optional Ollama recommendation</li>
+            <li>Existing automated visualization workflow</li>
+          </ul>
+          <a href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
+            Open Automated Visualization
+          </a>
+        </article>
+
+        <article class="choice-card manual">
+          <h2>Build Manual Visualization</h2>
+          <p>
+            Use the Power BI-style board to drag or assign source fields to
+            axes, choose a chart type, and see the visualization update.
+          </p>
+          <ul>
+            <li>Dynamic source-column fields</li>
+            <li>X, Y, Legend, Size, and Secondary Y roles</li>
+            <li>Interactive chart-type gallery</li>
+          </ul>
+          <a href="{{ url_for('core.manual_visualization_builder', dataset_id=dataset_id) }}">
+            Open Manual Visualization
+          </a>
+        </article>
+      </section>
+
+      <p class="back-link">
+        <a href="{{ url_for('core.saved_visualizations', dataset_id=dataset_id) }}">
+          Return to dashboard
+        </a>
+      </p>
+    </main>
+  </body>
+</html>

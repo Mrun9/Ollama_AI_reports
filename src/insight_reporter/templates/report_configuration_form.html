@@ -206,7 +206,7 @@
         {% endif %}
 
         <fieldset>
-          <legend>Saved manual visualizations</legend>
+          <legend>Saved automated visualizations</legend>
           {% if visualizations %}
             {% for artifact in visualizations %}
               {% set required_metric_ids = visualization_metric_requirements.get(
@@ -231,9 +231,88 @@
                   {% endfor %}
                 </p>
               {% endif %}
+              {% set saved_insight = visualization_insights.get(
+                artifact.visualization_id
+              ) %}
+              {% if saved_insight %}
+                <p>
+                  Saved chart insight:
+                  {% if saved_insight.include_in_reports %}
+                    {{ saved_insight.points|length }} grounded finding(s) will
+                    accompany this chart into the report.
+                  {% else %}
+                    available on the dashboard but excluded from reports.
+                  {% endif %}
+                  <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                    Review insight
+                  </a>
+                </p>
+              {% else %}
+                <p>
+                  No requested chart insight is saved.
+                  <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                    Ask for insight
+                  </a>
+                </p>
+              {% endif %}
             {% endfor %}
           {% else %}
-            <p>No saved manual visualizations are available. This is optional.</p>
+            <p>No saved manual visualizations are available from the automated builder. This is optional.</p>
+          {% endif %}
+        </fieldset>
+
+        <fieldset>
+          <legend>Saved manual-board visualizations</legend>
+          <p>
+            Selected board charts are added with their saved image and
+            Python-calculated observations. Report insight generation receives
+            only the bounded chart data, not raw source rows.
+          </p>
+          {% if manual_boards %}
+            {% for artifact in manual_boards %}
+              <label>
+                <input type="checkbox" name="selected_manual_board_ids"
+                  value="{{ artifact.visualization_id }}"
+                  {% if not artifact.png_filename %}disabled{% endif %}
+                  {% if artifact.visualization_id in form_data.getlist('selected_manual_board_ids') %}checked{% endif %}>
+                {{ artifact.title }} · {{ artifact.chart_type|replace("_", " ") }}
+                {% if not artifact.png_filename %} · re-save before report export{% endif %}
+              </label>
+              <p>
+                {{ artifact.preview.get("record_count", 0) }} source record(s)
+                · fields: {{ artifact.fields.values()|select|join(", ") }}
+                · deterministic chart evidence will be generated automatically
+                {% if not artifact.png_filename %}
+                  · reopen this chart and save it once to prepare its PDF image
+                {% endif %}
+              </p>
+              {% set saved_insight = visualization_insights.get(
+                artifact.visualization_id
+              ) %}
+              {% if saved_insight %}
+                <p>
+                  Saved chart insight:
+                  {% if saved_insight.include_in_reports %}
+                    {{ saved_insight.points|length }} grounded finding(s) will
+                    accompany this board into the report.
+                  {% else %}
+                    available on the dashboard but excluded from reports.
+                  {% endif %}
+                  <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                    Review insight
+                  </a>
+                </p>
+              {% else %}
+                <p>
+                  No requested chart insight is saved.
+                  <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                    Ask for insight
+                  </a>
+                </p>
+              {% endif %}
+            {% endfor %}
+          {% else %}
+            <p>No saved manual-board visualizations are available. This is optional.</p>
           {% endif %}
         </fieldset>
 

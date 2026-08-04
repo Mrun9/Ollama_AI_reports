@@ -474,18 +474,35 @@ automatically selected by the insight templates.
 2. The guided browser layer maps the selected business goal to the existing
    chart type and shows only compatible grouping choices. Advanced controls
    remain available but collapsed.
-3. `visualization_builder.parse_visualization_spec()` validates and bounds
+3. Optionally, `visualization_suggestions.generate_visualization_suggestion()`
+   sends bounded semantic metadata and the user's question to Ollama under a
+   JSON Schema restricted to real selectors and columns. It does not send raw
+   rows.
+4. `visualization_suggestions.parse_visualization_suggestion()` runs the
+   proposed configuration through the normal visualization parser and
+   chart-to-column validator. An invalid proposal is rejected before plotting.
+5. `visualization_builder.parse_visualization_spec()` validates and bounds
    the submitted form values independently of browser guidance.
-4. `visualization_builder.build_visualization()` resolves source-column and
+6. `visualization_builder.build_visualization()` resolves source-column and
    record-count measures without a KPI configuration. When configuration
    exists, it also resolves current KPI measures. Python applies the requested
    aggregation and transformations and renders a draft chart.
-5. The preview is rendered without yet making it report evidence.
-6. On confirmation, the specification and its generated chart are persisted.
-7. The dashboard reloads the validated visualization artifacts and displays
+7. The preview is rendered without yet making it report evidence. An
+   Ollama-assisted preview also displays its model, user request, confidence,
+   and rationale.
+8. On confirmation, the specification and its generated chart are persisted.
+9. The dashboard reloads the validated visualization artifacts and displays
    their actual saved PNGs in responsive cards through the protected chart
    route.
-8. `manual_visualization_evidence.generate_manual_visualization_evidence()` converts the confirmed chart into evidence with provenance.
+10. On a saved chart, the user may ask a management question.
+    `visualization_insights.generate_visualization_insight()` calculates up to
+    five Python findings from the retained chart data. Ollama may add
+    non-numeric implications and actions keyed to those verified facts.
+11. The insight is saved separately with the exact chart fingerprint. The user
+    can keep it dashboard-only or enable report carry-forward.
+12. `manual_visualization_evidence.generate_manual_visualization_evidence()`
+    converts the confirmed chart into evidence with provenance and appends the
+    requested insight only when it is opted in.
 
 A chart saved before KPI configuration remains valid because it is bound to
 the immutable source metadata and its selected source columns. When the user
@@ -499,6 +516,36 @@ selection can then combine KPIs, deterministic evidence, and dashboard charts.
 - A chart asset rendered directly on the dashboard, with its purpose,
   measures, classification, report status, and management actions.
 - A manual evidence item available during report selection.
+- An optional saved management-insight artifact whose factual and advisory
+  layers remain visibly separate.
+
+### 9A. Drag-and-drop manual board
+
+Generic **Build a visualization** actions outside the dashboard first open a
+chooser with separate Automated Visualization and Build Manual Visualization
+destinations. The dashboard keeps both direct buttons so each one opens its
+respective builder immediately.
+
+The separate **Build Manual Visualization** workspace loads field groups from
+the active data source and lets the user assign X, Y, Legend, Size, and
+Secondary Y roles. The browser renders the selected chart immediately, while
+the server recalculates and bounds the exact preview data before saving it.
+Saving retains a sanitized SVG plus a PNG snapshot without an extra frontend
+chart dependency.
+
+In report configuration, each report-ready `MBV-*` artifact is a separate
+checkbox. Python derives chart-specific observations from its saved preview;
+the narration model sees those observations and bounded supporting points, not
+raw source rows. The generated HTML report uses the saved chart route, and the
+PNG is retained with each immutable report version for PDF and historical
+rendering. Boards saved before PNG export support must be reopened and saved
+once before selection.
+
+After saving a board, its detail page shows the bounded supporting points and
+accepts a management question. Python calculates up to five findings; Ollama
+may add non-numeric implications and actions under the same grounding rules as
+automated charts. **Include these saved insights in reports** controls whether
+the saved findings accompany the selected board into report evidence.
 
 ### 10. Report configuration
 
@@ -514,6 +561,11 @@ This is the editorial selection stage: the user decides what the report should c
 
 1. `report_configuration` checks that every selected identifier exists for the same dataset.
 2. Selections are normalized and deduplicated.
+3. For every selected chart, the report package reloads only a current,
+   fingerprint-matching visualization insight.
+4. If its report preference is enabled, its exact finding, implication, and
+   action are appended to that chart's manual evidence. An insight never enters
+   a report without the chart.
 3. Required report fields and selection limits are validated.
 4. The configuration is saved.
 

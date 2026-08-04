@@ -29,19 +29,20 @@ from insight_reporter.visualization_builder import (
     parse_visualization_spec,
     save_visualization,
 )
+from insight_reporter.visualization_suggestions import VisualizationSuggestion
 
 
 def _dataset(tmp_path: Path):  # type: ignore[no-untyped-def]
     path = tmp_path / "dataset.csv"
     path.write_text(
         (
-            "date,segment,revenue,cost,stress,net,note\n"
-            "2026-01-01,A,100,60,2,-5,alpha\n"
-            "2026-01-02,B,200,120,4,0,beta\n"
-            "2026-02-01,A,150,80,6,5,gamma\n"
-            "2026-02-02,B,250,140,8,10,delta\n"
-            "2026-03-01,A,180,90,10,15,epsilon\n"
-            "2026-03-02,B,300,160,6,20,zeta\n"
+            "date,segment,region,revenue,cost,stress,net,note\n"
+            "2026-01-01,A,North,100,60,2,-5,alpha\n"
+            "2026-01-02,B,South,200,120,4,0,beta\n"
+            "2026-02-01,A,South,150,80,6,5,gamma\n"
+            "2026-02-02,B,North,250,140,8,10,delta\n"
+            "2026-03-01,A,North,180,90,10,15,epsilon\n"
+            "2026-03-02,B,South,300,160,6,20,zeta\n"
         ),
         encoding="utf-8",
     )
@@ -133,9 +134,7 @@ def test_supplementary_numeric_and_record_count_charts_are_traceable(
         configuration=configuration,
         spec=_spec(
             title="Largest revenue segment",
-            measure_selectors=[
-                f"metric:{configuration.primary_metric_id}"
-            ],
+            measure_selectors=[f"metric:{configuration.primary_metric_id}"],
             aggregation="sum",
             sort_by="value",
             sort_direction="descending",
@@ -175,6 +174,92 @@ def test_supplementary_numeric_and_record_count_charts_are_traceable(
     for artifact in (supplementary, count):
         chart_path = tmp_path / "charts" / artifact.chart.filename
         assert re.fullmatch(r"[0-9a-f]{32}\.png", artifact.chart.filename)
+        assert chart_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_extended_management_chart_styles_render_valid_pngs(
+    tmp_path: Path,
+) -> None:
+    _path, view, profile, configuration = _dataset(tmp_path)
+    revenue_selector = f"metric:{configuration.primary_metric_id}"
+    cost_selector = next(
+        f"metric:{metric.metric_id}" for metric in configuration.metrics if metric.name == "cost"
+    )
+    cases = (
+        _spec(
+            title="Stress area",
+            chart_type="time_area",
+            x_column="date",
+        ),
+        _spec(
+            title="Revenue mix over time",
+            chart_type="time_area_stacked",
+            measure_selectors=[revenue_selector],
+            x_column="date",
+            series_column="segment",
+            aggregation="sum",
+        ),
+        _spec(
+            title="Revenue composition",
+            chart_type="category_bar_stacked",
+            measure_selectors=[revenue_selector],
+            series_column="region",
+            aggregation="sum",
+        ),
+        _spec(
+            title="Revenue Pareto",
+            chart_type="pareto",
+            measure_selectors=[revenue_selector],
+            aggregation="sum",
+        ),
+        _spec(
+            title="Revenue share",
+            chart_type="donut",
+            measure_selectors=[revenue_selector],
+            aggregation="sum",
+        ),
+        _spec(
+            title="Stress heatmap",
+            chart_type="heatmap",
+            series_column="region",
+        ),
+        _spec(
+            title="Net waterfall",
+            chart_type="waterfall",
+            measure_selectors=["column:net"],
+            aggregation="sum",
+        ),
+        _spec(
+            title="Revenue funnel",
+            chart_type="funnel",
+            measure_selectors=[revenue_selector],
+            aggregation="sum",
+        ),
+        _spec(
+            title="Revenue and cost",
+            chart_type="combo",
+            measure_selectors=[revenue_selector, cost_selector],
+            aggregation="sum",
+        ),
+        _spec(
+            title="Total revenue",
+            chart_type="scorecard",
+            measure_selectors=[revenue_selector],
+            x_column="",
+            aggregation="sum",
+        ),
+    )
+
+    for spec in cases:
+        artifact = build_visualization(
+            view,
+            profile=profile,
+            configuration=configuration,
+            spec=spec,
+            chart_dir=tmp_path / "charts",
+        )
+        chart_path = tmp_path / "charts" / artifact.chart.filename
+        assert artifact.chart.chart_type == spec.chart_type
         assert chart_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
@@ -232,14 +317,11 @@ def test_configured_multiple_kpis_and_aggregate_formula_are_grouped_exactly(
     assert multiple.classification == "kpi"
     assert len(multiple.supporting_data) == 4
     by_measure_and_segment = {
-        (row["measure"], row["x"]): row["value"]
-        for row in multiple.supporting_data
+        (row["measure"], row["x"]): row["value"] for row in multiple.supporting_data
     }
     assert by_measure_and_segment[("revenue", "A")] == 430
     assert by_measure_and_segment[("cost", "B")] == 420
-    ratio_by_segment = {
-        row["x"]: row["value"] for row in ratio.supporting_data
-    }
+    ratio_by_segment = {row["x"]: row["value"] for row in ratio.supporting_data}
     assert ratio_by_segment["A"] == pytest.approx((430 / 230) * 100)
     assert ratio_by_segment["B"] == pytest.approx((750 / 420) * 100)
     assert ratio.measures[0].effective_aggregation == "formula"
@@ -257,9 +339,7 @@ def test_configured_multiple_kpis_and_aggregate_formula_are_grouped_exactly(
         metric_role="secondary",
     )
     ratio_metric = next(
-        metric
-        for metric in mixed_configuration.metrics
-        if metric.name == "Revenue cost ratio"
+        metric for metric in mixed_configuration.metrics if metric.name == "Revenue cost ratio"
     )
     with pytest.raises(VisualizationError, match="display format"):
         build_visualization(
@@ -563,22 +643,138 @@ def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
     dataset_id = _upload_visualization_dataset(client)
 
     dashboard = client.get(f"/workspaces/{dataset_id}/dashboard")
+    workspace = client.get(f"/workspaces/{dataset_id}")
     builder = client.get(f"/visualizations/{dataset_id}/new")
     assert dashboard.status_code == 200
+    assert workspace.status_code == 200
     assert b"<h1>Dashboard</h1>" in dashboard.data
     assert b"No KPIs are configured yet" in dashboard.data
     assert b"Your dashboard is empty" in dashboard.data
+    assert b"Automated Visualization" in dashboard.data
+    assert b"Build Manual Visualization" in dashboard.data
+    assert f'href="/visualizations/{dataset_id}/new"'.encode("ascii") in dashboard.data
+    assert (
+        f'href="/visualizations/{dataset_id}/manual/new"'.encode("ascii")
+        in dashboard.data
+    )
+    assert (
+        f'href="/visualizations/{dataset_id}/build"'.encode("ascii")
+        in workspace.data
+    )
+    chooser = client.get(f"/visualizations/{dataset_id}/build")
+    assert chooser.status_code == 200
+    assert b"Choose how you want to create the chart" in chooser.data
+    assert b"Automated Visualization" in chooser.data
+    assert b"Build Manual Visualization" in chooser.data
+    assert f'href="/visualizations/{dataset_id}/new"'.encode("ascii") in chooser.data
+    assert (
+        f'href="/visualizations/{dataset_id}/manual/new"'.encode("ascii")
+        in chooser.data
+    )
     assert builder.status_code == 200
+    assert builder.headers["Content-Security-Policy"] == "default-src 'self'"
     assert b"Start with the business question" in builder.data
+    manual_builder = client.get(f"/visualizations/{dataset_id}/manual/new")
+    assert manual_builder.status_code == 200
+    assert manual_builder.headers["Content-Security-Policy"] == (
+        "default-src 'self'; img-src 'self' blob: data:"
+    )
+    assert b"<h1>Build Manual Visualization</h1>" in manual_builder.data
+    assert b"manual_visualization_builder.js" in manual_builder.data
+    assert b"Drag fields here to create a visualization" in manual_builder.data
+    assert b"X-axis fields" in manual_builder.data
+    assert b"Y-axis fields" in manual_builder.data
+    assert b"Legend fields" in manual_builder.data
+    assert b"Size fields" in manual_builder.data
+    assert b"Line value fields" in manual_builder.data
+    assert b'data-field-group="x"' in manual_builder.data
+    assert b'data-field-group="y"' in manual_builder.data
+    assert b'data-field-group="series"' in manual_builder.data
+    assert b'data-field-group="size"' in manual_builder.data
+    assert b'data-field-group="secondary_y"' in manual_builder.data
+    assert b'data-field-name="segment"' in manual_builder.data
+    assert b'data-field-name="revenue"' in manual_builder.data
+    assert manual_builder.data.count(b'data-field-name="segment"') == 2
+    assert manual_builder.data.count(b'data-field-name="revenue"') == 4
+    assert manual_builder.data.count(b'data-field-name="date"') == 1
+    assert re.search(
+        rb'data-field-name="segment"\s+data-field-kind="categorical"\s+'
+        rb'data-preferred-axis="x"',
+        manual_builder.data,
+    )
+    assert re.search(
+        rb'data-field-name="segment"\s+data-field-kind="categorical"\s+'
+        rb'data-preferred-axis="series"',
+        manual_builder.data,
+    )
+    assert re.search(
+        rb'data-field-name="revenue"\s+data-field-kind="numeric"\s+'
+        rb'data-preferred-axis="y"',
+        manual_builder.data,
+    )
+    assert re.search(
+        rb'data-field-name="revenue"\s+data-field-kind="numeric"\s+'
+        rb'data-preferred-axis="size"',
+        manual_builder.data,
+    )
+    assert re.search(
+        rb'data-field-name="revenue"\s+data-field-kind="numeric"\s+'
+        rb'data-preferred-axis="secondary_y"',
+        manual_builder.data,
+    )
+    assert b'data-chart-type="auto"' in manual_builder.data
+    assert b'data-chart-type="scatter"' in manual_builder.data
+    assert b'data-chart-type="stacked_column"' in manual_builder.data
+    assert b'data-chart-type="stacked_bar"' in manual_builder.data
+    assert b'data-chart-type="pie"' in manual_builder.data
+    assert b'data-chart-type="card"' in manual_builder.data
+    assert b'data-chart-type="table"' in manual_builder.data
+    assert b'data-chart-type="pareto"' in manual_builder.data
+    assert b'data-chart-type="waterfall"' in manual_builder.data
+    assert b'data-chart-type="funnel"' in manual_builder.data
+    assert b'data-chart-type="treemap"' in manual_builder.data
+    assert b'data-chart-type="box"' in manual_builder.data
+    assert b'data-chart-type="heatmap"' in manual_builder.data
+    assert b'data-chart-type="grouped_column"' in manual_builder.data
+    assert b'data-chart-type="bubble"' in manual_builder.data
+    assert b'data-chart-type="multi_line"' in manual_builder.data
+    assert b'data-chart-type="combo"' in manual_builder.data
+    assert b'data-chart-type="stacked_100_column"' in manual_builder.data
+    assert b'data-chart-type="stacked_100_bar"' in manual_builder.data
+    assert b'data-chart-type="radar"' in manual_builder.data
+    assert b'data-chart-type="gauge"' in manual_builder.data
+    assert b'data-chart-type="bullet"' in manual_builder.data
+    chart_script = client.get("/static/manual_visualization_builder.js")
+    assert chart_script.status_code == 200
+    assert b"chart-choice-label" in chart_script.data
+    assert b"rasterizePreview" in chart_script.data
+    assert b'toDataURL("image/png")' in chart_script.data
+    assert b'preview.removeAttribute("hidden")' in chart_script.data
+    assert b'preview.hasAttribute("hidden")' in chart_script.data
+    assert b'data-drop-zone="x"' in manual_builder.data
+    assert b'data-drop-zone="y"' in manual_builder.data
+    assert b'data-drop-zone="series"' in manual_builder.data
+    assert b'data-drop-zone="size"' in manual_builder.data
+    assert b'data-drop-zone="secondary_y"' in manual_builder.data
+    assert b'id="pareto-line-mode"' in manual_builder.data
+    assert b'value="individual_percent"' in manual_builder.data
+    assert b'id="target-value"' in manual_builder.data
+    assert b"Let Ollama recommend a chart" not in manual_builder.data
     assert b"KPIs will appear here after they are configured" in builder.data
-    assert re.search(
-        rb'value="column:revenue"\s+checked',
-        builder.data,
-    ) is not None
-    assert re.search(
-        rb'value="category_bar"\s+checked',
-        builder.data,
-    ) is not None
+    assert (
+        re.search(
+            rb'value="column:revenue"\s+checked',
+            builder.data,
+        )
+        is not None
+    )
+    assert (
+        re.search(
+            rb'value="category_bar"\s+checked',
+            builder.data,
+        )
+        is not None
+    )
     assert b"Advanced options" in builder.data
 
     preview_post = client.post(
@@ -607,16 +803,10 @@ def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
     )
     assert preview_post.status_code == 303
     token = preview_post.headers["Location"].rsplit("/", 1)[-1]
-    saved = client.post(
-        f"/visualizations/{dataset_id}/preview/{token}/save"
-    )
+    saved = client.post(f"/visualizations/{dataset_id}/preview/{token}/save")
     assert saved.status_code == 303
     visualization_id = saved.headers["Location"].rsplit("/", 1)[-1]
-    saved_path = (
-        Path(app.config["VISUALIZATION_DIR"])
-        / dataset_id
-        / f"{visualization_id}.json"
-    )
+    saved_path = Path(app.config["VISUALIZATION_DIR"]) / dataset_id / f"{visualization_id}.json"
     assert saved_path.is_file()
 
     configured = client.post(
@@ -632,27 +822,21 @@ def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
     )
     assert configured.status_code == 303
 
-    reopened_dashboard = client.get(
-        f"/workspaces/{dataset_id}/dashboard"
-    )
+    reopened_dashboard = client.get(f"/workspaces/{dataset_id}/dashboard")
     reopened_builder = client.get(f"/visualizations/{dataset_id}/new")
-    saved_visualization = client.get(
-        f"/visualizations/{dataset_id}/{visualization_id}"
-    )
+    saved_visualization = client.get(f"/visualizations/{dataset_id}/{visualization_id}")
     assert reopened_dashboard.status_code == 200
     assert b"Stress by segment before KPIs" in reopened_dashboard.data
     assert b"1 configured KPI(s)" in reopened_dashboard.data
     assert b'class="visualization-card"' in reopened_dashboard.data
-    chart_url = (
-        f"/visualizations/{dataset_id}/{visualization_id}/chart"
-    )
+    chart_url = f"/visualizations/{dataset_id}/{visualization_id}/chart"
     assert f'src="{chart_url}"'.encode("ascii") in reopened_dashboard.data
     assert b'loading="lazy"' in reopened_dashboard.data
     dashboard_chart = client.get(chart_url)
     assert dashboard_chart.status_code == 200
     assert dashboard_chart.data.startswith(b"\x89PNG\r\n\x1a\n")
     assert reopened_builder.status_code == 200
-    assert b"revenue <span class=\"tag\">KPI</span>" in reopened_builder.data
+    assert b'revenue <span class="tag">KPI</span>' in reopened_builder.data
     assert saved_visualization.status_code == 200
 
     evidence = client.post(f"/insights/{dataset_id}")
@@ -661,6 +845,464 @@ def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
     assert report_setup.status_code == 200
     assert b"Stress by segment before KPIs" in report_setup.data
     assert visualization_id.encode("ascii") in report_setup.data
+
+
+def test_manual_visualization_board_returns_bounded_live_preview_data(
+    client: FlaskClient,
+) -> None:
+    dataset_id = _upload_visualization_dataset(client)
+    endpoint = f"/visualizations/{dataset_id}/manual/preview-data"
+
+    grouped = client.get(
+        endpoint,
+        query_string={"chart": "auto", "x": "segment", "y": "revenue"},
+    )
+    assert grouped.status_code == 200
+    grouped_payload = grouped.get_json()
+    assert grouped_payload["chart_type"] == "column"
+    assert grouped_payload["aggregation"] == "Sum of revenue"
+    assert grouped_payload["record_count"] == 6
+    assert grouped_payload["points"] == [
+        {"x": "B", "y": 750.0},
+        {"x": "A", "y": 430.0},
+    ]
+
+    time_series = client.get(
+        endpoint,
+        query_string={"chart": "auto", "x": "date", "y": "revenue"},
+    )
+    assert time_series.status_code == 200
+    assert time_series.get_json()["chart_type"] == "line"
+
+    scatter = client.get(
+        endpoint,
+        query_string={"chart": "auto", "x": "stress", "y": "revenue"},
+    )
+    assert scatter.status_code == 200
+    assert scatter.get_json()["chart_type"] == "scatter"
+    assert len(scatter.get_json()["points"]) == 6
+
+    histogram = client.get(
+        endpoint,
+        query_string={"chart": "auto", "y": "revenue"},
+    )
+    assert histogram.status_code == 200
+    assert histogram.get_json()["chart_type"] == "histogram"
+    assert sum(point["y"] for point in histogram.get_json()["points"]) == 6
+
+    stacked = client.get(
+        endpoint,
+        query_string={
+            "chart": "auto",
+            "x": "date",
+            "y": "revenue",
+            "series": "segment",
+        },
+    )
+    assert stacked.status_code == 200
+    stacked_payload = stacked.get_json()
+    assert stacked_payload["chart_type"] == "stacked_column"
+    assert stacked_payload["series_label"] == "segment"
+    assert stacked_payload["record_count"] == 6
+    assert {point["series"] for point in stacked_payload["points"]} == {"A", "B"}
+
+    grouped_columns = client.get(
+        endpoint,
+        query_string={
+            "chart": "grouped_column",
+            "x": "date",
+            "y": "revenue",
+            "series": "segment",
+        },
+    )
+    assert grouped_columns.status_code == 200
+    assert grouped_columns.get_json()["chart_type"] == "grouped_column"
+    assert grouped_columns.get_json()["series_label"] == "segment"
+
+    for chart_type in (
+        "multi_line",
+        "stacked_100_column",
+        "stacked_100_bar",
+    ):
+        series_chart = client.get(
+            endpoint,
+            query_string={
+                "chart": chart_type,
+                "x": "date",
+                "y": "revenue",
+                "series": "segment",
+            },
+        )
+        assert series_chart.status_code == 200
+        assert series_chart.get_json()["chart_type"] == chart_type
+
+    combo = client.get(
+        endpoint,
+        query_string={
+            "chart": "combo",
+            "x": "date",
+            "y": "revenue",
+            "secondary_y": "stress",
+        },
+    )
+    assert combo.status_code == 200
+    combo_payload = combo.get_json()
+    assert combo_payload["secondary_y_label"] == "stress"
+    assert combo_payload["points"][0] == {
+        "x": "2026-01-01",
+        "y": 100.0,
+        "secondary_y": 2.0,
+    }
+
+    bubble = client.get(
+        endpoint,
+        query_string={
+            "chart": "auto",
+            "x": "stress",
+            "y": "revenue",
+            "size": "stress",
+        },
+    )
+    assert bubble.status_code == 200
+    bubble_payload = bubble.get_json()
+    assert bubble_payload["chart_type"] == "bubble"
+    assert bubble_payload["size_label"] == "stress"
+    assert bubble_payload["points"][0] == {"x": 2.0, "y": 100.0, "size": 2.0}
+
+    pie = client.get(
+        endpoint,
+        query_string={"chart": "pie", "x": "segment", "y": "revenue"},
+    )
+    assert pie.status_code == 200
+    assert pie.get_json()["chart_type"] == "pie"
+    assert pie.get_json()["points"][0] == {"x": "B", "y": 750.0}
+
+    card = client.get(
+        endpoint,
+        query_string={"chart": "card", "y": "revenue"},
+    )
+    assert card.status_code == 200
+    assert card.get_json()["points"] == [{"x": "revenue", "y": 1180.0}]
+
+    table = client.get(
+        endpoint,
+        query_string={"chart": "table", "x": "segment", "y": "revenue"},
+    )
+    assert table.status_code == 200
+    assert table.get_json()["chart_type"] == "table"
+
+    for chart_type in ("pareto", "waterfall", "funnel", "treemap"):
+        response = client.get(
+            endpoint,
+            query_string={"chart": chart_type, "x": "segment", "y": "revenue"},
+        )
+        assert response.status_code == 200
+        assert response.get_json()["chart_type"] == chart_type
+
+    box = client.get(
+        endpoint,
+        query_string={"chart": "box", "x": "segment", "y": "revenue"},
+    )
+    assert box.status_code == 200
+    box_payload = box.get_json()
+    assert box_payload["chart_type"] == "box"
+    assert box_payload["points"][0] == {
+        "x": "A",
+        "minimum": 100.0,
+        "q1": 125.0,
+        "median": 150.0,
+        "q3": 165.0,
+        "maximum": 180.0,
+        "count": 3,
+    }
+
+    heatmap = client.get(
+        endpoint,
+        query_string={
+            "chart": "heatmap",
+            "x": "date",
+            "y": "revenue",
+            "series": "segment",
+        },
+    )
+    assert heatmap.status_code == 200
+    assert heatmap.get_json()["chart_type"] == "heatmap"
+    assert heatmap.get_json()["series_label"] == "segment"
+
+    radar = client.get(
+        endpoint,
+        query_string={"chart": "radar", "x": "date", "y": "revenue"},
+    )
+    assert radar.status_code == 200
+    assert radar.get_json()["chart_type"] == "radar"
+    assert len(radar.get_json()["points"]) == 6
+
+    gauge = client.get(
+        endpoint,
+        query_string={"chart": "gauge", "y": "revenue", "target": "1000"},
+    )
+    assert gauge.status_code == 200
+    assert gauge.get_json()["target"] == 1000.0
+    assert gauge.get_json()["points"] == [{"x": "revenue", "y": 1180.0}]
+
+    bullet = client.get(
+        endpoint,
+        query_string={"chart": "bullet", "y": "revenue", "target": "1500"},
+    )
+    assert bullet.status_code == 200
+    assert bullet.get_json()["chart_type"] == "bullet"
+
+    missing_target = client.get(
+        endpoint,
+        query_string={"chart": "gauge", "y": "revenue"},
+    )
+    assert missing_target.status_code == 422
+    assert b"Enter a positive target value" in missing_target.data
+
+    invalid = client.get(
+        endpoint,
+        query_string={"chart": "line", "x": "segment", "y": "revenue"},
+    )
+    assert invalid.status_code == 422
+    assert b"need a date/time X-axis" in invalid.data
+
+    unknown_field = client.get(
+        endpoint,
+        query_string={"chart": "auto", "x": "not-a-column"},
+    )
+    assert unknown_field.status_code == 422
+    assert b"selected X-axis field is unavailable" in unknown_field.data
+
+
+def test_manual_visualization_can_be_saved_reopened_updated_and_shown_on_dashboard(
+    app: Flask,
+    client: FlaskClient,
+) -> None:
+    dataset_id = _upload_visualization_dataset(client)
+    save_url = f"/visualizations/{dataset_id}/manual/save"
+    svg = (
+        '<svg viewBox="0 0 800 460" role="img">'
+        "<title>Revenue by segment</title>"
+        '<rect x="10" y="10" width="100" height="50" fill="#2563eb"/>'
+        "</svg>"
+    )
+    payload = {
+        "visualization_id": None,
+        "title": "Revenue by segment",
+        "chart": "column",
+        "fields": {
+            "x": "segment",
+            "y": "revenue",
+            "series": None,
+            "size": None,
+            "secondary_y": None,
+        },
+        "settings": {
+            "pareto_line": "cumulative_percent",
+            "target": None,
+        },
+        "svg": svg,
+    }
+
+    saved = client.post(save_url, json=payload)
+    assert saved.status_code == 201
+    saved_payload = saved.get_json()
+    visualization_id = saved_payload["visualization_id"]
+    assert re.fullmatch(r"MBV-[0-9A-F]{16}", visualization_id)
+    artifact_path = (
+        Path(app.config["VISUALIZATION_DIR"])
+        / "manual_boards"
+        / dataset_id
+        / f"{visualization_id}.json"
+    )
+    assert artifact_path.is_file()
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["chart_type"] == "column"
+    assert artifact["fields"]["x"] == "segment"
+
+    detail = client.get(saved_payload["url"])
+    chart = client.get(f"{saved_payload['url']}/chart")
+    dashboard = client.get(f"/workspaces/{dataset_id}/dashboard")
+    edit = client.get(f"/visualizations/{dataset_id}/manual/new?edit={visualization_id}")
+    assert detail.status_code == 200
+    assert b"Revenue by segment" in detail.data
+    assert b"Edit visualization" in detail.data
+    assert chart.status_code == 200
+    assert chart.mimetype == "image/svg+xml"
+    assert b"<script" not in chart.data
+    assert chart.headers["Content-Security-Policy"] == "sandbox; default-src 'none'"
+    assert dashboard.status_code == 200
+    assert b"Manual board" in dashboard.data
+    assert b"Revenue by segment" in dashboard.data
+    assert (
+        f"src=\"{saved_payload['url']}/chart\"".encode("ascii")
+        in dashboard.data
+    )
+    assert client.get(f"{saved_payload['url']}/chart.png").status_code == 404
+    assert edit.status_code == 200
+    assert visualization_id.encode("ascii") in edit.data
+    assert b'"chart": "column"' in edit.data
+
+    payload["visualization_id"] = visualization_id
+    payload["title"] = "Updated revenue by segment"
+    updated = client.post(save_url, json=payload)
+    assert updated.status_code == 200
+    updated_artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert updated_artifact["visualization_id"] == visualization_id
+    assert updated_artifact["title"] == "Updated revenue by segment"
+    assert updated_artifact["created_at"] == artifact["created_at"]
+
+    unsafe_payload = dict(payload)
+    unsafe_payload["visualization_id"] = None
+    unsafe_payload["svg"] = '<svg viewBox="0 0 800 460"><script>alert(1)</script></svg>'
+    rejected = client.post(save_url, json=unsafe_payload)
+    assert rejected.status_code == 422
+    assert b"unsafe element" in rejected.data
+
+    invalid_png_payload = dict(payload)
+    invalid_png_payload["visualization_id"] = None
+    invalid_png_payload["png"] = "data:image/png;base64,bm90LWEtcG5n"
+    invalid_png = client.post(save_url, json=invalid_png_payload)
+    assert invalid_png.status_code == 422
+    assert b"PNG" in invalid_png.data
+
+
+def test_ollama_chart_suggestion_builds_a_reviewable_validated_preview(
+    app: Flask,
+    client: FlaskClient,
+    monkeypatch,
+) -> None:
+    dataset_id = _upload_and_configure(client)
+    builder = client.get(f"/visualizations/{dataset_id}/new")
+    selector_match = re.search(
+        rb'name="measure_selectors" value="(metric:[^"]+)"',
+        builder.data,
+    )
+    assert selector_match is not None
+    selector = selector_match.group(1).decode("ascii")
+    captured: dict[str, object] = {}
+
+    def suggest(*_args, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return VisualizationSuggestion(
+            spec=_spec(
+                title="Revenue contribution by segment",
+                purpose="Compare which segment contributes the most revenue.",
+                chart_type="donut",
+                measure_selectors=[selector],
+                x_column="segment",
+                aggregation="sum",
+                top_n="7",
+            ),
+            confidence=0.89,
+            rationale=(
+                "Segment is a detected low-cardinality category.",
+                "Revenue is a configured summable KPI.",
+            ),
+            user_request="Show revenue share by segment.",
+        )
+
+    monkeypatch.setattr(
+        "insight_reporter.routes.generate_visualization_suggestion",
+        suggest,
+    )
+
+    response = client.post(
+        f"/visualizations/{dataset_id}/assistant",
+        data={"user_request": "Show revenue share by segment."},
+    )
+
+    assert response.status_code == 303
+    assert captured["user_request"] == "Show revenue share by segment."
+    preview = client.get(response.headers["Location"])
+    assert preview.status_code == 200
+    assert b"Ollama-assisted setup" in preview.data
+    assert b"Show revenue share by segment." in preview.data
+    assert b"Revenue contribution by segment" in preview.data
+    token = response.headers["Location"].rsplit("/", 1)[-1]
+    saved = client.post(f"/visualizations/{dataset_id}/preview/{token}/save")
+    assert saved.status_code == 303
+    visualization_id = saved.headers["Location"].rsplit("/", 1)[-1]
+    payload = json.loads(
+        (Path(app.config["VISUALIZATION_DIR"]) / dataset_id / f"{visualization_id}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["assistant"]["method"] == "ollama_assisted"
+    assert payload["assistant"]["confidence"] == 0.89
+    reopened = client.get(saved.headers["Location"])
+    assert b"Ollama-assisted setup" in reopened.data
+
+
+def test_saved_chart_insight_route_persists_findings_and_report_preference(
+    app: Flask,
+    client: FlaskClient,
+) -> None:
+    dataset_id = _upload_and_configure(client)
+    builder = client.get(f"/visualizations/{dataset_id}/new")
+    selector_match = re.search(
+        rb'name="measure_selectors" value="(metric:[^"]+)"',
+        builder.data,
+    )
+    assert selector_match is not None
+    preview = client.post(
+        f"/visualizations/{dataset_id}/preview",
+        data={
+            "title": "Revenue by segment",
+            "purpose": "Where should management focus?",
+            "chart_type": "category_bar",
+            "measure_selectors": [selector_match.group(1).decode("ascii")],
+            "x_column": "segment",
+            "series_column": "",
+            "aggregation": "sum",
+            "date_granularity": "month",
+            "filter_column": "",
+            "filter_mode": "include",
+            "filter_values": "",
+            "date_start": "",
+            "date_end": "",
+            "sort_by": "value",
+            "sort_direction": "descending",
+            "top_n": "10",
+            "scale": "linear",
+            "bin_count": "10",
+            "include_in_report": "yes",
+        },
+    )
+    token = preview.headers["Location"].rsplit("/", 1)[-1]
+    saved = client.post(f"/visualizations/{dataset_id}/preview/{token}/save")
+    visualization_id = saved.headers["Location"].rsplit("/", 1)[-1]
+
+    generated = client.post(
+        f"/visualizations/{dataset_id}/{visualization_id}/insights",
+        data={
+            "question": "Which segment should management review?",
+            "include_in_reports": "yes",
+        },
+    )
+    assert generated.status_code == 303
+    detail = client.get(generated.headers["Location"])
+    assert detail.status_code == 200
+    assert b"Saved management findings" in detail.data
+    assert b"Which segment should management review?" in detail.data
+    assert b"Included when this visualization is selected" in detail.data
+    assert b"Five grounded chart findings were saved" in detail.data
+
+    insight_path = (
+        Path(app.config["VISUALIZATION_INSIGHT_DIR"]) / dataset_id / f"{visualization_id}.json"
+    )
+    payload = json.loads(insight_path.read_text(encoding="utf-8"))
+    assert payload["include_in_reports"] is True
+    assert payload["model_status"] == "not_requested"
+    assert len(payload["points"]) == 5
+
+    excluded = client.post(
+        (f"/visualizations/{dataset_id}/{visualization_id}/insights/report-inclusion"),
+        data={},
+    )
+    assert excluded.status_code == 303
+    updated = json.loads(insight_path.read_text(encoding="utf-8"))
+    assert updated["include_in_reports"] is False
 
 
 def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
@@ -677,17 +1319,18 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     assert b"4. Name the chart" in builder.data
     assert b"What decision or question will this chart support?" in builder.data
     assert b'value="column:stress"' in builder.data
-    assert re.search(
-        rb'value="metric:[^"]+"\s+checked',
-        builder.data,
-    ) is not None
+    assert (
+        re.search(
+            rb'value="metric:[^"]+"\s+checked',
+            builder.data,
+        )
+        is not None
+    )
     assert b"visualization_builder.js" in builder.data
     assert b"Describe what you want to visualize" not in builder.data
     assert b"Generate validated preview with Ollama" not in builder.data
-    assert (
-        client.post(f"/visualizations/{dataset_id}/assistant").status_code
-        == 405
-    )
+    assert b"Let Ollama recommend a chart" in builder.data
+    assert b"Suggest and preview a chart" in builder.data
 
     preview_post = client.post(
         f"/visualizations/{dataset_id}/preview",
@@ -726,9 +1369,7 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     assert chart.status_code == 200
     assert chart.data.startswith(b"\x89PNG\r\n\x1a\n")
 
-    saved_post = client.post(
-        f"/visualizations/{dataset_id}/preview/{token}/save"
-    )
+    saved_post = client.post(f"/visualizations/{dataset_id}/preview/{token}/save")
     assert saved_post.status_code == 303
     saved_url = saved_post.headers["Location"]
     match = re.search(r"/(VIS-[0-9A-F]{16})$", saved_url)
@@ -738,32 +1379,22 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     assert saved.status_code == 200
     assert b"Include in final report" in saved.data
     assert b">Yes<" in saved.data
-    saved_path = (
-        Path(app.config["VISUALIZATION_DIR"])
-        / dataset_id
-        / f"{visualization_id}.json"
-    )
+    saved_path = Path(app.config["VISUALIZATION_DIR"]) / dataset_id / f"{visualization_id}.json"
     payload = json.loads(saved_path.read_text(encoding="utf-8"))
     old_chart = Path(app.config["CHART_DIR"]) / payload["chart"]["filename"]
     assert payload["classification"] == "supplementary"
     assert payload["schema_version"] == 3
-    assert payload["spec"]["purpose"] == (
-        "<script>Which segment is highest?</script>"
-    )
+    assert payload["spec"]["purpose"] == ("<script>Which segment is highest?</script>")
     assert old_chart.is_file()
 
-    regenerated = client.post(
-        f"/visualizations/{dataset_id}/{visualization_id}/regenerate"
-    )
+    regenerated = client.post(f"/visualizations/{dataset_id}/{visualization_id}/regenerate")
     assert regenerated.status_code == 303
     updated = json.loads(saved_path.read_text(encoding="utf-8"))
     assert updated["visualization_id"] == visualization_id
     assert updated["chart"]["filename"] != payload["chart"]["filename"]
     assert not old_chart.exists()
 
-    edit = client.get(
-        f"/visualizations/{dataset_id}/new?edit={visualization_id}"
-    )
+    edit = client.get(f"/visualizations/{dataset_id}/new?edit={visualization_id}")
     assert edit.status_code == 200
     assert b'value="VIS-' in edit.data
 
@@ -794,9 +1425,7 @@ def test_supplementary_preview_save_reopen_regenerate_and_edit_workflow(
     )
     assert replacement_preview.status_code == 303
     replacement_token = replacement_preview.headers["Location"].rsplit("/", 1)[-1]
-    replaced = client.post(
-        f"/visualizations/{dataset_id}/preview/{replacement_token}/save"
-    )
+    replaced = client.post(f"/visualizations/{dataset_id}/preview/{replacement_token}/save")
     assert replaced.status_code == 303
     assert replaced.headers["Location"].endswith(visualization_id)
     replacement_payload = json.loads(saved_path.read_text(encoding="utf-8"))

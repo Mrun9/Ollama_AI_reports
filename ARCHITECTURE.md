@@ -87,6 +87,8 @@ redirect.
 | `insight_engine.py` | KPI capability planning, whole-dataset snapshots, consolidated diagnostics, and Python-only row/period/segment/dataset target, cohort, share, anomaly, correlation, and benchmark findings |
 | `evidence_layer.py` | Prioritizes management findings, expands actionable diagnostics, and creates traceable records and deterministic charts |
 | `visualization_builder.py` | Validates, calculates, renders, and saves dashboard charts before or after KPI configuration |
+| `visualization_suggestions.py` | Constrains Ollama chart recommendations to detected columns and the deterministic visualization contract |
+| `visualization_insights.py` | Derives post-save chart facts, validates optional Ollama interpretation, persists chart-bound insight preferences, and prepares opted-in report observations |
 | `manual_visualization_evidence.py` | Produces deterministic evidence for manual charts |
 | `dataset_context.py` | Builds safe field tokens shown beside configuration forms |
 
@@ -115,6 +117,7 @@ local backups when recovery matters.
 | `instance/evidence/` | Ranked, traceable evidence records |
 | `instance/charts/` | Automatic evidence chart images |
 | `instance/visualizations/` | Saved manual visualization definitions |
+| `instance/visualization_insights/` | User-requested management insights fingerprinted to saved visualizations |
 | `instance/visualization_previews/` | Short-lived chart previews |
 | `instance/report_configurations/` | User-selected report content |
 | `instance/report_packages/` | Bounded narration input packages |
@@ -171,6 +174,12 @@ zero accepted AI stories is not saved. Executive-summary points are separately
 validated against their cited stories and facts; invalid summaries are retried
 before a clearly labelled story-based fallback is used.
 
+Visualization interpretation uses a narrower boundary: Python writes every
+finding first, Ollama receives only those findings and the user's question,
+and its implication/action fields are rejected if they contain new numeric
+text. The resulting artifact includes the saved-chart fingerprint. Load and
+report-package construction both reject a fingerprint mismatch.
+
 Every actual Ollama request crosses `model_run_metrics.py`. The measurement
 ends when `client.chat()` returns, while the CSV row is finalized after normal
 Python validation so it can distinguish accepted output from returned but
@@ -191,6 +200,10 @@ outcomes are retained; model inputs and outputs are not copied into telemetry.
   `conditional_metrics.py`, then `business_config.py` and
   `insight_engine.py`.
 - Add a manual chart type: `visualization_builder.py`.
+- Change saved-chart findings or interpretation:
+  `visualization_insights.py`, then
+  `manual_visualization_evidence.py` and
+  `report_generation_package.py`.
 - Change the report-selection form: `report_configuration.py`, its templates,
   and the corresponding route.
 - Change what Ollama receives: `report_generation_package.py` or the bounded

@@ -28,16 +28,26 @@ from insight_reporter.formula_engine import aggregate_row_values
 
 CHART_TYPES = (
     "time_line",
+    "time_area",
+    "time_area_stacked",
     "category_bar",
     "category_bar_horizontal",
+    "category_bar_stacked",
+    "pareto",
+    "donut",
     "scatter",
     "histogram",
     "box",
+    "heatmap",
+    "waterfall",
+    "funnel",
+    "combo",
+    "scorecard",
 )
 AGGREGATIONS = ("configured", "sum", "mean", "median", "min", "max")
 DATE_GRANULARITIES = ("day", "month", "quarter", "year")
 SCALES = ("linear", "log")
-SORT_OPTIONS = ("label", "value")
+SORT_OPTIONS = ("label", "value", "source")
 SORT_DIRECTIONS = ("ascending", "descending")
 FILTER_MODES = ("include", "exclude")
 _MISSING_MARKERS = frozenset({"", "na", "n/a", "null", "none", "nan"})
@@ -54,6 +64,23 @@ _MAX_FILTER_VALUES = 50
 _MAX_BINS = 50
 _MAX_SERIES = 12
 _PREVIEW_RETENTION_SECONDS = 24 * 60 * 60
+_TIME_GROUPED_CHARTS = frozenset(
+    {"time_line", "time_area", "time_area_stacked"}
+)
+_CATEGORY_GROUPED_CHARTS = frozenset(
+    {
+        "category_bar",
+        "category_bar_horizontal",
+        "category_bar_stacked",
+        "pareto",
+        "donut",
+        "heatmap",
+        "waterfall",
+        "funnel",
+        "combo",
+    }
+)
+_GROUPED_CHARTS = _TIME_GROUPED_CHARTS | _CATEGORY_GROUPED_CHARTS
 
 
 class VisualizationError(ValueError):
@@ -319,11 +346,11 @@ def build_visualization(
         raise VisualizationError("Visualization dataset ID is invalid.")
     _validate_dataset(view, profile, configuration)
     assistant = _validate_assistant_metadata(assistant_metadata)
-    measures = tuple(
-        _resolve_measure(selector, profile, configuration, spec)
-        for selector in spec.measure_selectors
+    measures = validate_visualization_spec(
+        spec,
+        profile=profile,
+        configuration=configuration,
     )
-    _validate_compatibility(spec, measures, profile, configuration)
     rows = _filter_rows(view.iter_rows(), spec, profile, configuration)
     if not rows:
         raise VisualizationError("The selected filters produce no source records.")
@@ -348,6 +375,15 @@ def build_visualization(
             "The selected chart has no finite values after validation and filtering."
         )
     plotted_values = _plotted_values(spec.chart_type, supporting_data)
+    if spec.chart_type in {"pareto", "donut", "funnel"} and (
+        not plotted_values
+        or any(value < 0 for value in plotted_values)
+        or sum(plotted_values) <= 0
+    ):
+        raise VisualizationError(
+            "Pareto, donut, and funnel charts require non-negative values "
+            "with a positive total."
+        )
     if spec.scale == "log" and (
         not plotted_values or any(value <= 0 for value in plotted_values)
     ):
@@ -388,6 +424,22 @@ def build_visualization(
         created_at=datetime.now(UTC).isoformat(),
         assistant=assistant,
     )
+
+
+def validate_visualization_spec(
+    spec: VisualizationSpec,
+    *,
+    profile: DatasetProfile,
+    configuration: BusinessConfiguration | None,
+) -> tuple[_ResolvedMeasure, ...]:
+    """Resolve measures and validate chart-to-column compatibility without plotting."""
+
+    measures = tuple(
+        _resolve_measure(selector, profile, configuration, spec)
+        for selector in spec.measure_selectors
+    )
+    _validate_compatibility(spec, measures, profile, configuration)
+    return measures
 
 
 def save_preview(
@@ -670,14 +722,20 @@ def _validate_compatibility(
     configuration: BusinessConfiguration | None,
 ) -> None:
     chart_type = spec.chart_type
-    if chart_type == "time_line":
+    if chart_type in _TIME_GROUPED_CHARTS:
         if spec.x_column not in profile.date_candidates:
             raise VisualizationError("Time-series charts require a valid date column.")
-    elif chart_type in {"category_bar", "category_bar_horizontal"}:
+    elif chart_type in _CATEGORY_GROUPED_CHARTS:
         if spec.x_column not in profile.category_candidates:
             raise VisualizationError(
                 "Category charts require a valid category column."
             )
+        if chart_type == "donut":
+            column = profile.column(spec.x_column or "")
+            if column is None or column.unique_count > 7:
+                raise VisualizationError(
+                    "Donut charts require a category with at most seven values."
+                )
     elif chart_type == "scatter":
         if len(measures) != 1 or not measures[0].is_row_level:
             raise VisualizationError(
@@ -704,35 +762,91 @@ def _validate_compatibility(
             raise VisualizationError(
                 "A grouped box plot requires a valid category column."
             )
+    elif chart_type == "scorecard":
+        if len(measures) != 1:
+            raise VisualizationError("KPI scorecards require exactly one measure.")
+        if spec.x_column is not None:
+            raise VisualizationError("KPI scorecards do not use a grouping field.")
+
+    if chart_type in {
+        "pareto",
+        "donut",
+        "heatmap",
+        "waterfall",
+        "funnel",
+    } and len(measures) != 1:
+        raise VisualizationError(
+            f"{_chart_type_label(chart_type).capitalize()} requires exactly one measure."
+        )
+    if chart_type == "combo" and len(measures) != 2:
+        raise VisualizationError(
+            "Combo charts require exactly two compatible measures."
+        )
+    if chart_type in {
+        "time_area_stacked",
+        "category_bar_stacked",
+        "pareto",
+        "donut",
+    } and any(
+        measure.public.effective_aggregation not in {"sum", "count"}
+        for measure in measures
+    ):
+        raise VisualizationError(
+            "Stacked, Pareto, and donut charts require summable measures."
+        )
 
     if spec.series_column is not None:
         if spec.series_column not in profile.category_candidates:
             raise VisualizationError("Series must use a valid category column.")
-        if chart_type not in {"time_line", "scatter"}:
+        if chart_type not in {
+            "time_line",
+            "time_area",
+            "time_area_stacked",
+            "category_bar",
+            "category_bar_horizontal",
+            "category_bar_stacked",
+            "scatter",
+            "heatmap",
+        }:
             raise VisualizationError(
-                "Series grouping is supported only for line and scatter charts."
+                "This chart type does not support an additional series."
             )
-        if chart_type == "time_line" and len(measures) != 1:
+        if chart_type in _TIME_GROUPED_CHARTS and len(measures) != 1:
             raise VisualizationError(
                 "A categorized time-series chart supports exactly one measure."
             )
+    if chart_type == "heatmap" and spec.series_column is None:
+        raise VisualizationError(
+            "Heatmaps require a second category in the advanced split setting."
+        )
+    if chart_type == "heatmap" and spec.series_column == spec.x_column:
+        raise VisualizationError(
+            "Heatmap rows and columns must use different category fields."
+        )
     if len(measures) > 1:
         formats = {measure.public.display_format for measure in measures}
         if len(formats) != 1:
             raise VisualizationError(
                 "Multiple measures must use the same display format and compatible units."
             )
-    if any(measure.count_records for measure in measures) and chart_type not in {
-        "time_line",
-        "category_bar",
-        "category_bar_horizontal",
+    if any(measure.count_records for measure in measures) and chart_type not in (
+        _GROUPED_CHARTS | {"scorecard"}
+    ):
+        raise VisualizationError(
+            "Record count is supported only for grouped charts or a scorecard."
+        )
+    if spec.scale == "log" and chart_type in {
+        "histogram",
+        "box",
+        "donut",
+        "pareto",
+        "heatmap",
+        "waterfall",
+        "funnel",
+        "scorecard",
     }:
         raise VisualizationError(
-            "Record count is supported only for time or category charts."
-        )
-    if spec.scale == "log" and chart_type in {"histogram", "box"}:
-        raise VisualizationError(
-            "Logarithmic scale is supported for line, bar, and scatter charts."
+            "Logarithmic scale is unavailable for this chart type."
         )
     if spec.date_start is not None or spec.date_end is not None:
         date_column = _date_filter_column(
@@ -803,8 +917,23 @@ def _prepare_supporting_data(
     spec: VisualizationSpec,
     measures: tuple[_ResolvedMeasure, ...],
 ) -> tuple[dict[str, object], ...]:
-    if spec.chart_type in {"time_line", "category_bar", "category_bar_horizontal"}:
+    if spec.chart_type in _GROUPED_CHARTS:
         return _grouped_data(rows, spec=spec, measures=measures)
+    if spec.chart_type == "scorecard":
+        value = _group_measure_value(rows, measures[0])
+        return (
+            (
+                {
+                    "measure_selector": measures[0].public.selector,
+                    "measure": measures[0].public.label,
+                    "aggregation": measures[0].public.effective_aggregation,
+                    "value": value,
+                    "record_count": len(rows),
+                },
+            )
+            if value is not None
+            else ()
+        )
     measure = measures[0]
     if spec.chart_type == "scatter":
         output: list[dict[str, object]] = []
@@ -853,7 +982,7 @@ def _grouped_data(
 ) -> tuple[dict[str, object], ...]:
     groups: dict[tuple[str, str | None], list[DatasetRow]] = {}
     for row in rows:
-        if spec.chart_type == "time_line":
+        if spec.chart_type in _TIME_GROUPED_CHARTS:
             parsed = _parse_datetime(row.values[spec.x_column or ""])
             if parsed is None:
                 continue
@@ -889,7 +1018,7 @@ def _grouped_data(
                 }
             )
     reverse = spec.sort_direction == "descending"
-    if spec.chart_type == "time_line":
+    if spec.chart_type in _TIME_GROUPED_CHARTS:
         output.sort(
             key=lambda row: (
                 str(row["x"]),
@@ -910,7 +1039,7 @@ def _grouped_data(
                 key=lambda value: primary_values.get(value, -math.inf),
                 reverse=reverse,
             )
-        else:
+        elif spec.sort_by == "label":
             distinct_x.sort(key=str.casefold, reverse=reverse)
         allowed_x = distinct_x[: spec.top_n]
         order = {value: index for index, value in enumerate(allowed_x)}
@@ -993,12 +1122,24 @@ def _render_chart(
     try:
         if spec.chart_type == "time_line":
             _render_line(axis, supporting_data)
+        elif spec.chart_type in {"time_area", "time_area_stacked"}:
+            _render_area(
+                axis,
+                supporting_data,
+                stacked=spec.chart_type == "time_area_stacked",
+            )
         elif spec.chart_type in {"category_bar", "category_bar_horizontal"}:
             _render_bars(
                 axis,
                 supporting_data,
                 horizontal=spec.chart_type == "category_bar_horizontal",
             )
+        elif spec.chart_type == "category_bar_stacked":
+            _render_stacked_bars(axis, supporting_data)
+        elif spec.chart_type == "pareto":
+            _render_pareto(axis, supporting_data)
+        elif spec.chart_type == "donut":
+            _render_donut(axis, supporting_data)
         elif spec.chart_type == "scatter":
             _render_scatter(axis, supporting_data)
             axis.set_xlabel(_safe_label(spec.x_column or "X"))
@@ -1014,6 +1155,20 @@ def _render_chart(
             axis.set_ylabel("Record count")
         elif spec.chart_type == "box":
             _render_box(axis, supporting_data, measures[0].public.label)
+        elif spec.chart_type == "heatmap":
+            _render_heatmap(figure, axis, supporting_data)
+        elif spec.chart_type == "waterfall":
+            _render_waterfall(axis, supporting_data)
+        elif spec.chart_type == "funnel":
+            _render_funnel(axis, supporting_data)
+        elif spec.chart_type == "combo":
+            _render_combo(axis, supporting_data)
+        elif spec.chart_type == "scorecard":
+            _render_scorecard(
+                axis,
+                supporting_data,
+                display_format=measures[0].public.display_format,
+            )
         else:
             raise VisualizationError("Chart type is unsupported.")
         axis.set_title(_safe_title(spec.title))
@@ -1086,6 +1241,52 @@ def _render_line(axis: Any, rows: tuple[dict[str, object], ...]) -> None:
         axis.legend()
 
 
+def _render_area(
+    axis: Any,
+    rows: tuple[dict[str, object], ...],
+    *,
+    stacked: bool,
+) -> None:
+    x_values = sorted({str(row["x"]) for row in rows})
+    keys = list(
+        dict.fromkeys(
+            (str(row["measure"]), str(row["series"] or ""))
+            for row in rows
+        )
+    )
+    series_values: list[list[float]] = []
+    labels: list[str] = []
+    for measure, series in keys:
+        values_by_x = {
+            str(row["x"]): float(row["value"])
+            for row in rows
+            if str(row["measure"]) == measure
+            and str(row["series"] or "") == series
+        }
+        series_values.append([values_by_x.get(value, 0.0) for value in x_values])
+        labels.append(measure if not series else f"{measure} — {series}")
+    positions = list(range(len(x_values)))
+    if stacked:
+        axis.stackplot(
+            positions,
+            *series_values,
+            labels=[_safe_label(label) for label in labels],
+            alpha=0.8,
+        )
+    else:
+        for values, label in zip(series_values, labels, strict=True):
+            axis.plot(positions, values, linewidth=2, label=_safe_label(label))
+            axis.fill_between(positions, values, alpha=0.2)
+    axis.set_xticks(
+        positions,
+        [_safe_label(value) for value in x_values],
+        rotation=30,
+        ha="right",
+    )
+    if len(labels) > 1:
+        axis.legend()
+
+
 def _render_bars(
     axis: Any,
     rows: tuple[dict[str, object], ...],
@@ -1093,30 +1294,243 @@ def _render_bars(
     horizontal: bool,
 ) -> None:
     x_values = list(dict.fromkeys(str(row["x"]) for row in rows))
-    measures = list(dict.fromkeys(str(row["measure"]) for row in rows))
-    width = 0.8 / max(len(measures), 1)
-    for measure_index, measure in enumerate(measures):
+    keys = list(
+        dict.fromkeys(
+            (str(row["measure"]), str(row["series"] or ""))
+            for row in rows
+        )
+    )
+    width = 0.8 / max(len(keys), 1)
+    for key_index, (measure, series) in enumerate(keys):
         values_by_x = {
             str(row["x"]): float(row["value"])
             for row in rows
             if str(row["measure"]) == measure
+            and str(row["series"] or "") == series
         }
         positions = [
-            index - 0.4 + (width / 2) + (measure_index * width)
+            index - 0.4 + (width / 2) + (key_index * width)
             for index in range(len(x_values))
         ]
         values = [values_by_x.get(x_value, math.nan) for x_value in x_values]
+        label = measure if not series else f"{measure} — {series}"
         if horizontal:
-            axis.barh(positions, values, height=width, label=_safe_label(measure))
+            axis.barh(positions, values, height=width, label=_safe_label(label))
         else:
-            axis.bar(positions, values, width=width, label=_safe_label(measure))
+            axis.bar(positions, values, width=width, label=_safe_label(label))
     labels = [_safe_label(value) for value in x_values]
     if horizontal:
         axis.set_yticks(range(len(x_values)), labels)
     else:
         axis.set_xticks(range(len(x_values)), labels, rotation=30, ha="right")
-    if len(measures) > 1:
+    if len(keys) > 1:
         axis.legend()
+
+
+def _render_stacked_bars(
+    axis: Any,
+    rows: tuple[dict[str, object], ...],
+) -> None:
+    x_values = list(dict.fromkeys(str(row["x"]) for row in rows))
+    keys = list(
+        dict.fromkeys(
+            (str(row["measure"]), str(row["series"] or ""))
+            for row in rows
+        )
+    )
+    bottoms = [0.0] * len(x_values)
+    for measure, series in keys:
+        values_by_x = {
+            str(row["x"]): float(row["value"])
+            for row in rows
+            if str(row["measure"]) == measure
+            and str(row["series"] or "") == series
+        }
+        values = [values_by_x.get(value, 0.0) for value in x_values]
+        label = measure if not series else f"{measure} — {series}"
+        axis.bar(
+            range(len(x_values)),
+            values,
+            bottom=bottoms,
+            label=_safe_label(label),
+        )
+        bottoms = [
+            previous + value
+            for previous, value in zip(bottoms, values, strict=True)
+        ]
+    axis.set_xticks(
+        range(len(x_values)),
+        [_safe_label(value) for value in x_values],
+        rotation=30,
+        ha="right",
+    )
+    if len(keys) > 1:
+        axis.legend()
+
+
+def _render_pareto(axis: Any, rows: tuple[dict[str, object], ...]) -> None:
+    ordered = sorted(rows, key=lambda row: float(row["value"]), reverse=True)
+    labels = [_safe_label(row["x"]) for row in ordered]
+    values = [float(row["value"]) for row in ordered]
+    positions = list(range(len(values)))
+    axis.bar(positions, values, color="#4c78a8")
+    axis.set_xticks(positions, labels, rotation=30, ha="right")
+    total = sum(values)
+    cumulative = []
+    running = 0.0
+    for value in values:
+        running += value
+        cumulative.append((running / total) * 100 if total else 0.0)
+    percent_axis = axis.twinx()
+    percent_axis.plot(positions, cumulative, color="#e45756", marker="o")
+    percent_axis.set_ylim(0, 105)
+    percent_axis.set_ylabel("Cumulative percentage")
+
+
+def _render_donut(axis: Any, rows: tuple[dict[str, object], ...]) -> None:
+    axis.pie(
+        [float(row["value"]) for row in rows],
+        labels=[_safe_label(row["x"]) for row in rows],
+        autopct="%1.1f%%",
+        startangle=90,
+        wedgeprops={"width": 0.42, "edgecolor": "white"},
+    )
+    axis.axis("equal")
+
+
+def _render_heatmap(
+    figure: Any,
+    axis: Any,
+    rows: tuple[dict[str, object], ...],
+) -> None:
+    x_values = list(dict.fromkeys(str(row["x"]) for row in rows))
+    y_values = list(dict.fromkeys(str(row["series"] or "") for row in rows))
+    lookup = {
+        (str(row["x"]), str(row["series"] or "")): float(row["value"])
+        for row in rows
+    }
+    matrix = [
+        [lookup.get((x_value, y_value), math.nan) for x_value in x_values]
+        for y_value in y_values
+    ]
+    image = axis.imshow(matrix, aspect="auto", cmap="Blues")
+    axis.set_xticks(
+        range(len(x_values)),
+        [_safe_label(value) for value in x_values],
+        rotation=30,
+        ha="right",
+    )
+    axis.set_yticks(
+        range(len(y_values)),
+        [_safe_label(value) for value in y_values],
+    )
+    figure.colorbar(image, ax=axis, fraction=0.03, pad=0.04)
+
+
+def _render_waterfall(
+    axis: Any,
+    rows: tuple[dict[str, object], ...],
+) -> None:
+    labels = [_safe_label(row["x"]) for row in rows]
+    deltas = [float(row["value"]) for row in rows]
+    starts: list[float] = []
+    running = 0.0
+    for delta in deltas:
+        starts.append(running if delta >= 0 else running + delta)
+        running += delta
+    colors = ["#2ca02c" if value >= 0 else "#d62728" for value in deltas]
+    axis.bar(range(len(deltas)), [abs(value) for value in deltas], bottom=starts, color=colors)
+    axis.axhline(0, color="#475569", linewidth=0.8)
+    axis.set_xticks(range(len(labels)), labels, rotation=30, ha="right")
+
+
+def _render_funnel(axis: Any, rows: tuple[dict[str, object], ...]) -> None:
+    labels = [_safe_label(row["x"]) for row in rows]
+    values = [float(row["value"]) for row in rows]
+    positions = list(range(len(values)))
+    axis.barh(positions, values, color="#4c78a8")
+    axis.set_yticks(positions, labels)
+    axis.invert_yaxis()
+    maximum = max(values, default=0.0)
+    for position, value in zip(positions, values, strict=True):
+        percentage = (value / maximum) * 100 if maximum else 0.0
+        axis.text(value, position, f" {percentage:.1f}%", va="center")
+
+
+def _render_combo(axis: Any, rows: tuple[dict[str, object], ...]) -> None:
+    x_values = list(dict.fromkeys(str(row["x"]) for row in rows))
+    measures = list(dict.fromkeys(str(row["measure"]) for row in rows))
+    first, second = measures
+    values = {
+        measure: {
+            str(row["x"]): float(row["value"])
+            for row in rows
+            if str(row["measure"]) == measure
+        }
+        for measure in measures
+    }
+    positions = list(range(len(x_values)))
+    axis.bar(
+        positions,
+        [values[first].get(x_value, math.nan) for x_value in x_values],
+        color="#4c78a8",
+        alpha=0.8,
+        label=_safe_label(first),
+    )
+    line_axis = axis.twinx()
+    line_axis.plot(
+        positions,
+        [values[second].get(x_value, math.nan) for x_value in x_values],
+        color="#e45756",
+        marker="o",
+        linewidth=2,
+        label=_safe_label(second),
+    )
+    axis.set_xticks(
+        positions,
+        [_safe_label(value) for value in x_values],
+        rotation=30,
+        ha="right",
+    )
+    axis.legend(loc="upper left")
+    line_axis.legend(loc="upper right")
+
+
+def _render_scorecard(
+    axis: Any,
+    rows: tuple[dict[str, object], ...],
+    *,
+    display_format: str,
+) -> None:
+    row = rows[0]
+    value = float(row["value"])
+    formatted = (
+        f"{value:,.1f}%"
+        if display_format == "percentage"
+        else f"${value:,.2f}"
+        if display_format == "currency"
+        else f"{value:,.2f}"
+    )
+    axis.axis("off")
+    axis.text(
+        0.5,
+        0.58,
+        formatted,
+        ha="center",
+        va="center",
+        fontsize=34,
+        fontweight="bold",
+        color="#1d4ed8",
+    )
+    axis.text(
+        0.5,
+        0.38,
+        _safe_label(row["measure"]),
+        ha="center",
+        va="center",
+        fontsize=14,
+        color="#475569",
+    )
 
 
 def _render_scatter(axis: Any, rows: tuple[dict[str, object], ...]) -> None:
@@ -1283,7 +1697,7 @@ def _load_artifact(
         raise VisualizationError("Saved visualization metadata is invalid.")
     assistant = (
         _validate_assistant_metadata(payload.get("assistant"))
-        if payload.get("schema_version") == 2
+        if int(payload["schema_version"]) >= 2
         else None
     )
     return VisualizationArtifact(
@@ -1419,7 +1833,7 @@ def _date_filter_column(
     profile: DatasetProfile,
     configuration: BusinessConfiguration | None,
 ) -> str | None:
-    if spec.chart_type == "time_line":
+    if spec.chart_type in _TIME_GROUPED_CHARTS:
         return spec.x_column
     if configuration is not None and configuration.date_column is not None:
         return configuration.date_column
@@ -1625,11 +2039,21 @@ def _safe_label(value: object, *, maximum: int = _MAX_LABEL_CHARACTERS) -> str:
 def _chart_type_label(chart_type: str) -> str:
     return {
         "time_line": "time-series line chart",
+        "time_area": "time-series area chart",
+        "time_area_stacked": "stacked time-series area chart",
         "category_bar": "category bar chart",
         "category_bar_horizontal": "horizontal category bar chart",
+        "category_bar_stacked": "stacked category bar chart",
+        "pareto": "Pareto chart",
+        "donut": "donut chart",
         "scatter": "scatter plot",
         "histogram": "distribution histogram",
         "box": "box-and-outlier chart",
+        "heatmap": "category heatmap",
+        "waterfall": "waterfall chart",
+        "funnel": "funnel chart",
+        "combo": "bar-and-line combo chart",
+        "scorecard": "KPI scorecard",
     }[chart_type]
 
 

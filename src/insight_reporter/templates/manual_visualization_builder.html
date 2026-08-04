@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Build Manual Visualization | AI Insight Reporter</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --accent: #2563eb;
+        --accent-dark: #1d4ed8;
+        --background: #eef2f7;
+        --border: #d6deea;
+        --muted: #64748b;
+        --panel: #ffffff;
+        --text: #172033;
+      }
+      * { box-sizing: border-box; }
+      body {
+        background: var(--background);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+        line-height: 1.45;
+        margin: 0;
+      }
+      a { color: var(--accent-dark); }
+      button, input { font: inherit; }
+      .page-shell {
+        margin: 0 auto;
+        max-width: 1600px;
+        padding: 1rem clamp(0.75rem, 2vw, 2rem) 2rem;
+      }
+      .builder-header {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: space-between;
+        margin: 0.75rem 0 1rem;
+      }
+      .builder-header h1 { font-size: 1.45rem; margin: 0; }
+      .builder-header p { color: var(--muted); margin: 0.2rem 0 0; }
+      .header-actions { display: flex; gap: 0.5rem; }
+      .header-actions button {
+        border: 1px solid var(--border);
+        border-radius: 0.45rem;
+        padding: 0.55rem 0.8rem;
+      }
+      .header-actions button:disabled { cursor: not-allowed; opacity: 0.55; }
+      .board {
+        display: grid;
+        gap: 0;
+        grid-template-columns: 15rem minmax(24rem, 1fr) 20rem;
+        min-height: 44rem;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        min-width: 0;
+        padding: 1rem;
+      }
+      .fields-panel { border-radius: 0.75rem 0 0 0.75rem; }
+      .controls-panel { border-radius: 0 0.75rem 0.75rem 0; }
+      .panel h2 { font-size: 1rem; margin: 0 0 0.75rem; }
+      .panel-help { color: var(--muted); font-size: 0.82rem; margin: -0.4rem 0 0.8rem; }
+      .field-search {
+        border: 1px solid #aeb9c8;
+        border-radius: 0.45rem;
+        padding: 0.55rem 0.65rem;
+        width: 100%;
+      }
+      .field-list {
+        display: grid;
+        gap: 1rem;
+        margin-top: 0.75rem;
+        max-height: 37rem;
+        overflow-y: auto;
+        padding-right: 0.2rem;
+      }
+      .field-group { display: grid; gap: 0.35rem; }
+      .field-group h3 {
+        align-items: center;
+        background: var(--panel);
+        color: #334155;
+        display: flex;
+        font-size: 0.8rem;
+        gap: 0.4rem;
+        margin: 0;
+        padding: 0.15rem 0;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+      .role-badge {
+        align-items: center;
+        background: #dbeafe;
+        border-radius: 0.3rem;
+        color: #1e40af;
+        display: inline-flex;
+        font-size: 0.68rem;
+        font-weight: 800;
+        height: 1.45rem;
+        justify-content: center;
+        min-width: 1.8rem;
+        padding: 0 0.35rem;
+      }
+      .field-group-help, .empty-field-group {
+        color: var(--muted);
+        font-size: 0.72rem;
+        margin: 0 0 0.15rem;
+      }
+      .field-card {
+        align-items: center;
+        background: #fff;
+        border: 1px solid transparent;
+        border-radius: 0.45rem;
+        color: var(--text);
+        cursor: grab;
+        display: grid;
+        gap: 0.55rem;
+        grid-template-columns: 2rem minmax(0, 1fr);
+        padding: 0.55rem;
+        text-align: left;
+        touch-action: none;
+        width: 100%;
+      }
+      .field-card:hover, .field-card:focus-visible {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        outline: 0;
+      }
+      .field-card.is-assigned { background: #eff6ff; }
+      .field-symbol {
+        align-items: center;
+        background: #e8eef7;
+        border-radius: 0.35rem;
+        color: #334155;
+        display: inline-flex;
+        font-size: 0.68rem;
+        font-weight: 800;
+        height: 1.8rem;
+        justify-content: center;
+        width: 1.8rem;
+      }
+      .field-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .drag-ghost {
+        background: #fff;
+        border: 1px solid var(--accent);
+        border-radius: 0.45rem;
+        box-shadow: 0 0.6rem 1.5rem rgb(15 23 42 / 20%);
+        left: 0;
+        max-width: 15rem;
+        padding: 0.55rem 0.75rem;
+        pointer-events: none;
+        position: fixed;
+        top: 0;
+        transform: translate(0.8rem, 0.8rem);
+        z-index: 20;
+      }
+      .canvas-panel {
+        background-color: #f8fafc;
+        background-image: radial-gradient(#cbd5e1 0.8px, transparent 0.8px);
+        background-size: 18px 18px;
+        border-block: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        padding: 1.25rem;
+      }
+      .canvas-toolbar {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.7rem;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+      }
+      .canvas-toolbar input {
+        background: rgb(255 255 255 / 92%);
+        border: 1px solid var(--border);
+        border-radius: 0.45rem;
+        font-weight: 700;
+        max-width: 28rem;
+        padding: 0.5rem 0.65rem;
+        width: 100%;
+      }
+      .chart-status {
+        background: #e0e7ff;
+        border-radius: 999px;
+        color: #3730a3;
+        font-size: 0.75rem;
+        font-weight: 750;
+        padding: 0.25rem 0.6rem;
+        white-space: nowrap;
+      }
+      .visual-tile {
+        background: #fff;
+        border: 2px solid #93c5fd;
+        border-radius: 0.7rem;
+        box-shadow: 0 0.5rem 1.2rem rgb(31 47 74 / 9%);
+        display: grid;
+        flex: 1;
+        min-height: 32rem;
+        overflow: hidden;
+        place-items: center;
+        position: relative;
+      }
+      .empty-state {
+        color: var(--muted);
+        max-width: 28rem;
+        padding: 2rem;
+        text-align: center;
+      }
+      .empty-icon {
+        color: #94a3b8;
+        display: block;
+        margin: 0 auto 0.8rem;
+        width: 4rem;
+      }
+      #chart-preview { display: block; height: 100%; min-height: 30rem; width: 100%; }
+      .chart-message {
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 0.5rem;
+        color: #9a3412;
+        margin: 1rem;
+        padding: 0.8rem;
+      }
+      .chart-meta {
+        bottom: 0.5rem;
+        color: var(--muted);
+        font-size: 0.72rem;
+        left: 0.75rem;
+        position: absolute;
+      }
+      .chart-gallery {
+        display: grid;
+        gap: 0.55rem;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-bottom: 1.25rem;
+      }
+      .chart-choice {
+        align-items: center;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 0.45rem;
+        color: #334155;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        justify-content: center;
+        min-height: 5.2rem;
+        padding: 0.55rem 0.35rem;
+        position: relative;
+        text-align: center;
+      }
+      .chart-choice:hover, .chart-choice:focus-visible { border-color: #60a5fa; }
+      .chart-choice.is-selected {
+        background: #dbeafe;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent);
+        color: var(--accent-dark);
+      }
+      .chart-choice.is-selected::before {
+        align-items: center;
+        background: var(--accent);
+        border-radius: 50%;
+        color: #fff;
+        content: "✓";
+        display: flex;
+        font-size: 0.65rem;
+        font-weight: 900;
+        height: 1.15rem;
+        justify-content: center;
+        position: absolute;
+        right: 0.3rem;
+        top: 0.3rem;
+        width: 1.15rem;
+      }
+      .chart-choice svg {
+        color: currentColor;
+        display: block;
+        flex: 0 0 auto;
+        height: 2rem;
+        width: 2rem;
+      }
+      .chart-choice-label {
+        display: block;
+        font-size: 0.68rem;
+        font-weight: 650;
+        line-height: 1.15;
+      }
+      .chart-choice.is-selected .chart-choice-label { font-weight: 800; }
+      .axis-wells { display: grid; gap: 0.8rem; }
+      .axis-well label { display: block; font-size: 0.8rem; font-weight: 750; margin-bottom: 0.3rem; }
+      .drop-zone {
+        align-items: center;
+        background: #f8fafc;
+        border: 1px dashed #94a3b8;
+        border-radius: 0.5rem;
+        color: var(--muted);
+        display: flex;
+        min-height: 3.2rem;
+        padding: 0.5rem;
+      }
+      .drop-zone.is-target {
+        background: #dbeafe;
+        border-color: var(--accent);
+        color: var(--accent-dark);
+      }
+      .axis-placeholder { font-size: 0.8rem; }
+      .field-pill {
+        align-items: center;
+        background: #dbeafe;
+        border: 1px solid #93c5fd;
+        border-radius: 999px;
+        color: #1e3a8a;
+        display: flex;
+        font-size: 0.8rem;
+        font-weight: 700;
+        gap: 0.35rem;
+        max-width: 100%;
+        padding: 0.32rem 0.45rem 0.32rem 0.65rem;
+      }
+      .field-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .field-pill button {
+        background: transparent;
+        border: 0;
+        border-radius: 50%;
+        color: inherit;
+        cursor: pointer;
+        line-height: 1;
+        padding: 0.1rem 0.2rem;
+      }
+      .tip {
+        background: #f8fafc;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.78rem;
+        margin: 1.25rem -1rem -1rem;
+        padding: 0.8rem 1rem;
+      }
+      .chart-settings {
+        border-top: 1px solid var(--border);
+        display: grid;
+        gap: 0.75rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+      }
+      .chart-settings h2 { margin-bottom: 0; }
+      .setting-field label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 750;
+        margin-bottom: 0.3rem;
+      }
+      .setting-field input, .setting-field select {
+        border: 1px solid #aeb9c8;
+        border-radius: 0.4rem;
+        padding: 0.48rem 0.55rem;
+        width: 100%;
+      }
+      [hidden] { display: none !important; }
+      @media (max-width: 64rem) {
+        .board { grid-template-columns: 13rem minmax(20rem, 1fr); }
+        .controls-panel {
+          border-radius: 0 0 0.75rem 0.75rem;
+          grid-column: 1 / -1;
+        }
+        .chart-gallery { grid-template-columns: repeat(6, minmax(5rem, 1fr)); }
+      }
+      @media (max-width: 44rem) {
+        .board { display: flex; flex-direction: column; }
+        .fields-panel, .controls-panel { border-radius: 0; }
+        .canvas-panel { border: 1px solid var(--border); min-height: 34rem; order: 3; }
+        .controls-panel { order: 2; }
+        .field-list { max-height: 15rem; }
+        .chart-gallery { grid-template-columns: repeat(3, 1fr); }
+      }
+    </style>
+    <script src="{{ url_for('static', filename='manual_visualization_builder.js') }}" defer></script>
+  </head>
+  <body>
+    <main class="page-shell" id="manual-visualization-board"
+      data-preview-url="{{ url_for('core.manual_visualization_preview_data', dataset_id=dataset_id) }}"
+      data-save-url="{{ url_for('core.save_manual_visualization_board', dataset_id=dataset_id) }}">
+      <script type="application/json" id="manual-initial-state">{{ (manual_initial_state or {})|tojson }}</script>
+      {% set current_section = "dashboard" %}
+      {% include "_report_project_navigation.html" %}
+
+      <header class="builder-header">
+        <div>
+          <h1>Build Manual Visualization</h1>
+          <p>Drag fields onto an axis and refine the automatically selected chart.</p>
+        </div>
+        <div class="header-actions">
+          <button type="button" id="save-visualization">Save visualization</button>
+        </div>
+      </header>
+
+      <div class="board">
+        <aside class="panel fields-panel" aria-labelledby="data-fields-heading">
+          <h2 id="data-fields-heading">Data fields</h2>
+          <p class="panel-help">Fields are grouped by where they can be used.</p>
+          <label for="field-search" class="panel-help">Search available fields</label>
+          <input class="field-search" id="field-search" type="search" placeholder="Search fields…">
+
+          {% macro field_button(column, preferred_axis) -%}
+            <button type="button" class="field-card"
+              data-field-name="{{ column.name }}"
+              data-field-kind="{{ column.inferred_type.value }}"
+              data-preferred-axis="{{ preferred_axis }}"
+              title="{{ column.inferred_type.value }} · {{ column.unique_count }} unique value(s)">
+              <span class="field-symbol" aria-hidden="true">
+                {% if column.inferred_type.value == "numeric" %}#
+                {% elif column.inferred_type.value == "date/time" %}CAL
+                {% elif column.inferred_type.value == "boolean" %}T/F
+                {% elif column.inferred_type.value == "identifier" %}ID
+                {% else %}ABC{% endif %}
+              </span>
+              <span class="field-name">{{ column.name }}</span>
+            </button>
+          {%- endmacro %}
+
+          <div class="field-list" id="field-list">
+            <section class="field-group" data-field-group="x" aria-labelledby="x-fields-heading">
+              <h3 id="x-fields-heading"><span class="role-badge">X</span> X-axis fields</h3>
+              <p class="field-group-help">Categories, dates, and numbers for grouping or comparison.</p>
+              {% if profile.category_candidates or profile.date_candidates or profile.kpi_candidates %}
+                {% for column in profile.columns %}
+                  {% if column.name in profile.category_candidates or column.name in profile.date_candidates or column.name in profile.kpi_candidates %}
+                    {{ field_button(column, "x") }}
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <p class="empty-field-group">No compatible X-axis fields.</p>
+              {% endif %}
+            </section>
+
+            <section class="field-group" data-field-group="y" aria-labelledby="y-fields-heading">
+              <h3 id="y-fields-heading"><span class="role-badge">Y</span> Y-axis fields</h3>
+              <p class="field-group-help">Numeric measures that can be aggregated.</p>
+              {% if profile.kpi_candidates %}
+                {% for column in profile.columns %}
+                  {% if column.name in profile.kpi_candidates %}
+                    {{ field_button(column, "y") }}
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <p class="empty-field-group">No numeric Y-axis fields.</p>
+              {% endif %}
+            </section>
+
+            <section class="field-group" data-field-group="series" aria-labelledby="legend-fields-heading">
+              <h3 id="legend-fields-heading"><span class="role-badge">L</span> Legend fields</h3>
+              <p class="field-group-help">Categories with a manageable number of values.</p>
+              {% if profile.category_candidates %}
+                {% for column in profile.columns %}
+                  {% if column.name in profile.category_candidates %}
+                    {{ field_button(column, "series") }}
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <p class="empty-field-group">No compatible Legend fields.</p>
+              {% endif %}
+            </section>
+
+            <section class="field-group" data-field-group="size" aria-labelledby="size-fields-heading">
+              <h3 id="size-fields-heading"><span class="role-badge">S</span> Size fields</h3>
+              <p class="field-group-help">Positive numeric values used to size bubbles.</p>
+              {% if profile.kpi_candidates %}
+                {% for column in profile.columns %}
+                  {% if column.name in profile.kpi_candidates %}
+                    {{ field_button(column, "size") }}
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <p class="empty-field-group">No numeric Size fields.</p>
+              {% endif %}
+            </section>
+
+            <section class="field-group" id="secondary-y-field-group"
+              data-field-group="secondary_y" aria-labelledby="secondary-y-fields-heading" hidden>
+              <h3 id="secondary-y-fields-heading"><span class="role-badge">Y2</span> Line value fields</h3>
+              <p class="field-group-help">A second numeric measure for combo charts.</p>
+              {% if profile.kpi_candidates %}
+                {% for column in profile.columns %}
+                  {% if column.name in profile.kpi_candidates %}
+                    {{ field_button(column, "secondary_y") }}
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <p class="empty-field-group">No numeric Secondary Y fields.</p>
+              {% endif %}
+            </section>
+          </div>
+        </aside>
+
+        <section class="canvas-panel" aria-labelledby="canvas-title">
+          <div class="canvas-toolbar">
+            <input id="canvas-title" value="Untitled visualization" maxlength="120"
+              aria-label="Visualization title">
+            <span class="chart-status" id="chart-status">Automatic chart</span>
+          </div>
+          <div class="visual-tile" id="visual-tile" data-drop-zone="auto">
+            <div class="empty-state" id="empty-state">
+              <svg class="empty-icon" viewBox="0 0 64 64" aria-hidden="true">
+                <path d="M10 52V30h10v22zm17 0V12h10v40zm17 0V22h10v30z" fill="currentColor"/>
+              </svg>
+              <strong>Drag fields here to create a visualization</strong>
+              <p>Try a category on the X-axis and a number on the Y-axis.</p>
+            </div>
+            <svg id="chart-preview" viewBox="0 0 800 460" role="img"
+              aria-labelledby="preview-title preview-description" hidden>
+              <title id="preview-title">Manual visualization preview</title>
+              <desc id="preview-description">A preview generated from the selected fields.</desc>
+            </svg>
+            <p class="chart-message" id="chart-message" role="alert" hidden></p>
+            <p class="chart-meta" id="chart-meta" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <aside class="panel controls-panel" aria-labelledby="visualizations-heading">
+          <h2 id="visualizations-heading">Visualizations</h2>
+          <p class="panel-help">Automatic chooses a chart from the assigned field types.</p>
+          <div class="chart-gallery" role="group" aria-label="Visualization type">
+            <button type="button" class="chart-choice is-selected" data-chart-type="auto"
+              aria-pressed="true" title="Automatic">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 2 2.2 7.8L26 12l-7.8 2.2L16 22l-2.2-7.8L6 12l7.8-2.2zM25 21l1.2 4.1L30 26l-3.8 1L25 31l-1.2-4-3.8-1 3.8-.9z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="column"
+              aria-pressed="false" title="Column chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M7 24V14h5v10zm7 0V5h5v19zm7 0V10h5v14z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="bar"
+              aria-pressed="false" title="Horizontal bar chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 4v24M8 7h15v5H8zm0 7h20v5H8zm0 7h11v5H8z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="stacked_column"
+              aria-pressed="false" title="Stacked column chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M7 18h5v7H7zm0-7h5v7H7zm8 3h5v11h-5zm0-9h5v9h-5zm8 12h5v8h-5zm0-6h5v6h-5z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="stacked_bar"
+              aria-pressed="false" title="Stacked horizontal bar chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4v24M7 7h9v5H7zm9 0h8v5h-8zM7 14h13v5H7zm13 0h8v5h-8zM7 21h7v5H7zm7 0h6v5h-6z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="grouped_column"
+              aria-pressed="false" title="Grouped column chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M6 25V11h4v14zm5 0V17h4v8zm6 0V6h4v19zm5 0V13h4v12z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="stacked_100_column"
+              aria-pressed="false" title="100% stacked column">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M7 19h6v6H7zm0-7h6v7H7zm0-6h6v6H7zm12 14h6v5h-6zm0-8h6v8h-6zm0-6h6v6h-6z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="stacked_100_bar"
+              aria-pressed="false" title="100% stacked bar">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4v24M7 7h7v5H7zm7 0h6v5h-6zm6 0h7v5h-7zM7 14h10v5H7zm10 0h4v5h-4zm4 0h6v5h-6zM7 21h5v5H7zm5 0h9v5h-9zm9 0h6v5h-6z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="line"
+              aria-pressed="false" title="Line chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m4 24 7-9 6 4 9-12 2 2-10.5 14-6-4L6 26z" fill="currentColor"/><circle cx="11" cy="15" r="2"/><circle cx="17" cy="19" r="2"/><circle cx="26" cy="7" r="2"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="multi_line"
+              aria-pressed="false" title="Multi-series line">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m4 23 7-8 6 4 10-12M4 26l8-5 6 3 9-8" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="11" cy="15" r="2" fill="currentColor"/><circle cx="18" cy="24" r="2" fill="#60a5fa"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="combo"
+              aria-pressed="false" title="Column and line combo">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M6 25V14h5v11zm8 0V8h5v17zm8 0V17h5v8z" fill="currentColor" opacity=".65"/><path d="m5 12 8 4 7-9 8 4" fill="none" stroke="#1d4ed8" stroke-width="2.5"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="area"
+              aria-pressed="false" title="Area chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m4 25 7-10 6 4 9-12 2 2v18H4z" fill="currentColor" opacity=".75"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="scatter"
+              aria-pressed="false" title="Scatter plot">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4v24h24" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="21" r="2.5" fill="currentColor"/><circle cx="15" cy="15" r="2.5" fill="currentColor"/><circle cx="21" cy="18" r="2.5" fill="currentColor"/><circle cx="25" cy="8" r="2.5" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="bubble"
+              aria-pressed="false" title="Bubble chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4v24h24" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="21" r="3" fill="currentColor"/><circle cx="17" cy="15" r="5" fill="currentColor" opacity=".8"/><circle cx="25" cy="9" r="7" fill="#60a5fa" opacity=".85"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="pie"
+              aria-pressed="false" title="Pie chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M14 3a13 13 0 1 0 13 13H14z" fill="currentColor"/><path d="M17 3v10h10A13 13 0 0 0 17 3" fill="#60a5fa"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="donut"
+              aria-pressed="false" title="Donut chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" stroke-width="6"/><path d="M16 5a11 11 0 0 1 10.5 7.6" fill="none" stroke="#60a5fa" stroke-width="6"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="histogram"
+              aria-pressed="false" title="Histogram">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M6 25v-7h4v7zm4 0V10h4v15zm4 0V5h4v20zm4 0V13h4v12zm4 0V20h4v5z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="pareto"
+              aria-pressed="false" title="Pareto chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M6 25V12h5v13zm7 0V16h5v9zm7 0v-5h5v5z" fill="currentColor"/><path d="m7 9 8 3 9-7" fill="none" stroke="#60a5fa" stroke-width="2.5"/><circle cx="7" cy="9" r="2" fill="#60a5fa"/><circle cx="15" cy="12" r="2" fill="#60a5fa"/><circle cx="24" cy="5" r="2" fill="#60a5fa"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="waterfall"
+              aria-pressed="false" title="Waterfall chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 27h24M5 8h6v7H5zm8 7h6v8h-6zm8-5h6v13h-6z" fill="currentColor"/><path d="M11 15h2m6 0h2" stroke="#60a5fa" stroke-width="2"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="funnel"
+              aria-pressed="false" title="Funnel chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 5h26l-4 6H7zm5 8h16l-4 6h-8zm5 8h6v6h-6z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="treemap"
+              aria-pressed="false" title="Treemap">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4h24v24H4zm2 2v12h10V6zm12 0v7h8V6zm0 9v11h8V15zM6 20v6h10v-6z" fill="currentColor" fill-rule="evenodd"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="box"
+              aria-pressed="false" title="Box plot">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 16h5m12 0h5M10 9h12v14H10zM16 5v4m0 14v4M10 16h12" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="heatmap"
+              aria-pressed="false" title="Heatmap">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 4h7v7H4zm9 0h7v7h-7zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7zm9 0h7v7h-7zM4 22h7v7H4zm9 0h7v7h-7zm9 0h7v7h-7z" fill="currentColor"/><path d="M13 13h7v7h-7zM22 4h7v7h-7z" fill="#60a5fa"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="radar"
+              aria-pressed="false" title="Radar chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 12 9-5 15H9L4 12z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 8 7 6-3 8h-8l-3-8z" fill="#60a5fa" opacity=".7"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="gauge"
+              aria-pressed="false" title="Gauge">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 23a11 11 0 0 1 22 0" fill="none" stroke="currentColor" stroke-width="5"/><path d="m16 21 7-8" stroke="#60a5fa" stroke-width="2.5"/><circle cx="16" cy="21" r="2.5" fill="currentColor"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="bullet"
+              aria-pressed="false" title="Bullet chart">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 9h24v14H4z" fill="#cbd5e1"/><path d="M4 13h17v6H4z" fill="currentColor"/><path d="M24 7v18" stroke="#60a5fa" stroke-width="3"/></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="card"
+              aria-pressed="false" title="KPI card">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><text x="16" y="20" text-anchor="middle" fill="currentColor" font-size="11" font-weight="800">123</text></svg>
+            </button>
+            <button type="button" class="chart-choice" data-chart-type="table"
+              aria-pressed="false" title="Table">
+              <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 5h24v22H4zM6 7v4h20V7zm0 6v5h8v-5zm10 0v5h10v-5zM6 20v5h8v-5zm10 0v5h10v-5z" fill="currentColor"/></svg>
+            </button>
+          </div>
+
+          <h2>Build visual</h2>
+          <div class="axis-wells">
+            <div class="axis-well">
+              <label for="x-axis-zone">X-axis</label>
+              <div class="drop-zone" id="x-axis-zone" data-drop-zone="x">
+                <span class="axis-placeholder">Drop a category, date, or number</span>
+              </div>
+            </div>
+            <div class="axis-well">
+              <label for="y-axis-zone">Y-axis</label>
+              <div class="drop-zone" id="y-axis-zone" data-drop-zone="y">
+                <span class="axis-placeholder">Drop a numeric field</span>
+              </div>
+            </div>
+            <div class="axis-well">
+              <label for="legend-zone">Legend</label>
+              <div class="drop-zone" id="legend-zone" data-drop-zone="series">
+                <span class="axis-placeholder">Drop a category to split the values</span>
+              </div>
+            </div>
+            <div class="axis-well">
+              <label for="size-zone">Size</label>
+              <div class="drop-zone" id="size-zone" data-drop-zone="size">
+                <span class="axis-placeholder">Drop a positive numeric field for bubbles</span>
+              </div>
+            </div>
+            <div class="axis-well" id="secondary-y-axis-well" hidden>
+              <label for="secondary-y-zone">Secondary Y</label>
+              <div class="drop-zone" id="secondary-y-zone" data-drop-zone="secondary_y">
+                <span class="axis-placeholder">Drop the numeric line value</span>
+              </div>
+            </div>
+          </div>
+          <section class="chart-settings" aria-labelledby="chart-settings-heading">
+            <h2 id="chart-settings-heading">Chart settings</h2>
+            <div class="setting-field" id="pareto-line-setting" hidden>
+              <label for="pareto-line-mode">Pareto line</label>
+              <select id="pareto-line-mode">
+                <option value="cumulative_percent">Cumulative percentage</option>
+                <option value="cumulative_value">Cumulative value</option>
+                <option value="individual_percent">Individual percentage</option>
+                <option value="none">Hide line</option>
+              </select>
+            </div>
+            <div class="setting-field" id="target-setting" hidden>
+              <label for="target-value">Target value</label>
+              <input id="target-value" type="number" min="0.000001" step="any"
+                placeholder="Enter a positive target">
+            </div>
+            <p class="panel-help" id="no-chart-settings">Select a chart with configurable settings.</p>
+          </section>
+          <p class="tip">Tip: clicking a field assigns it to the section where it appears. Drag it when you want a different role.</p>
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>

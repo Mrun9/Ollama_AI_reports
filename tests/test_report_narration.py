@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from insight_reporter import report_narration
 from insight_reporter.manual_visualization_evidence import (
     ManualVisualizationEvidence,
 )
@@ -285,11 +286,12 @@ def test_narration_synthesizes_story_packs_and_is_traceable(
     assert len({row["workflow_run_id"] for row in metric_rows}) == 1
     assert all(row["status"] == "validated" for row in metric_rows)
     assert report.generation_diagnostics == {
-        "schema_version": 1,
+        "schema_version": 2,
         "story_pack_count": 2,
         "ai_story_count": 2,
         "fallback_story_count": 0,
         "rejected_story_ids": [],
+        "oversized_story_ids": [],
         "executive_summary_source": "ollama",
         "validation_policy": {
             "exact_numeric_grounding": True,
@@ -1231,8 +1233,33 @@ def test_one_invalid_story_does_not_discard_valid_synthesis() -> None:
     assert report.stories[1].fact_references
 
 
-def test_manual_visualization_evidence_receives_safe_commentary() -> None:
-    manual_evidence = ManualVisualizationEvidence(
+def _manual_visualization_with_saved_insights() -> ManualVisualizationEvidence:
+    long_insight = (
+        "Review this validated pattern with the relevant business owners "
+        "and compare it with the next reporting period before deciding "
+        "whether operational follow-up is warranted. "
+    ) * 4
+    saved_insights = tuple(
+        {
+            "confidence": "high",
+            "measure": "Saved visualization",
+            "observation": {
+                "fact_id": f"VF-{index}",
+                "finding": long_insight,
+                "insight_id": "VIZI-CCCCCCCCCCCCCCCC",
+                "interpretation_source": (
+                    "python_fact_with_ollama_interpretation"
+                ),
+                "management_implication": long_insight,
+                "question": "Which validated pattern merits review?",
+                "suggested_action": long_insight,
+            },
+            "record_count": None,
+            "type": "user_requested_visualization_insight",
+        }
+        for index in range(1, 6)
+    )
+    return ManualVisualizationEvidence(
         schema_version=1,
         id="MVE-AAAAAAAAAAAAAAAA",
         visualization_id="VIS-BBBBBBBBBBBBBBBB",
@@ -1256,13 +1283,124 @@ def test_manual_visualization_evidence_receives_safe_commentary() -> None:
         observations=(
             {
                 "type": "displayed_extremes",
-                "highest": {"label": "Platform A", "value": 8.5},
+                "observation": {
+                    "highest": {"x": "Platform A", "value": 8.5},
+                    "lowest": {"x": "Platform B", "value": 3.5},
+                },
             },
+            *saved_insights,
         ),
         supporting_data=(),
         supporting_data_omitted_count=0,
         limitations=(
             "Observations are descriptive and do not establish causation.",
+        ),
+    )
+
+
+def test_oversized_saved_insights_are_shortened_before_narration() -> None:
+    manual_evidence = _manual_visualization_with_saved_insights()
+    package = replace(
+        _package(record_count=0),
+        manual_visualization_evidence=(manual_evidence,),
+    )
+    client = FakeClient()
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=client,
+    )
+
+    assert report.stories[0].narration_source == "ollama"
+    story_prompt = client.calls[0]["messages"][1]["content"]
+    prompt_payload = json.loads(story_prompt.split("\n", maxsplit=1)[1])
+    assert prompt_payload["input_compaction"]["applied"] is True
+    assert len(story_prompt.split("\n", maxsplit=1)[1]) <= 10_000
+    facts = prompt_payload["evidence"][0]["qualitative_facts"]
+    saved = [
+        fact
+        for fact in facts
+        if fact.get("type") == "user_requested_visualization_insight"
+    ]
+    assert len(saved) == 5
+    assert sum("question" in fact["observation"] for fact in saved) == 1
+    assert all(
+        len(value) <= 160
+        for fact in saved
+        for value in fact["observation"].values()
+    )
+
+
+def test_story_that_remains_oversized_uses_deterministic_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(report_narration, "_MAX_BATCH_CHARACTERS", 4_000)
+    manual_evidence = _manual_visualization_with_saved_insights()
+    package = replace(
+        _package(record_count=1),
+        manual_visualization_evidence=(manual_evidence,),
+    )
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+
+    stories_by_evidence = {
+        story.evidence_ids[0]: story for story in report.stories
+    }
+    assert stories_by_evidence["EVD-0000000000000001"].narration_source == (
+        "ollama"
+    )
+    fallback = stories_by_evidence[manual_evidence.id]
+    assert fallback.narration_source == "deterministic_only"
+    assert report.generation_diagnostics["rejected_story_ids"] == []
+    assert report.generation_diagnostics["oversized_story_ids"] == [
+        fallback.story_id
+    ]
+
+
+def test_report_with_only_an_oversized_story_remains_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(report_narration, "_MAX_BATCH_CHARACTERS", 4_000)
+    package = replace(
+        _package(record_count=0),
+        manual_visualization_evidence=(
+            _manual_visualization_with_saved_insights(),
+        ),
+    )
+
+    report = generate_narrated_report(
+        package,
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+
+    assert report.stories[0].narration_source == "deterministic_only"
+    assert report.ai_narrated_evidence_ids == ()
+    assert report.generation_diagnostics["rejected_story_ids"] == []
+    assert report.generation_diagnostics["oversized_story_ids"] == [
+        report.stories[0].story_id
+    ]
+
+
+def test_manual_visualization_evidence_receives_safe_commentary() -> None:
+    manual_evidence = replace(
+        _manual_visualization_with_saved_insights(),
+        observations=(
+            {
+                "type": "displayed_extremes",
+                "highest": {"label": "Platform A", "value": 8.5},
+            },
         ),
     )
     package = replace(

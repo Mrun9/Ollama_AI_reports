@@ -6,10 +6,11 @@ import hashlib
 import json
 import re
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from insight_reporter.business_config import BusinessConfiguration
+from insight_reporter.manual_visualization_store import ManualVisualizationArtifact
 from insight_reporter.visualization_builder import VisualizationArtifact
 
 AUDIENCES = ("executive", "management", "analyst", "general")
@@ -49,6 +50,10 @@ _REPORT_KEYS_V2 = _REPORT_KEYS_V1 | {
     "company_name",
     "report_author",
 }
+_REPORT_KEYS_V3 = _REPORT_KEYS_V2 | {
+    "manual_board_sha256s",
+    "selected_manual_board_ids",
+}
 
 
 class ReportConfigurationError(ValueError):
@@ -75,6 +80,8 @@ class ReportConfiguration:
     selected_metric_ids: tuple[str, ...]
     selected_evidence_ids: tuple[str, ...]
     selected_visualization_ids: tuple[str, ...]
+    manual_board_sha256s: dict[str, str] = field(default_factory=dict)
+    selected_manual_board_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -100,6 +107,8 @@ class ReportConfiguration:
             "selected_visualization_ids": list(
                 self.selected_visualization_ids
             ),
+            "manual_board_sha256s": self.manual_board_sha256s,
+            "selected_manual_board_ids": list(self.selected_manual_board_ids),
         }
 
 
@@ -120,6 +129,8 @@ def validate_report_configuration(
     selected_visualization_ids: list[str],
     company_name: object = "",
     report_author: object = "",
+    manual_boards: tuple[ManualVisualizationArtifact, ...] = (),
+    selected_manual_board_ids: list[str] | None = None,
 ) -> ReportConfiguration:
     """Validate report selections against current, revalidated artifacts."""
 
@@ -255,6 +266,31 @@ def validate_report_configuration(
             )
     ordered_visualization_ids = tuple(sorted(visualization_ids))
 
+    manual_board_ids = _unique_selection(
+        selected_manual_board_ids or [],
+        label="Manual board visualization",
+        maximum=_MAX_VISUALIZATION_SELECTIONS,
+    )
+    eligible_manual_boards = {
+        artifact.visualization_id: artifact for artifact in manual_boards
+    }
+    if any(
+        visualization_id not in eligible_manual_boards
+        for visualization_id in manual_board_ids
+    ):
+        raise ReportConfigurationError(
+            "Report manual-board visualizations are unavailable or stale."
+        )
+    if any(
+        eligible_manual_boards[visualization_id].png_filename is None
+        for visualization_id in manual_board_ids
+    ):
+        raise ReportConfigurationError(
+            "Reopen and save older manual-board visualizations before selecting "
+            "them for a report. This creates the PNG required for PDF export."
+        )
+    ordered_manual_board_ids = tuple(sorted(manual_board_ids))
+
     sources = tuple(source.to_dict() for source in configuration.sources)
     if evidence_ids and (
         evidence_payload is None
@@ -269,9 +305,18 @@ def validate_report_configuration(
             eligible_visualizations[visualization_id],
             sources=sources,
         )
+    for visualization_id in ordered_manual_board_ids:
+        if not any(
+            eligible_manual_boards[visualization_id].source_sha256
+            == source.get("sha256")
+            for source in sources
+        ):
+            raise ReportConfigurationError(
+                "Selected manual-board visualization does not match the current report sources."
+            )
 
     return ReportConfiguration(
-        schema_version=2,
+        schema_version=3,
         dataset_id=configuration.dataset_id,
         sources=sources,
         business_configuration_sha256=artifact_sha256(
@@ -300,6 +345,13 @@ def validate_report_configuration(
         selected_metric_ids=ordered_metric_ids,
         selected_evidence_ids=ordered_evidence_ids,
         selected_visualization_ids=ordered_visualization_ids,
+        manual_board_sha256s={
+            visualization_id: artifact_sha256(
+                eligible_manual_boards[visualization_id].to_dict()
+            )
+            for visualization_id in ordered_manual_board_ids
+        },
+        selected_manual_board_ids=ordered_manual_board_ids,
     )
 
 
@@ -338,6 +390,7 @@ def load_report_configuration(
     configuration: BusinessConfiguration,
     evidence_payload: dict[str, object] | None,
     visualizations: tuple[VisualizationArtifact, ...],
+    manual_boards: tuple[ManualVisualizationArtifact, ...] = (),
 ) -> ReportConfiguration:
     """Load and revalidate a saved report selection against current artifacts."""
 
@@ -357,6 +410,8 @@ def load_report_configuration(
         if schema_version == 1
         else _REPORT_KEYS_V2
         if schema_version == 2
+        else _REPORT_KEYS_V3
+        if schema_version == 3
         else frozenset()
     )
     if (
@@ -378,6 +433,10 @@ def load_report_configuration(
         payload.get("selected_visualization_ids"),
         "saved visualization selections",
     )
+    selected_manual_board_ids = _string_list(
+        payload.get("selected_manual_board_ids", []),
+        "saved manual-board visualization selections",
+    )
     candidate = validate_report_configuration(
         configuration,
         evidence_payload=evidence_payload,
@@ -396,14 +455,26 @@ def load_report_configuration(
         selected_visualization_ids=selected_visualization_ids,
         company_name=payload.get("company_name", ""),
         report_author=payload.get("report_author", ""),
+        manual_boards=manual_boards,
+        selected_manual_board_ids=selected_manual_board_ids,
     )
     normalized_payload = dict(payload)
     if schema_version == 1:
         normalized_payload.update(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "company_name": "",
                 "report_author": "",
+                "manual_board_sha256s": {},
+                "selected_manual_board_ids": [],
+            }
+        )
+    elif schema_version == 2:
+        normalized_payload.update(
+            {
+                "schema_version": 3,
+                "manual_board_sha256s": {},
+                "selected_manual_board_ids": [],
             }
         )
     if candidate.to_dict() != normalized_payload:

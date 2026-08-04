@@ -152,7 +152,7 @@ def test_report_selection_is_ordered_traceable_and_round_trips(
     )
 
     assert loaded == report
-    assert loaded.schema_version == 2
+    assert loaded.schema_version == 3
     assert loaded.sources == tuple(
         source.to_dict() for source in configuration.sources
     )
@@ -186,6 +186,8 @@ def test_previous_report_configuration_loads_with_empty_branding(
     payload["schema_version"] = 1
     payload.pop("company_name")
     payload.pop("report_author")
+    payload.pop("manual_board_sha256s")
+    payload.pop("selected_manual_board_ids")
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     loaded = load_report_configuration(
@@ -195,7 +197,7 @@ def test_previous_report_configuration_loads_with_empty_branding(
         visualizations=visualizations,
     )
 
-    assert loaded.schema_version == 2
+    assert loaded.schema_version == 3
     assert loaded.company_name == ""
     assert loaded.report_author == ""
 

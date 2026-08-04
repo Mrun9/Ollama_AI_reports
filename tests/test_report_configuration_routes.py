@@ -1,8 +1,11 @@
 """Milestone 5A report-configuration route and HTML-safety tests."""
 
+import base64
 import io
 import json
 import re
+import struct
+import zlib
 from pathlib import Path
 
 from flask import Flask
@@ -196,6 +199,57 @@ def _save_manual_visualization(
     return saved.headers["Location"].rsplit("/", 1)[-1]
 
 
+def _png_data_url() -> str:
+    def chunk(name: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload))
+            + name
+            + payload
+            + struct.pack(">I", zlib.crc32(name + payload) & 0xFFFFFFFF)
+        )
+
+    width, height = 800, 460
+    rows = b"".join(b"\x00" + b"\xff\xff\xff" * width for _ in range(height))
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+
+
+def _save_manual_board(client: FlaskClient, dataset_id: str) -> str:
+    response = client.post(
+        f"/visualizations/{dataset_id}/manual/save",
+        json={
+            "visualization_id": None,
+            "title": "Manual revenue board",
+            "chart": "column",
+            "fields": {
+                "x": "segment",
+                "y": "revenue",
+                "series": None,
+                "size": None,
+                "secondary_y": None,
+            },
+            "settings": {
+                "pareto_line": "cumulative_percent",
+                "target": None,
+            },
+            "svg": (
+                '<svg viewBox="0 0 800 460" role="img">'
+                "<title>Manual revenue board</title>"
+                '<rect x="20" y="20" width="200" height="100" fill="#2563eb"/>'
+                "</svg>"
+            ),
+            "png": _png_data_url(),
+        },
+    )
+    assert response.status_code == 201
+    return response.get_json()["visualization_id"]
+
+
 def test_report_configuration_selects_and_escapes_current_assets(
     app: Flask,
     client: FlaskClient,
@@ -321,6 +375,168 @@ def test_report_configuration_selects_and_escapes_current_assets(
     assert package_response.status_code == 200
     assert package_response.json == package
 
+
+def test_manual_board_is_report_selectable_grounded_and_exported(
+    app: Flask,
+    client: FlaskClient,
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    dataset_id = _upload_and_configure(client)
+    configuration = json.loads(
+        (
+            Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json"
+        ).read_text(encoding="utf-8")
+    )
+    metric_id = configuration["primary_metric_id"]
+    manual_board_id = _save_manual_board(client, dataset_id)
+
+    dashboard = client.get(f"/workspaces/{dataset_id}/dashboard")
+    png_url = f"/visualizations/{dataset_id}/manual/{manual_board_id}/chart.png"
+    assert dashboard.status_code == 200
+    assert f'src="{png_url}"'.encode("ascii") in dashboard.data
+    assert b'class="manual-chart-image"' in dashboard.data
+    assert b'width="800"' in dashboard.data
+    assert b'height="460"' in dashboard.data
+    png = client.get(png_url)
+    assert png.status_code == 200
+    assert png.mimetype == "image/png"
+    assert png.data.startswith(b"\x89PNG\r\n\x1a\n")
+
+    initial_detail = client.get(
+        f"/visualizations/{dataset_id}/manual/{manual_board_id}"
+    )
+    assert initial_detail.status_code == 200
+    assert b"Insights from this visualization" in initial_detail.data
+    assert b"Supporting data" in initial_detail.data
+    assert b"Include these saved insights in reports" in initial_detail.data
+    assert b"North" in initial_detail.data
+    assert b"South" in initial_detail.data
+
+    insight_response = client.post(
+        f"/visualizations/{dataset_id}/manual/{manual_board_id}/insights",
+        data={
+            "question": "Which segment should management review?",
+            "include_in_reports": "yes",
+        },
+    )
+    assert insight_response.status_code == 303
+    insight_detail = client.get(insight_response.headers["Location"])
+    assert insight_detail.status_code == 200
+    assert b"Saved management findings" in insight_detail.data
+    assert b"Included when this manual-board visualization" in insight_detail.data
+    insight_path = (
+        Path(app.config["VISUALIZATION_INSIGHT_DIR"])
+        / dataset_id
+        / f"{manual_board_id}.json"
+    )
+    saved_insight = json.loads(insight_path.read_text(encoding="utf-8"))
+    assert saved_insight["visualization_id"] == manual_board_id
+    assert saved_insight["include_in_reports"] is True
+    assert saved_insight["points"]
+
+    form = client.get(f"/reports/{dataset_id}/configure")
+    assert form.status_code == 200
+    assert b"Saved manual-board visualizations" in form.data
+    assert manual_board_id.encode("ascii") in form.data
+    assert b"Manual revenue board" in form.data
+    assert b"grounded finding(s) will" in form.data
+    assert b"accompany this board into the report" in form.data
+
+    saved = client.post(
+        f"/reports/{dataset_id}/configure",
+        data={
+            "title": "Manual board report",
+            "business_objective": "Review manual revenue analysis.",
+            "audience": "management",
+            "tone": "professional",
+            "detail_level": "standard",
+            "user_notes": "",
+            "selected_metric_ids": [metric_id],
+            "selected_manual_board_ids": [manual_board_id],
+        },
+    )
+    assert saved.status_code == 303
+    report_configuration = json.loads(
+        (
+            Path(app.config["REPORT_CONFIGURATION_DIR"]) / f"{dataset_id}.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert report_configuration["schema_version"] == 3
+    assert report_configuration["selected_manual_board_ids"] == [manual_board_id]
+    assert len(report_configuration["manual_board_sha256s"][manual_board_id]) == 64
+
+    package = client.get(f"/reports/{dataset_id}/package")
+    assert package.status_code == 200
+    board_evidence = package.json["manual_visualization_evidence"][0]
+    assert board_evidence["visualization_id"] == manual_board_id
+    assert board_evidence["classification"] == "manual_board"
+    assert board_evidence["observations"][0]["type"] == "displayed_extremes"
+    requested_insights = [
+        observation
+        for observation in board_evidence["observations"]
+        if observation["type"] == "user_requested_visualization_insight"
+    ]
+    assert len(requested_insights) == len(saved_insight["points"])
+    assert requested_insights[0]["observation"]["question"] == (
+        "Which segment should management review?"
+    )
+    assert package.json["omissions"]["included_visualization_insight_count"] == 1
+    assert package.json["model_input_policy"]["raw_dataset_rows_included"] is False
+
+    def fake_generate(package, **kwargs):  # type: ignore[no-untyped-def]
+        return generate_narrated_report(
+            package,
+            model=kwargs["model"],
+            host=kwargs["host"],
+            timeout_seconds=kwargs["timeout_seconds"],
+            client=_FakeNarrationClient(),
+        )
+
+    monkeypatch.setattr(
+        "insight_reporter.routes.generate_narrated_report",
+        fake_generate,
+    )
+    generated = client.post(f"/reports/{dataset_id}/generate")
+    assert generated.status_code == 303
+    page = client.get(generated.headers["Location"])
+    assert page.status_code == 200
+    assert f"/manual/{manual_board_id}/chart".encode("ascii") in page.data
+    generated_json = client.get(f"{generated.headers['Location']}/json").get_json()
+    item = next(
+        item for item in generated_json["items"]
+        if item["visualization_id"] == manual_board_id
+    )
+    assert item["evidence_kind"] == "manual_visualization"
+    pdf = client.get(f"{generated.headers['Location']}/pdf")
+    assert pdf.status_code == 200
+    assert pdf.data.startswith(b"%PDF-")
+    snapshot = (
+        Path(app.config["GENERATED_REPORT_ASSET_DIR"])
+        / dataset_id
+        / f"V0001-{generated_json['report_id']}"
+        / f"{item['evidence_id']}.png"
+    )
+    assert snapshot.is_file()
+    assert snapshot.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+    excluded = client.post(
+        (
+            f"/visualizations/{dataset_id}/manual/{manual_board_id}"
+            "/insights/report-inclusion"
+        ),
+        data={},
+    )
+    assert excluded.status_code == 303
+    excluded_insight = json.loads(insight_path.read_text(encoding="utf-8"))
+    assert excluded_insight["include_in_reports"] is False
+    excluded_package = client.get(f"/reports/{dataset_id}/package")
+    assert excluded_package.status_code == 200
+    assert all(
+        observation["type"] != "user_requested_visualization_insight"
+        for observation in excluded_package.json["manual_visualization_evidence"][0][
+            "observations"
+        ]
+    )
 
 def test_default_report_selection_is_bounded_and_excludes_diagnostics(
     app: Flask,

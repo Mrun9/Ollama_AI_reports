@@ -103,6 +103,19 @@ from insight_reporter.insight_engine import (
     generate_insights,
     save_insight_report,
 )
+from insight_reporter.manual_visualization_preview import (
+    ManualVisualizationPreviewError,
+    build_manual_visualization_preview,
+)
+from insight_reporter.manual_visualization_store import (
+    ManualVisualizationArtifact,
+    ManualVisualizationStoreError,
+    list_manual_visualizations,
+    load_manual_visualization,
+    manual_visualization_png_path,
+    manual_visualization_svg_path,
+    save_manual_visualization,
+)
 from insight_reporter.navigation_state import (
     NavigationStateError,
     load_navigation_state,
@@ -168,6 +181,18 @@ from insight_reporter.visualization_builder import (
     save_visualization,
     spec_to_form,
 )
+from insight_reporter.visualization_insights import (
+    VisualizationInsightArtifact,
+    VisualizationInsightError,
+    generate_visualization_insight,
+    load_visualization_insight,
+    save_visualization_insight,
+    set_visualization_insight_report_inclusion,
+)
+from insight_reporter.visualization_suggestions import (
+    VisualizationSuggestionError,
+    generate_visualization_suggestion,
+)
 from insight_reporter.workspace_history import (
     WorkspaceDirectories,
     WorkspaceHistoryError,
@@ -219,12 +244,8 @@ def workspace_history():  # type: ignore[no-untyped-def]
         abort(422, description=str(error))
     return render_template(
         "workspaces.html",
-        workspaces=tuple(
-            item for item in all_workspaces if not item.record.is_archived
-        ),
-        archived_workspaces=tuple(
-            item for item in all_workspaces if item.record.is_archived
-        ),
+        workspaces=tuple(item for item in all_workspaces if not item.record.is_archived),
+        archived_workspaces=tuple(item for item in all_workspaces if item.record.is_archived),
     )
 
 
@@ -265,9 +286,7 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
     try:
         report_versions = list_generated_report_versions(
             dataset_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         )
     except ReportNarrationError as error:
         abort(422, description=str(error))
@@ -285,9 +304,7 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
         if report_id in workspace.record.archived_report_ids
     )
     configuration_ready = _configuration_path(dataset_id).is_file()
-    evidence_ready = (
-        Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
-    ).is_file()
+    evidence_ready = (Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json").is_file()
     visualization_count = 0
     configuration = None
     if workspace.record.has_source:
@@ -297,18 +314,25 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
                 dataset_id,
                 profile,
             )
-            visualization_count = len(
+            automated_count = len(
                 list_visualizations(
                     dataset_id=dataset_id,
-                    visualization_dir=Path(
-                        current_app.config["VISUALIZATION_DIR"]
-                    ),
+                    visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
                     profile=profile,
                     configuration=configuration,
                 )
             )
+            manual_count = len(
+                list_manual_visualizations(
+                    dataset_id=dataset_id,
+                    source_sha256=profile.source_sha256,
+                    visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+                )
+            )
+            visualization_count = automated_count + manual_count
         except (
             BusinessConfigurationError,
+            ManualVisualizationStoreError,
             VisualizationError,
         ):
             visualization_count = 0
@@ -323,9 +347,7 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
         configuration=configuration,
         evidence_ready=evidence_ready,
         visualization_count=visualization_count,
-        report_configuration_ready=_report_configuration_path(
-            dataset_id
-        ).is_file(),
+        report_configuration_ready=_report_configuration_path(dataset_id).is_file(),
     )
 
 
@@ -416,9 +438,7 @@ def add_workspace_source(dataset_id: str):  # type: ignore[no-untyped-def]
     if workspace.record.has_source:
         abort(409, description="This workspace already has a data source.")
     uploaded_files = [
-        item
-        for field_name in request.files
-        for item in request.files.getlist(field_name)
+        item for field_name in request.files for item in request.files.getlist(field_name)
     ]
     if len(uploaded_files) != 1 or "file" not in request.files:
         abort(
@@ -444,14 +464,11 @@ def add_workspace_source(dataset_id: str):  # type: ignore[no-untyped-def]
         )
     except (DatasetValidationError, WorkspaceHistoryError) as error:
         if result is not None:
-            (
-                Path(current_app.config["UPLOAD_DIR"])
-                / result.internal_filename
-            ).unlink(missing_ok=True)
+            (Path(current_app.config["UPLOAD_DIR"]) / result.internal_filename).unlink(
+                missing_ok=True
+            )
         abort(
-            error.status_code
-            if isinstance(error, DatasetValidationError)
-            else 400,
+            error.status_code if isinstance(error, DatasetValidationError) else 400,
             description=str(error),
         )
     assert result is not None
@@ -646,9 +663,7 @@ def upload_dataset():  # type: ignore[no-untyped-def]
     """Validate, retain, and preview exactly one supported dataset file."""
 
     uploaded_files = [
-        item
-        for field_name in request.files
-        for item in request.files.getlist(field_name)
+        item for field_name in request.files for item in request.files.getlist(field_name)
     ]
     if len(uploaded_files) != 1 or "file" not in request.files:
         return _redirect_with_state(
@@ -683,10 +698,7 @@ def upload_dataset():  # type: ignore[no-untyped-def]
             workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
         )
     except WorkspaceHistoryError as error:
-        (
-            Path(current_app.config["UPLOAD_DIR"])
-            / result.internal_filename
-        ).unlink(missing_ok=True)
+        (Path(current_app.config["UPLOAD_DIR"]) / result.internal_filename).unlink(missing_ok=True)
         current_app.logger.error(
             "Workspace metadata could not be created: id=%s",
             result.internal_filename,
@@ -725,9 +737,7 @@ def upload_dataset():  # type: ignore[no-untyped-def]
             preview_rows=int(current_app.config["CSV_PREVIEW_ROWS"]),
         )
     except (DatasetProfileError, DatasetValidationError, DatasetViewError) as error:
-        current_app.logger.error(
-            "Accepted dataset could not be profiled: id=%s", dataset_id
-        )
+        current_app.logger.error("Accepted dataset could not be profiled: id=%s", dataset_id)
         return _redirect_with_state(
             "core.upload_form",
             {"view": "upload", "error": str(error), "status_code": 422},
@@ -741,12 +751,11 @@ def dataset_profile(dataset_id: str):  # type: ignore[no-untyped-def]
     """Display a stable GET page for an uploaded dataset and transient UI results."""
 
     dataset_path = _dataset_path(dataset_id)
-    if dataset_path.suffix == ".xlsx" and load_xlsx_selection(
-        Path(current_app.config["UPLOAD_DIR"]), dataset_id
-    ) is None:
-        return redirect(
-            url_for("core.excel_sheet_selection", dataset_id=dataset_id), code=303
-        )
+    if (
+        dataset_path.suffix == ".xlsx"
+        and load_xlsx_selection(Path(current_app.config["UPLOAD_DIR"]), dataset_id) is None
+    ):
+        return redirect(url_for("core.excel_sheet_selection", dataset_id=dataset_id), code=303)
     profile = _load_profile(dataset_id)
     state = _load_view_state("profile", dataset_id=dataset_id)
     return _render_profile(
@@ -759,9 +768,7 @@ def dataset_profile(dataset_id: str):  # type: ignore[no-untyped-def]
         rejected_suggestion_count=_state_count(state, "rejected_suggestion_count"),
         derived_suggestions=_state_list(state, "derived_suggestions"),
         derived_suggestion_error=_state_text(state, "derived_suggestion_error"),
-        rejected_derived_suggestion_count=_state_count(
-            state, "rejected_derived_suggestion_count"
-        ),
+        rejected_derived_suggestion_count=_state_count(state, "rejected_derived_suggestion_count"),
         review_notice=_state_text(state, "review_notice"),
         status_code=_state_status(state),
     )
@@ -813,9 +820,7 @@ def select_excel_sheet(dataset_id: str):  # type: ignore[no-untyped-def]
             size_bytes=path.stat().st_size,
             preview_rows=int(current_app.config["CSV_PREVIEW_ROWS"]),
         )
-        save_xlsx_selection(
-            Path(current_app.config["UPLOAD_DIR"]), dataset_id, table_name
-        )
+        save_xlsx_selection(Path(current_app.config["UPLOAD_DIR"]), dataset_id, table_name)
     except (DatasetValidationError, DatasetViewError, DatasetProfileError) as error:
         return _redirect_with_state(
             "core.excel_sheet_selection",
@@ -845,9 +850,7 @@ def suggest_configurations(dataset_id: str):  # type: ignore[no-untyped-def]
     try:
         existing = _load_existing_configuration(dataset_id, profile)
         excluded_kpis = (
-            tuple(metric.name for metric in existing.metrics)
-            if existing is not None
-            else ()
+            tuple(metric.name for metric in existing.metrics) if existing is not None else ()
         )
         batch = generate_configuration_suggestions(
             profile,
@@ -856,9 +859,7 @@ def suggest_configurations(dataset_id: str):  # type: ignore[no-untyped-def]
             host=str(current_app.config["OLLAMA_HOST"]),
             timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
             excluded_kpis=excluded_kpis,
-            metrics_dir=Path(
-                current_app.config["MODEL_RUN_METRICS_DIR"]
-            ),
+            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
         )
     except (BusinessConfigurationError, ConfigurationSuggestionError) as error:
         current_app.logger.warning(
@@ -867,9 +868,7 @@ def suggest_configurations(dataset_id: str):  # type: ignore[no-untyped-def]
             current_app.config["OLLAMA_MODEL"],
             error,
         )
-        return _redirect_profile_state(
-            dataset_id, suggestion_error=str(error), status_code=503
-        )
+        return _redirect_profile_state(dataset_id, suggestion_error=str(error), status_code=503)
 
     current_app.logger.info(
         "Local configuration suggestions generated: id=%s accepted=%d rejected=%d model=%s",
@@ -900,23 +899,14 @@ def review_suggestion(dataset_id: str):  # type: ignore[no-untyped-def]
                 kpi_direction=request.form.get("kpi_direction", ""),
                 date_column=request.form.get("date_column", ""),
                 category_columns=request.form.getlist("category_columns"),
-                target_or_benchmark=request.form.get(
-                    "target_or_benchmark", ""
-                ),
+                target_or_benchmark=request.form.get("target_or_benchmark", ""),
                 target_scope=request.form.get("target_scope", "row") or "row",
-                business_objective=request.form.get(
-                    "business_objective", ""
-                ),
+                business_objective=request.form.get("business_objective", ""),
                 aggregation=request.form.get("aggregation", "sum") or "sum",
-                display_format=(
-                    request.form.get("display_format", "number") or "number"
-                ),
+                display_format=(request.form.get("display_format", "number") or "number"),
             )
             form_data = request.form.copy()
-            notice = (
-                "AI suggestion loaded. Review or edit every field before "
-                "confirming."
-            )
+            notice = "AI suggestion loaded. Review or edit every field before confirming."
         else:
             form_data = request.form.copy()
             suggested_kpi = request.form.get("primary_kpi", "")
@@ -928,16 +918,10 @@ def review_suggestion(dataset_id: str):  # type: ignore[no-untyped-def]
                 existing_configuration=existing,
                 date_column=request.form.get("date_column", ""),
                 category_columns=request.form.getlist("category_columns"),
-                business_objective=request.form.get(
-                    "business_objective", ""
-                ),
-                target_or_benchmark=request.form.get(
-                    "target_or_benchmark", ""
-                ),
+                business_objective=request.form.get("business_objective", ""),
+                target_or_benchmark=request.form.get("target_or_benchmark", ""),
                 aggregation=request.form.get("aggregation", "sum") or "sum",
-                display_format=(
-                    request.form.get("display_format", "number") or "number"
-                ),
+                display_format=(request.form.get("display_format", "number") or "number"),
                 target_scope=request.form.get("target_scope", "row") or "row",
             )
             form_data.pop("primary_kpi", None)
@@ -973,9 +957,7 @@ def suggest_derived_kpis(dataset_id: str):  # type: ignore[no-untyped-def]
             model=str(current_app.config["OLLAMA_MODEL"]),
             host=str(current_app.config["OLLAMA_HOST"]),
             timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
-            metrics_dir=Path(
-                current_app.config["MODEL_RUN_METRICS_DIR"]
-            ),
+            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
             dataset_id=dataset_id,
         )
     except DerivedKpiSuggestionError as error:
@@ -1043,9 +1025,7 @@ def derived_kpi_editor(dataset_id: str):  # type: ignore[no-untyped-def]
             preview=None,
             form_data=form_data,
             configuration_error=configuration_error or str(error),
-            status_code=(
-                _state_status(state, default=400) if configuration_error else 400
-            ),
+            status_code=(_state_status(state, default=400) if configuration_error else 400),
         )
 
     if (
@@ -1093,9 +1073,7 @@ def conditional_kpi_editor(dataset_id: str):  # type: ignore[no-untyped-def]
                 profile,
             ),
             calculation_bases=("record_count", "value_sum"),
-            target_scope_options=tuple(
-                scope for scope in TARGET_SCOPES if scope != "row"
-            ),
+            target_scope_options=tuple(scope for scope in TARGET_SCOPES if scope != "row"),
         ),
         _state_status(state),
     )
@@ -1116,52 +1094,34 @@ def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
                 kpi_direction=request.form.get("kpi_direction", ""),
                 date_column=request.form.get("date_column", ""),
                 category_columns=request.form.getlist("category_columns"),
-                target_or_benchmark=request.form.get(
-                    "target_or_benchmark", ""
-                ),
-                business_objective=request.form.get(
-                    "business_objective", ""
-                ),
+                target_or_benchmark=request.form.get("target_or_benchmark", ""),
+                business_objective=request.form.get("business_objective", ""),
                 secondary_kpis=request.form.getlist("secondary_kpis"),
                 aggregation=request.form.get("aggregation", "sum") or "sum",
-                display_format=(
-                    request.form.get("display_format", "number") or "number"
-                ),
+                display_format=(request.form.get("display_format", "number") or "number"),
                 target_scope=request.form.get("target_scope", "row") or "row",
             )
         else:
-            context_submitted = (
-                request.form.get("context_submitted", "") == "yes"
-            )
+            context_submitted = request.form.get("context_submitted", "") == "yes"
             configuration = add_source_metrics(
                 profile,
                 dataset_id=dataset_id,
                 source_columns=request.form.getlist("source_kpis"),
                 kpi_direction=request.form.get("kpi_direction", ""),
                 existing_configuration=existing,
-                date_column=(
-                    request.form.get("date_column", "")
-                    if context_submitted
-                    else None
-                ),
+                date_column=(request.form.get("date_column", "") if context_submitted else None),
                 category_columns=(
-                    request.form.getlist("category_columns")
-                    if context_submitted
-                    else None
+                    request.form.getlist("category_columns") if context_submitted else None
                 ),
                 business_objective=(
-                    request.form.get("business_objective", "")
-                    if context_submitted
-                    else None
+                    request.form.get("business_objective", "") if context_submitted else None
                 ),
                 target_or_benchmark=request.form.get(
                     "target_or_benchmark",
                     "",
                 ),
                 aggregation=request.form.get("aggregation", "sum") or "sum",
-                display_format=(
-                    request.form.get("display_format", "number") or "number"
-                ),
+                display_format=(request.form.get("display_format", "number") or "number"),
                 target_scope=request.form.get("target_scope", "row") or "row",
             )
     except BusinessConfigurationError as error:
@@ -1181,9 +1141,7 @@ def configure_dataset(dataset_id: str):  # type: ignore[no-untyped-def]
         dataset_id,
         configuration_path.name,
     )
-    return redirect(
-        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
-    )
+    return redirect(url_for("core.saved_configuration", dataset_id=dataset_id), code=303)
 
 
 @core.post("/configure-derived/<dataset_id>")
@@ -1248,9 +1206,7 @@ def configure_derived_kpi(dataset_id: str):  # type: ignore[no-untyped-def]
         configuration_path.name,
         metric.name,
     )
-    return redirect(
-        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
-    )
+    return redirect(url_for("core.saved_configuration", dataset_id=dataset_id), code=303)
 
 
 @core.post("/configure-conditional/<dataset_id>")
@@ -1272,13 +1228,9 @@ def configure_conditional_kpi(
                 "",
             ),
             condition_column=condition_column,
-            included_values=request.form.getlist(
-                f"included_values::{condition_column}"
-            ),
+            included_values=request.form.getlist(f"included_values::{condition_column}"),
             value_column=request.form.get("value_column", ""),
-            row_grain_confirmed=(
-                request.form.get("row_grain_confirmed", "") == "yes"
-            ),
+            row_grain_confirmed=(request.form.get("row_grain_confirmed", "") == "yes"),
             source_id=source_id_from_hash(
                 profile.source_sha256,
                 profile.source_table_name,
@@ -1304,15 +1256,11 @@ def configure_conditional_kpi(
                 profile,
             ),
             metric_role=request.form.get("metric_role", "secondary"),
-            target_scope=(
-                request.form.get("target_scope", "dataset") or "dataset"
-            ),
+            target_scope=(request.form.get("target_scope", "dataset") or "dataset"),
         )
         save_business_configuration(
             configuration,
-            configuration_dir=Path(
-                current_app.config["CONFIGURATION_DIR"]
-            ),
+            configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
         )
     except (ConditionalMetricError, BusinessConfigurationError) as error:
         return _redirect_with_state(
@@ -1337,9 +1285,7 @@ def saved_configuration(dataset_id: str):  # type: ignore[no-untyped-def]
     """Display a retained configuration from a stable GET URL."""
 
     profile = _load_profile(dataset_id)
-    configuration_path = Path(current_app.config["CONFIGURATION_DIR"]) / (
-        f"{dataset_id}.json"
-    )
+    configuration_path = Path(current_app.config["CONFIGURATION_DIR"]) / (f"{dataset_id}.json")
     if not configuration_path.is_file():
         abort(404)
     try:
@@ -1361,18 +1307,14 @@ def choose_primary_metric(dataset_id: str):  # type: ignore[no-untyped-def]
     profile = _load_profile(dataset_id)
     try:
         configuration = _require_configuration(dataset_id, profile)
-        configuration = set_primary_metric(
-            configuration, request.form.get("metric_id", "")
-        )
+        configuration = set_primary_metric(configuration, request.form.get("metric_id", ""))
         save_business_configuration(
             configuration,
             configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
         )
     except BusinessConfigurationError as error:
         return _redirect_configuration_error(dataset_id, str(error))
-    return redirect(
-        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
-    )
+    return redirect(url_for("core.saved_configuration", dataset_id=dataset_id), code=303)
 
 
 @core.post("/configuration/<dataset_id>/metric")
@@ -1397,9 +1339,7 @@ def edit_metric_settings(dataset_id: str):  # type: ignore[no-untyped-def]
         )
     except BusinessConfigurationError as error:
         return _redirect_configuration_error(dataset_id, str(error))
-    return redirect(
-        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
-    )
+    return redirect(url_for("core.saved_configuration", dataset_id=dataset_id), code=303)
 
 
 @core.post("/configuration/<dataset_id>/remove")
@@ -1409,18 +1349,14 @@ def remove_configured_metric(dataset_id: str):  # type: ignore[no-untyped-def]
     profile = _load_profile(dataset_id)
     try:
         configuration = _require_configuration(dataset_id, profile)
-        configuration = remove_metric(
-            configuration, request.form.get("metric_id", "")
-        )
+        configuration = remove_metric(configuration, request.form.get("metric_id", ""))
         save_business_configuration(
             configuration,
             configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
         )
     except BusinessConfigurationError as error:
         return _redirect_configuration_error(dataset_id, str(error))
-    return redirect(
-        url_for("core.saved_configuration", dataset_id=dataset_id), code=303
-    )
+    return redirect(url_for("core.saved_configuration", dataset_id=dataset_id), code=303)
 
 
 # Report selection, generation, publication, and export
@@ -1432,7 +1368,7 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        configuration, evidence, visualizations = _report_assets(
+        configuration, evidence, visualizations, manual_boards = _report_assets(
             dataset_id,
             profile,
         )
@@ -1450,6 +1386,7 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
                     configuration=configuration,
                     evidence_payload=evidence,
                     visualizations=visualizations,
+                    manual_boards=manual_boards,
                 )
                 form_data = _report_form_from_configuration(saved)
             except ReportConfigurationError as error:
@@ -1459,8 +1396,15 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
                 configuration,
                 evidence_payload=evidence,
                 visualizations=visualizations,
+                manual_boards=manual_boards,
             )
     evidence_records = _sorted_evidence_records(evidence)
+    visualization_insights = {
+        insight.visualization_id: insight
+        for insight in _load_visualization_insights(
+            (*visualizations, *manual_boards)
+        )
+    }
     return (
         render_template(
             "report_configuration_form.html",
@@ -1468,19 +1412,13 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
             configuration=configuration,
             evidence_records=evidence_records,
             finding_evidence_records=tuple(
-                record
-                for record in evidence_records
-                if _evidence_kind(record) == "finding"
+                record for record in evidence_records if _evidence_kind(record) == "finding"
             ),
             association_evidence_records=tuple(
-                record
-                for record in evidence_records
-                if _evidence_kind(record) == "association"
+                record for record in evidence_records if _evidence_kind(record) == "association"
             ),
             diagnostic_evidence_records=tuple(
-                record
-                for record in evidence_records
-                if _evidence_kind(record) == "diagnostic"
+                record for record in evidence_records if _evidence_kind(record) == "diagnostic"
             ),
             recommended_evidence_ids=frozenset(
                 _recommended_evidence_ids(
@@ -1489,6 +1427,8 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
                 )
             ),
             visualizations=visualizations,
+            manual_boards=manual_boards,
+            visualization_insights=visualization_insights,
             visualization_metric_requirements={
                 artifact.visualization_id: tuple(
                     measure.selector.removeprefix("metric:")
@@ -1498,10 +1438,7 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
                 for artifact in visualizations
                 if artifact.visualization_id is not None
             },
-            metric_names={
-                metric.metric_id: metric.name
-                for metric in configuration.metrics
-            },
+            metric_names={metric.metric_id: metric.name for metric in configuration.metrics},
             form_data=form_data,
             audiences=AUDIENCES,
             tones=TONES,
@@ -1519,7 +1456,7 @@ def configure_report(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        configuration, evidence, visualizations = _report_assets(
+        configuration, evidence, visualizations, manual_boards = _report_assets(
             dataset_id,
             profile,
         )
@@ -1530,37 +1467,31 @@ def configure_report(dataset_id: str):  # type: ignore[no-untyped-def]
             title=request.form.get("title", ""),
             company_name=request.form.get("company_name", ""),
             report_author=request.form.get("report_author", ""),
-            business_objective=request.form.get(
-                "business_objective", ""
-            ),
+            business_objective=request.form.get("business_objective", ""),
             audience=request.form.get("audience", ""),
             tone=request.form.get("tone", ""),
             detail_level=request.form.get("detail_level", ""),
             user_notes=request.form.get("user_notes", ""),
-            include_evidence_appendix=request.form.get(
-                "include_evidence_appendix", ""
-            ),
-            selected_metric_ids=request.form.getlist(
-                "selected_metric_ids"
-            ),
-            selected_evidence_ids=request.form.getlist(
-                "selected_evidence_ids"
-            ),
-            selected_visualization_ids=request.form.getlist(
-                "selected_visualization_ids"
-            ),
+            include_evidence_appendix=request.form.get("include_evidence_appendix", ""),
+            selected_metric_ids=request.form.getlist("selected_metric_ids"),
+            selected_evidence_ids=request.form.getlist("selected_evidence_ids"),
+            selected_visualization_ids=request.form.getlist("selected_visualization_ids"),
+            manual_boards=manual_boards,
+            selected_manual_board_ids=request.form.getlist("selected_manual_board_ids"),
         )
         package = build_report_generation_package(
             report,
             configuration=configuration,
             evidence_payload=evidence,
             visualizations=visualizations,
+            manual_boards=manual_boards,
+            visualization_insights=_load_visualization_insights(
+                (*visualizations, *manual_boards)
+            ),
         )
         save_report_configuration(
             report,
-            report_configuration_dir=Path(
-                current_app.config["REPORT_CONFIGURATION_DIR"]
-            ),
+            report_configuration_dir=Path(current_app.config["REPORT_CONFIGURATION_DIR"]),
         )
         save_report_generation_package(
             package,
@@ -1601,7 +1532,7 @@ def saved_report_configuration(
     if not path.is_file():
         abort(404)
     try:
-        configuration, evidence, visualizations = _report_assets(
+        configuration, evidence, visualizations, manual_boards = _report_assets(
             dataset_id,
             profile,
         )
@@ -1610,12 +1541,17 @@ def saved_report_configuration(
             configuration=configuration,
             evidence_payload=evidence,
             visualizations=visualizations,
+            manual_boards=manual_boards,
         )
         package = build_report_generation_package(
             report,
             configuration=configuration,
             evidence_payload=evidence,
             visualizations=visualizations,
+            manual_boards=manual_boards,
+            visualization_insights=_load_visualization_insights(
+                (*visualizations, *manual_boards)
+            ),
         )
     except (
         BusinessConfigurationError,
@@ -1625,17 +1561,17 @@ def saved_report_configuration(
         VisualizationError,
     ) as error:
         abort(422, description=str(error))
-    metric_by_id = {
-        metric.metric_id: metric for metric in configuration.metrics
-    }
+    metric_by_id = {metric.metric_id: metric for metric in configuration.metrics}
     evidence_by_id = {
-        str(record.get("id")): record
-        for record in _sorted_evidence_records(evidence)
+        str(record.get("id")): record for record in _sorted_evidence_records(evidence)
     }
     visualization_by_id = {
         artifact.visualization_id: artifact
         for artifact in visualizations
         if artifact.visualization_id is not None
+    }
+    manual_board_by_id = {
+        artifact.visualization_id: artifact for artifact in manual_boards
     }
     state = _load_view_state(
         "saved_report_configuration",
@@ -1644,9 +1580,7 @@ def saved_report_configuration(
     try:
         latest_report = latest_generated_report(
             dataset_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
             expected_package_sha256=artifact_sha256(package.to_dict()),
         )
     except ReportNarrationError:
@@ -1656,16 +1590,18 @@ def saved_report_configuration(
             "report_configuration.html",
             report=report,
             selected_metrics=tuple(
-                metric_by_id[metric_id]
-                for metric_id in report.selected_metric_ids
+                metric_by_id[metric_id] for metric_id in report.selected_metric_ids
             ),
             selected_evidence=tuple(
-                evidence_by_id[evidence_id]
-                for evidence_id in report.selected_evidence_ids
+                evidence_by_id[evidence_id] for evidence_id in report.selected_evidence_ids
             ),
             selected_visualizations=tuple(
                 visualization_by_id[visualization_id]
                 for visualization_id in report.selected_visualization_ids
+            ),
+            selected_manual_boards=tuple(
+                manual_board_by_id[visualization_id]
+                for visualization_id in report.selected_manual_board_ids
             ),
             report_package=package,
             report_json=json.dumps(
@@ -1693,7 +1629,7 @@ def report_generation_package(
     if not path.is_file():
         abort(404)
     try:
-        configuration, evidence, visualizations = _report_assets(
+        configuration, evidence, visualizations, manual_boards = _report_assets(
             dataset_id,
             profile,
         )
@@ -1702,12 +1638,17 @@ def report_generation_package(
             configuration=configuration,
             evidence_payload=evidence,
             visualizations=visualizations,
+            manual_boards=manual_boards,
         )
         package = build_report_generation_package(
             report,
             configuration=configuration,
             evidence_payload=evidence,
             visualizations=visualizations,
+            manual_boards=manual_boards,
+            visualization_insights=_load_visualization_insights(
+                (*visualizations, *manual_boards)
+            ),
         )
     except (
         BusinessConfigurationError,
@@ -1726,24 +1667,22 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, visualizations, package = (
-            _current_report_package(dataset_id, profile)
+        _configuration, _evidence, visualizations, manual_boards, package = _current_report_package(
+            dataset_id, profile
         )
         draft = generate_narrated_report(
             package,
             model=str(current_app.config["OLLAMA_MODEL"]),
             host=str(current_app.config["OLLAMA_HOST"]),
-            timeout_seconds=int(
-                current_app.config["OLLAMA_TIMEOUT_SECONDS"]
-            ),
-            temperature=float(
-                current_app.config["OLLAMA_REPORT_TEMPERATURE"]
-            ),
-            metrics_dir=Path(
-                current_app.config["MODEL_RUN_METRICS_DIR"]
-            ),
+            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+            temperature=float(current_app.config["OLLAMA_REPORT_TEMPERATURE"]),
+            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
         )
-        if draft.stories and not draft.ai_narrated_evidence_ids:
+        if (
+            draft.stories
+            and not draft.ai_narrated_evidence_ids
+            and draft.generation_diagnostics.get("rejected_story_ids")
+        ):
             raise ReportNarrationError(
                 "Ollama returned responses, but none passed evidence "
                 "validation after four attempts per story. No report was "
@@ -1753,6 +1692,7 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
         generated, _path = _save_generated_report_with_charts(
             draft,
             visualizations=visualizations,
+            manual_boards=manual_boards,
         )
     except (
         BusinessConfigurationError,
@@ -1763,8 +1703,7 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
         VisualizationError,
     ) as error:
         current_app.logger.warning(
-            "Evidence-grounded report generation unavailable: id=%s "
-            "model=%s reason=%s",
+            "Evidence-grounded report generation unavailable: id=%s model=%s reason=%s",
             dataset_id,
             current_app.config["OLLAMA_MODEL"],
             error,
@@ -1796,9 +1735,7 @@ def generated_report_history(dataset_id: str):  # type: ignore[no-untyped-def]
     try:
         reports = list_generated_report_versions(
             dataset_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         )
     except ReportNarrationError as error:
         abort(422, description=str(error))
@@ -1810,37 +1747,23 @@ def generated_report_history(dataset_id: str):  # type: ignore[no-untyped-def]
     except WorkspaceHistoryError as error:
         abort(422, description=str(error))
     archived_ids = (
-        set(workspace_record.archived_report_ids)
-        if workspace_record is not None
-        else set()
+        set(workspace_record.archived_report_ids) if workspace_record is not None else set()
     )
-    active_reports = tuple(
-        report for report in reports if report.report_id not in archived_ids
-    )
-    archived_reports = tuple(
-        report for report in reports if report.report_id in archived_ids
-    )
+    active_reports = tuple(report for report in reports if report.report_id not in archived_ids)
+    archived_reports = tuple(report for report in reports if report.report_id in archived_ids)
     current_package_sha256 = _current_package_sha256(dataset_id)
     return render_template(
         "report_history.html",
         dataset_id=dataset_id,
         reports=active_reports,
         archived_reports=archived_reports,
-        report_names=(
-            workspace_record.report_names
-            if workspace_record is not None
-            else {}
-        ),
+        report_names=(workspace_record.report_names if workspace_record is not None else {}),
         workspace_is_archived=(
-            workspace_record.is_archived
-            if workspace_record is not None
-            else False
+            workspace_record.is_archived if workspace_record is not None else False
         ),
         current_package_sha256=current_package_sha256,
         configuration=_configuration_path(dataset_id).is_file(),
-        report_run_count=len(
-            {report.report_id for report in active_reports}
-        ),
+        report_run_count=len({report.report_id for report in active_reports}),
     )
 
 
@@ -1850,14 +1773,16 @@ def latest_report(dataset_id: str):  # type: ignore[no-untyped-def]
 
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, _visualizations, package = (
-            _current_report_package(dataset_id, profile)
-        )
+        (
+            _configuration,
+            _evidence,
+            _visualizations,
+            _manual_boards,
+            package,
+        ) = _current_report_package(dataset_id, profile)
         report = latest_generated_report(
             dataset_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
             expected_package_sha256=artifact_sha256(package.to_dict()),
         )
     except (
@@ -1892,15 +1817,17 @@ def generated_report(
     _ensure_report_active(dataset_id, report_id)
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, _visualizations, package = (
-            _current_report_package(dataset_id, profile)
-        )
+        (
+            _configuration,
+            _evidence,
+            _visualizations,
+            _manual_boards,
+            package,
+        ) = _current_report_package(dataset_id, profile)
         report = load_generated_report(
             dataset_id,
             report_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
             expected_package_sha256=artifact_sha256(package.to_dict()),
         )
     except (
@@ -1928,9 +1855,7 @@ def generated_report(
     )
 
 
-@core.get(
-    "/reports/<dataset_id>/generated/<report_id>/versions/<int:version>"
-)
+@core.get("/reports/<dataset_id>/generated/<report_id>/versions/<int:version>")
 def generated_report_version(
     dataset_id: str,
     report_id: str,
@@ -1944,9 +1869,7 @@ def generated_report_version(
             dataset_id,
             report_id,
             version,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         )
     except ReportNarrationError as error:
         abort(422, description=str(error))
@@ -1968,9 +1891,7 @@ def generated_report_version(
     )
 
 
-@core.post(
-    "/reports/<dataset_id>/generated/<report_id>/presentation"
-)
+@core.post("/reports/<dataset_id>/generated/<report_id>/presentation")
 def publish_generated_report(
     dataset_id: str,
     report_id: str,
@@ -1980,20 +1901,20 @@ def publish_generated_report(
     _ensure_report_active(dataset_id, report_id, mutable=True)
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, _visualizations, package = (
-            _current_report_package(dataset_id, profile)
-        )
+        (
+            _configuration,
+            _evidence,
+            _visualizations,
+            _manual_boards,
+            package,
+        ) = _current_report_package(dataset_id, profile)
         report = load_generated_report(
             dataset_id,
             report_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
             expected_package_sha256=artifact_sha256(package.to_dict()),
         )
-        included_story_ids = tuple(
-            request.form.getlist("included_story_ids")
-        )
+        included_story_ids = tuple(request.form.getlist("included_story_ids"))
         positions: list[tuple[int, str]] = []
         for story in report.stories:
             raw_position = request.form.get(
@@ -2007,26 +1928,21 @@ def publish_generated_report(
                     "Every report story requires a numeric display order."
                 ) from error
             positions.append((position, story.story_id))
-        if (
-            any(position < 1 for position, _story_id in positions)
-            or len({position for position, _story_id in positions})
-            != len(positions)
-        ):
+        if any(position < 1 for position, _story_id in positions) or len(
+            {position for position, _story_id in positions}
+        ) != len(positions):
             raise ReportNarrationError(
-                "Report story display positions must be unique positive "
-                "numbers."
+                "Report story display positions must be unique positive numbers."
             )
         revised = publish_report_presentation(
             report,
             included_story_ids=included_story_ids,
-            story_order=tuple(
-                story_id
-                for _position, story_id in sorted(positions)
-            ),
+            story_order=tuple(story_id for _position, story_id in sorted(positions)),
         )
         published, _path = _save_generated_report_with_charts(
             revised,
             visualizations=_visualizations,
+            manual_boards=_manual_boards,
         )
     except (
         BusinessConfigurationError,
@@ -2047,9 +1963,7 @@ def publish_generated_report(
     )
 
 
-@core.post(
-    "/reports/<dataset_id>/generated/<report_id>/stories/<story_id>/regenerate"
-)
+@core.post("/reports/<dataset_id>/generated/<report_id>/stories/<story_id>/regenerate")
 def regenerate_report_story(
     dataset_id: str,
     report_id: str,
@@ -2060,15 +1974,17 @@ def regenerate_report_story(
     _ensure_report_active(dataset_id, report_id, mutable=True)
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, _visualizations, package = (
-            _current_report_package(dataset_id, profile)
-        )
+        (
+            _configuration,
+            _evidence,
+            _visualizations,
+            _manual_boards,
+            package,
+        ) = _current_report_package(dataset_id, profile)
         report = load_generated_report(
             dataset_id,
             report_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
             expected_package_sha256=artifact_sha256(package.to_dict()),
         )
         revised = regenerate_generated_story(
@@ -2077,19 +1993,14 @@ def regenerate_report_story(
             story_id=story_id,
             model=str(current_app.config["OLLAMA_MODEL"]),
             host=str(current_app.config["OLLAMA_HOST"]),
-            timeout_seconds=int(
-                current_app.config["OLLAMA_TIMEOUT_SECONDS"]
-            ),
-            temperature=float(
-                current_app.config["OLLAMA_REPORT_TEMPERATURE"]
-            ),
-            metrics_dir=Path(
-                current_app.config["MODEL_RUN_METRICS_DIR"]
-            ),
+            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+            temperature=float(current_app.config["OLLAMA_REPORT_TEMPERATURE"]),
+            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
         )
         regenerated, _path = _save_generated_report_with_charts(
             revised,
             visualizations=_visualizations,
+            manual_boards=_manual_boards,
         )
     except (
         BusinessConfigurationError,
@@ -2120,15 +2031,13 @@ def generated_report_pdf(
     _ensure_report_active(dataset_id, report_id)
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, visualizations, package = (
-            _current_report_package(dataset_id, profile)
+        _configuration, _evidence, visualizations, manual_boards, package = _current_report_package(
+            dataset_id, profile
         )
         report = load_generated_report(
             dataset_id,
             report_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
             expected_package_sha256=artifact_sha256(package.to_dict()),
         )
         rendered = build_report_pdf(
@@ -2136,6 +2045,7 @@ def generated_report_pdf(
             chart_paths=_generated_report_chart_paths(
                 report,
                 visualizations=visualizations,
+                manual_boards=manual_boards,
             ),
         )
     except (
@@ -2167,15 +2077,17 @@ def generated_report_json(
     _ensure_report_active(dataset_id, report_id)
     profile = _load_profile(dataset_id)
     try:
-        _configuration, _evidence, _visualizations, package = (
-            _current_report_package(dataset_id, profile)
-        )
+        (
+            _configuration,
+            _evidence,
+            _visualizations,
+            _manual_boards,
+            package,
+        ) = _current_report_package(dataset_id, profile)
         report = load_generated_report(
             dataset_id,
             report_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
             expected_package_sha256=artifact_sha256(package.to_dict()),
         )
     except (
@@ -2190,9 +2102,7 @@ def generated_report_json(
     return jsonify(report.to_dict())
 
 
-@core.get(
-    "/reports/<dataset_id>/generated/<report_id>/versions/<int:version>/pdf"
-)
+@core.get("/reports/<dataset_id>/generated/<report_id>/versions/<int:version>/pdf")
 def generated_report_version_pdf(
     dataset_id: str,
     report_id: str,
@@ -2206,9 +2116,7 @@ def generated_report_version_pdf(
             dataset_id,
             report_id,
             version,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         )
         rendered = build_report_pdf(
             report,
@@ -2225,9 +2133,7 @@ def generated_report_version_pdf(
     )
 
 
-@core.get(
-    "/reports/<dataset_id>/generated/<report_id>/versions/<int:version>/json"
-)
+@core.get("/reports/<dataset_id>/generated/<report_id>/versions/<int:version>/json")
 def generated_report_version_json(
     dataset_id: str,
     report_id: str,
@@ -2241,19 +2147,14 @@ def generated_report_version_json(
             dataset_id,
             report_id,
             version,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         )
     except ReportNarrationError as error:
         abort(422, description=str(error))
     return jsonify(report.to_dict())
 
 
-@core.get(
-    "/reports/<dataset_id>/generated/<report_id>/versions/"
-    "<int:version>/charts/<evidence_id>"
-)
+@core.get("/reports/<dataset_id>/generated/<report_id>/versions/<int:version>/charts/<evidence_id>")
 def generated_report_version_chart(
     dataset_id: str,
     report_id: str,
@@ -2268,9 +2169,7 @@ def generated_report_version_chart(
             dataset_id,
             report_id,
             version,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         )
     except ReportNarrationError as error:
         abort(422, description=str(error))
@@ -2286,7 +2185,7 @@ def generated_report_version_chart(
     )
 
 
-# Manual visualization workflow
+# Visualization workflows
 
 
 @core.get("/workspaces/<dataset_id>/dashboard")
@@ -2303,25 +2202,31 @@ def saved_visualizations(dataset_id: str):  # type: ignore[no-untyped-def]
             profile=profile,
             configuration=configuration,
         )
-    except (BusinessConfigurationError, VisualizationError) as error:
+        manual_visualizations = list_manual_visualizations(
+            dataset_id=dataset_id,
+            source_sha256=profile.source_sha256,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+    except (
+        BusinessConfigurationError,
+        ManualVisualizationStoreError,
+        VisualizationError,
+    ) as error:
         abort(422, description=str(error))
     return render_template(
         "visualizations.html",
         dataset_id=dataset_id,
         configuration=configuration,
         visualizations=visualizations,
-        evidence_ready=(
-            Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
-        ).is_file(),
-        report_configuration_ready=_report_configuration_path(
-            dataset_id
-        ).is_file(),
+        manual_visualizations=manual_visualizations,
+        evidence_ready=(Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json").is_file(),
+        report_configuration_ready=_report_configuration_path(dataset_id).is_file(),
     )
 
 
 @core.get("/visualizations/<dataset_id>/new")
 def visualization_builder(dataset_id: str):  # type: ignore[no-untyped-def]
-    """Display the stable manual visualization builder."""
+    """Display the existing automated visualization builder."""
 
     profile = _load_profile(dataset_id)
     try:
@@ -2355,6 +2260,8 @@ def visualization_builder(dataset_id: str):  # type: ignore[no-untyped-def]
             configuration=configuration,
             form_data=form_data,
             error=_state_text(state, "error"),
+            assistant_request=_state_text(state, "assistant_request"),
+            suggestion_model=current_app.config["OLLAMA_MODEL"],
             chart_types=CHART_TYPES,
             aggregations=AGGREGATIONS,
             date_granularities=DATE_GRANULARITIES,
@@ -2369,6 +2276,414 @@ def visualization_builder(dataset_id: str):  # type: ignore[no-untyped-def]
             ),
         ),
         _state_status(state),
+    )
+
+
+@core.get("/visualizations/<dataset_id>/build")
+def visualization_builder_choice(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Let generic visualization actions choose the appropriate builder."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+    except BusinessConfigurationError as error:
+        abort(422, description=str(error))
+    return render_template(
+        "visualization_builder_choice.html",
+        dataset_id=dataset_id,
+        configuration=configuration,
+    )
+
+
+@core.get("/visualizations/<dataset_id>/manual/new")
+def manual_visualization_builder(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Display the separate manual visualization workspace."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+    except BusinessConfigurationError as error:
+        abort(422, description=str(error))
+    initial_state = None
+    edit_id = request.args.get("edit", "")
+    if edit_id:
+        try:
+            artifact = load_manual_visualization(
+                edit_id,
+                dataset_id=dataset_id,
+                source_sha256=profile.source_sha256,
+                visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            )
+        except ManualVisualizationStoreError as error:
+            abort(404, description=str(error))
+        initial_state = {
+            "visualization_id": artifact.visualization_id,
+            "title": artifact.title,
+            "chart": artifact.requested_chart,
+            "fields": artifact.fields,
+            "settings": artifact.settings,
+        }
+    response = current_app.make_response(
+        render_template(
+            "manual_visualization_builder.html",
+            dataset_id=dataset_id,
+            configuration=configuration,
+            profile=profile,
+            manual_initial_state=initial_state,
+        )
+    )
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; img-src 'self' blob: data:"
+    )
+    return response
+
+
+@core.get("/visualizations/<dataset_id>/manual/preview-data")
+def manual_visualization_preview_data(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Return bounded data for the manual builder's live browser preview."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        payload = build_manual_visualization_preview(
+            _load_dataset_view_for_id(dataset_id),
+            profile,
+            x_column=request.args.get("x") or None,
+            y_column=request.args.get("y") or None,
+            series_column=request.args.get("series") or None,
+            size_column=request.args.get("size") or None,
+            secondary_y_column=request.args.get("secondary_y") or None,
+            target_value=request.args.get("target") or None,
+            requested_chart=request.args.get("chart", "auto"),
+        )
+    except (DatasetViewError, ManualVisualizationPreviewError) as error:
+        return jsonify(error=str(error)), 422
+    return jsonify(payload)
+
+
+@core.post("/visualizations/<dataset_id>/manual/save")
+def save_manual_visualization_board(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Persist the current manual-board state and its safe SVG snapshot."""
+
+    values = request.get_json(silent=True)
+    if not isinstance(values, dict):
+        return jsonify(error="A JSON visualization payload is required."), 400
+    fields = values.get("fields")
+    settings = values.get("settings")
+    if not isinstance(fields, dict) or not isinstance(settings, dict):
+        return jsonify(error="Visualization fields and settings are required."), 400
+    profile = _load_profile(dataset_id)
+
+    def field(role: str) -> str | None:
+        value = fields.get(role)
+        return value if isinstance(value, str) and value else None
+
+    target = settings.get("target")
+    target_text = str(target) if isinstance(target, (int, float)) else None
+    try:
+        preview = build_manual_visualization_preview(
+            _load_dataset_view_for_id(dataset_id),
+            profile,
+            x_column=field("x"),
+            y_column=field("y"),
+            series_column=field("series"),
+            size_column=field("size"),
+            secondary_y_column=field("secondary_y"),
+            target_value=target_text,
+            requested_chart=str(values.get("chart", "auto")),
+        )
+        artifact = save_manual_visualization(
+            dataset_id=dataset_id,
+            source_sha256=profile.source_sha256,
+            values=values,
+            preview=preview,
+            svg_markup=str(values.get("svg", "")),
+            png_data_url=(values.get("png") if isinstance(values.get("png"), str) else None),
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+    except (
+        DatasetViewError,
+        ManualVisualizationPreviewError,
+        ManualVisualizationStoreError,
+    ) as error:
+        return jsonify(error=str(error)), 422
+    return (
+        jsonify(
+            visualization_id=artifact.visualization_id,
+            url=url_for(
+                "core.saved_manual_visualization",
+                dataset_id=dataset_id,
+                visualization_id=artifact.visualization_id,
+            ),
+        ),
+        200 if values.get("visualization_id") else 201,
+    )
+
+
+@core.get("/visualizations/<dataset_id>/manual/<visualization_id>")
+def saved_manual_visualization(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
+    """Display one saved interactive manual visualization."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+        artifact = load_manual_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            source_sha256=profile.source_sha256,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+    except (BusinessConfigurationError, ManualVisualizationStoreError) as error:
+        abort(404, description=str(error))
+    insight = load_visualization_insight(
+        artifact,
+        insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+    )
+    state = _load_view_state(
+        "saved_manual_visualization",
+        dataset_id=dataset_id,
+    )
+    return render_template(
+        "manual_visualization.html",
+        dataset_id=dataset_id,
+        configuration=configuration,
+        artifact=artifact,
+        visualization_insight=insight,
+        insight_notice=_state_text(state, "insight_notice"),
+        insight_error=_state_text(state, "insight_error"),
+    )
+
+
+@core.post("/visualizations/<dataset_id>/manual/<visualization_id>/insights")
+def request_manual_visualization_insight(
+    dataset_id: str,
+    visualization_id: str,
+):  # type: ignore[no-untyped-def]
+    """Generate grounded findings for one saved manual-board visualization."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        artifact = load_manual_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            source_sha256=profile.source_sha256,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+        insight = generate_visualization_insight(
+            artifact,
+            question=request.form.get("question", ""),
+            include_in_reports=(request.form.get("include_in_reports") == "yes"),
+            use_model=request.form.get("use_model") == "yes",
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
+        )
+        save_visualization_insight(
+            insight,
+            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+        )
+    except (ManualVisualizationStoreError, VisualizationInsightError) as error:
+        return _redirect_with_state(
+            "core.saved_manual_visualization",
+            {
+                "view": "saved_manual_visualization",
+                "dataset_id": dataset_id,
+                "insight_error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+            visualization_id=visualization_id,
+        )
+    notice = (
+        "Five grounded chart findings were saved."
+        if len(insight.points) == 5
+        else f"{len(insight.points)} grounded chart findings were saved."
+    )
+    if insight.model_status == "unavailable":
+        notice += (
+            " Ollama was unavailable or returned unsafe text, so the "
+            "Python-derived findings were retained without AI interpretation."
+        )
+    return _redirect_with_state(
+        "core.saved_manual_visualization",
+        {
+            "view": "saved_manual_visualization",
+            "dataset_id": dataset_id,
+            "insight_notice": notice,
+        },
+        dataset_id=dataset_id,
+        visualization_id=visualization_id,
+    )
+
+
+@core.post(
+    "/visualizations/<dataset_id>/manual/<visualization_id>/insights/report-inclusion"
+)
+def update_manual_visualization_insight_report_inclusion(
+    dataset_id: str,
+    visualization_id: str,
+):  # type: ignore[no-untyped-def]
+    """Change whether a manual-board insight follows its chart into reports."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        artifact = load_manual_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            source_sha256=profile.source_sha256,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+        insight = load_visualization_insight(
+            artifact,
+            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+        )
+        if insight is None:
+            raise VisualizationInsightError(
+                "Generate chart insights before changing report inclusion."
+            )
+        updated = set_visualization_insight_report_inclusion(
+            insight,
+            include_in_reports=(request.form.get("include_in_reports") == "yes"),
+        )
+        save_visualization_insight(
+            updated,
+            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+        )
+    except (ManualVisualizationStoreError, VisualizationInsightError) as error:
+        return _redirect_with_state(
+            "core.saved_manual_visualization",
+            {
+                "view": "saved_manual_visualization",
+                "dataset_id": dataset_id,
+                "insight_error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+            visualization_id=visualization_id,
+        )
+    notice = (
+        "Chart insights will be included when this visualization is selected for a report."
+        if updated.include_in_reports
+        else "Chart insights will remain saved but will not be included in reports."
+    )
+    return _redirect_with_state(
+        "core.saved_manual_visualization",
+        {
+            "view": "saved_manual_visualization",
+            "dataset_id": dataset_id,
+            "insight_notice": notice,
+        },
+        dataset_id=dataset_id,
+        visualization_id=visualization_id,
+    )
+
+
+@core.get("/visualizations/<dataset_id>/manual/<visualization_id>/chart")
+def saved_manual_visualization_chart(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
+    """Serve a sanitized saved SVG through its validated artifact."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        artifact = load_manual_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            source_sha256=profile.source_sha256,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+        path = manual_visualization_svg_path(
+            artifact,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+    except ManualVisualizationStoreError as error:
+        abort(404, description=str(error))
+    response = send_file(path, mimetype="image/svg+xml", max_age=0)
+    response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
+    return response
+
+
+@core.get("/visualizations/<dataset_id>/manual/<visualization_id>/chart.png")
+def saved_manual_visualization_chart_png(
+    dataset_id: str,
+    visualization_id: str,
+):  # type: ignore[no-untyped-def]
+    """Serve the validated PNG retained for dashboard and report rendering."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        artifact = load_manual_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            source_sha256=profile.source_sha256,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+        path = manual_visualization_png_path(
+            artifact,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        )
+    except ManualVisualizationStoreError as error:
+        abort(404, description=str(error))
+    if path is None:
+        abort(404, description="Manual visualization PNG was not found.")
+    return send_file(path, mimetype="image/png", max_age=0)
+
+
+@core.post("/visualizations/<dataset_id>/assistant")
+def suggest_visualization(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Ask Ollama for one chart, then build a validated preview with Python."""
+
+    profile = _load_profile(dataset_id)
+    user_request = request.form.get("user_request", "")
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+        suggestion = generate_visualization_suggestion(
+            profile,
+            configuration=configuration,
+            user_request=user_request,
+            dataset_id=dataset_id,
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
+        )
+        artifact = build_visualization(
+            _load_dataset_view_for_id(dataset_id),
+            profile=profile,
+            configuration=configuration,
+            spec=suggestion.spec,
+            chart_dir=Path(current_app.config["CHART_DIR"]),
+            assistant_metadata=suggestion.assistant_metadata(
+                model=str(current_app.config["OLLAMA_MODEL"])
+            ),
+            dataset_id=dataset_id,
+        )
+        token = save_preview(
+            artifact,
+            preview_dir=Path(current_app.config["VISUALIZATION_PREVIEW_DIR"]),
+            chart_dir=Path(current_app.config["CHART_DIR"]),
+        )
+    except (
+        BusinessConfigurationError,
+        VisualizationError,
+        VisualizationSuggestionError,
+    ) as error:
+        return _redirect_with_state(
+            "core.visualization_builder",
+            {
+                "view": "visualization_builder",
+                "dataset_id": dataset_id,
+                "assistant_request": user_request,
+                "error": str(error),
+                "status_code": 503 if isinstance(error, VisualizationSuggestionError) else 400,
+            },
+            dataset_id=dataset_id,
+        )
+    return redirect(
+        url_for(
+            "core.visualization_preview",
+            dataset_id=dataset_id,
+            token=token,
+        ),
+        code=303,
     )
 
 
@@ -2449,9 +2764,7 @@ def visualization_preview(dataset_id: str, token: str):  # type: ignore[no-untyp
 
 
 @core.get("/visualizations/<dataset_id>/preview/<token>/chart")
-def visualization_preview_chart(
-    dataset_id: str, token: str
-):  # type: ignore[no-untyped-def]
+def visualization_preview_chart(dataset_id: str, token: str):  # type: ignore[no-untyped-def]
     """Serve a draft chart only through its validated preview token."""
 
     profile = _load_profile(dataset_id)
@@ -2520,9 +2833,7 @@ def confirm_visualization(dataset_id: str, token: str):  # type: ignore[no-untyp
 
 
 @core.get("/visualizations/<dataset_id>/<visualization_id>")
-def saved_visualization(
-    dataset_id: str, visualization_id: str
-):  # type: ignore[no-untyped-def]
+def saved_visualization(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
     """Display a saved visualization and its reproducible supporting data."""
 
     profile = _load_profile(dataset_id)
@@ -2537,17 +2848,156 @@ def saved_visualization(
         )
     except (BusinessConfigurationError, VisualizationError) as error:
         abort(404, description=str(error))
+    insight = load_visualization_insight(
+        artifact,
+        insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+    )
+    state = _load_view_state(
+        "saved_visualization",
+        dataset_id=dataset_id,
+    )
     return _render_visualization(
         artifact,
         artifact_json=json.dumps(artifact.to_dict(), indent=2, sort_keys=True),
         configuration=configuration,
+        visualization_insight=insight,
+        insight_notice=_state_text(state, "insight_notice"),
+        insight_error=_state_text(state, "insight_error"),
+    )
+
+
+@core.post("/visualizations/<dataset_id>/<visualization_id>/insights")
+def request_visualization_insight(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
+    """Derive chart facts and optionally add a grounded Ollama interpretation."""
+
+    profile = _load_profile(dataset_id)
+    question = request.form.get("question", "")
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+        artifact = load_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+        insight = generate_visualization_insight(
+            artifact,
+            question=question,
+            include_in_reports=(request.form.get("include_in_reports") == "yes"),
+            use_model=request.form.get("use_model") == "yes",
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
+        )
+        save_visualization_insight(
+            insight,
+            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+        )
+    except (
+        BusinessConfigurationError,
+        VisualizationError,
+        VisualizationInsightError,
+    ) as error:
+        return _redirect_with_state(
+            "core.saved_visualization",
+            {
+                "view": "saved_visualization",
+                "dataset_id": dataset_id,
+                "insight_error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+            visualization_id=visualization_id,
+        )
+    notice = (
+        "Five grounded chart findings were saved."
+        if len(insight.points) == 5
+        else f"{len(insight.points)} grounded chart findings were saved."
+    )
+    if insight.model_status == "unavailable":
+        notice += (
+            " Ollama was unavailable or returned unsafe text, so the "
+            "Python-derived findings were retained without AI interpretation."
+        )
+    return _redirect_with_state(
+        "core.saved_visualization",
+        {
+            "view": "saved_visualization",
+            "dataset_id": dataset_id,
+            "insight_notice": notice,
+        },
+        dataset_id=dataset_id,
+        visualization_id=visualization_id,
+    )
+
+
+@core.post("/visualizations/<dataset_id>/<visualization_id>/insights/report-inclusion")
+def update_visualization_insight_report_inclusion(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
+    """Change whether a saved chart insight follows the chart into reports."""
+
+    profile = _load_profile(dataset_id)
+    try:
+        configuration = _load_existing_configuration(dataset_id, profile)
+        artifact = load_visualization(
+            visualization_id,
+            dataset_id=dataset_id,
+            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+            profile=profile,
+            configuration=configuration,
+        )
+        insight = load_visualization_insight(
+            artifact,
+            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+        )
+        if insight is None:
+            raise VisualizationInsightError(
+                "Generate chart insights before changing report inclusion."
+            )
+        updated = set_visualization_insight_report_inclusion(
+            insight,
+            include_in_reports=(request.form.get("include_in_reports") == "yes"),
+        )
+        save_visualization_insight(
+            updated,
+            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+        )
+    except (
+        BusinessConfigurationError,
+        VisualizationError,
+        VisualizationInsightError,
+    ) as error:
+        return _redirect_with_state(
+            "core.saved_visualization",
+            {
+                "view": "saved_visualization",
+                "dataset_id": dataset_id,
+                "insight_error": str(error),
+                "status_code": 400,
+            },
+            dataset_id=dataset_id,
+            visualization_id=visualization_id,
+        )
+    notice = (
+        "Chart insights will be included when this visualization is selected for a report."
+        if updated.include_in_reports
+        else "Chart insights will remain saved but will not be included in reports."
+    )
+    return _redirect_with_state(
+        "core.saved_visualization",
+        {
+            "view": "saved_visualization",
+            "dataset_id": dataset_id,
+            "insight_notice": notice,
+        },
+        dataset_id=dataset_id,
+        visualization_id=visualization_id,
     )
 
 
 @core.get("/visualizations/<dataset_id>/<visualization_id>/chart")
-def saved_visualization_chart(
-    dataset_id: str, visualization_id: str
-):  # type: ignore[no-untyped-def]
+def saved_visualization_chart(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
     """Serve a saved chart only through its validated visualization record."""
 
     profile = _load_profile(dataset_id)
@@ -2567,9 +3017,7 @@ def saved_visualization_chart(
 
 
 @core.post("/visualizations/<dataset_id>/<visualization_id>/regenerate")
-def regenerate_visualization(
-    dataset_id: str, visualization_id: str
-):  # type: ignore[no-untyped-def]
+def regenerate_visualization(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
     """Recalculate a saved visualization from its retained source and specification."""
 
     profile = _load_profile(dataset_id)
@@ -2631,9 +3079,7 @@ def deterministic_insights(dataset_id: str):  # type: ignore[no-untyped-def]
     """Generate factual observations, evidence records, and charts using Python."""
 
     profile = _load_profile(dataset_id)
-    configuration_path = Path(current_app.config["CONFIGURATION_DIR"]) / (
-        f"{dataset_id}.json"
-    )
+    configuration_path = Path(current_app.config["CONFIGURATION_DIR"]) / (f"{dataset_id}.json")
     if not configuration_path.is_file():
         abort(404)
 
@@ -2700,9 +3146,7 @@ def deterministic_insights(dataset_id: str):  # type: ignore[no-untyped-def]
         report_path.name,
         saved_evidence_path.name,
     )
-    return redirect(
-        url_for("core.saved_insights", dataset_id=dataset_id), code=303
-    )
+    return redirect(url_for("core.saved_insights", dataset_id=dataset_id), code=303)
 
 
 @core.get("/insights/<dataset_id>")
@@ -2736,9 +3180,7 @@ def saved_insights(dataset_id: str):  # type: ignore[no-untyped-def]
         report_json=json.dumps(report, indent=2, sort_keys=True),
         evidence=evidence,
         evidence_json=(
-            json.dumps(evidence, indent=2, sort_keys=True)
-            if evidence is not None
-            else None
+            json.dumps(evidence, indent=2, sort_keys=True) if evidence is not None else None
         ),
         diagnostic_evidence_types=_DIAGNOSTIC_EVIDENCE_TYPES,
         association_evidence_types=_ASSOCIATION_EVIDENCE_TYPES,
@@ -2801,13 +3243,10 @@ def _workspace_directories() -> WorkspaceDirectories:
         insight_dir=Path(current_app.config["INSIGHT_DIR"]),
         evidence_dir=Path(current_app.config["EVIDENCE_DIR"]),
         visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
-        report_configuration_dir=Path(
-            current_app.config["REPORT_CONFIGURATION_DIR"]
-        ),
+        visualization_insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
+        report_configuration_dir=Path(current_app.config["REPORT_CONFIGURATION_DIR"]),
         report_package_dir=Path(current_app.config["REPORT_PACKAGE_DIR"]),
-        generated_report_dir=Path(
-            current_app.config["GENERATED_REPORT_DIR"]
-        ),
+        generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         trash_dir=Path(current_app.config["TRASH_DIR"]),
     )
 
@@ -2893,9 +3332,7 @@ def _require_report_run(dataset_id: str, report_id: str) -> None:
     try:
         reports = list_generated_report_versions(
             dataset_id,
-            generated_report_dir=Path(
-                current_app.config["GENERATED_REPORT_DIR"]
-            ),
+            generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
         )
     except ReportNarrationError as error:
         abort(422, description=str(error))
@@ -2921,9 +3358,7 @@ def _ensure_report_active(
     if mutable and record is not None and record.is_archived:
         abort(
             409,
-            description=(
-                "Restore the workspace before changing its reports."
-            ),
+            description=("Restore the workspace before changing its reports."),
         )
 
 
@@ -3016,9 +3451,7 @@ def _render_profile(
             derived_suggestion_error=derived_suggestion_error,
             rejected_derived_suggestion_count=rejected_derived_suggestion_count,
             derived_numeric_columns=tuple(
-                column.name
-                for column in profile.columns
-                if column.inferred_type.value == "numeric"
+                column.name for column in profile.columns if column.inferred_type.value == "numeric"
             ),
             review_notice=review_notice,
             suggestion_model=current_app.config["OLLAMA_MODEL"],
@@ -3029,10 +3462,7 @@ def _render_profile(
                     candidate
                     for candidate in profile.kpi_candidates
                     if candidate.casefold()
-                    not in {
-                        metric.name.casefold()
-                        for metric in configuration.metrics
-                    }
+                    not in {metric.name.casefold() for metric in configuration.metrics}
                 )
                 if configuration is not None
                 else profile.kpi_candidates
@@ -3106,9 +3536,7 @@ def _render_derived_editor(
             metric=metric,
             preview=preview,
             numeric_columns=tuple(
-                column.name
-                for column in profile.columns
-                if column.inferred_type.value == "numeric"
+                column.name for column in profile.columns if column.inferred_type.value == "numeric"
             ),
             aggregation_options=("sum", "mean", "median", "min", "max", "formula"),
             display_format_options=("number", "percentage", "currency"),
@@ -3137,15 +3565,12 @@ def _render_saved_configuration(
             display_format_options=DISPLAY_FORMATS,
             target_scope_options=TARGET_SCOPES,
             evidence_ready=(
-                Path(current_app.config["EVIDENCE_DIR"])
-                / f"{configuration.dataset_id}.json"
+                Path(current_app.config["EVIDENCE_DIR"]) / f"{configuration.dataset_id}.json"
             ).is_file(),
             report_configuration_ready=_report_configuration_path(
                 configuration.dataset_id
             ).is_file(),
-            configuration_json=json.dumps(
-                configuration.to_dict(), indent=2, sort_keys=True
-            ),
+            configuration_json=json.dumps(configuration.to_dict(), indent=2, sort_keys=True),
         ),
         status_code,
     )
@@ -3174,9 +3599,7 @@ def _visualization_request_values(
         "scale": values.get("scale", ""),
         "bin_count": values.get("bin_count", ""),
         "include_in_report": values.get("include_in_report", ""),
-        "replaces_visualization_id": values.get(
-            "replaces_visualization_id", ""
-        ),
+        "replaces_visualization_id": values.get("replaces_visualization_id", ""),
     }
 
 
@@ -3276,9 +3699,7 @@ def _build_dataset_context(
             error,
         )
     if configuration is not None:
-        evidence_path = (
-            Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
-        )
+        evidence_path = Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
         if evidence_path.is_file():
             try:
                 evidence = load_evidence_payload(
@@ -3307,11 +3728,10 @@ def _report_assets(
     BusinessConfiguration,
     dict[str, object] | None,
     tuple[VisualizationArtifact, ...],
+    tuple[ManualVisualizationArtifact, ...],
 ]:
     configuration = _require_configuration(dataset_id, profile)
-    evidence_path = (
-        Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
-    )
+    evidence_path = Path(current_app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
     evidence = (
         load_evidence_payload(evidence_path, dataset_id=dataset_id)
         if evidence_path.is_file()
@@ -3323,7 +3743,12 @@ def _report_assets(
         profile=profile,
         configuration=configuration,
     )
-    return configuration, evidence, visualizations
+    manual_boards = list_manual_visualizations(
+        dataset_id=dataset_id,
+        source_sha256=profile.source_sha256,
+        visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+    )
+    return configuration, evidence, visualizations, manual_boards
 
 
 def _current_report_package(
@@ -3333,9 +3758,10 @@ def _current_report_package(
     BusinessConfiguration,
     dict[str, object] | None,
     tuple[VisualizationArtifact, ...],
+    tuple[ManualVisualizationArtifact, ...],
     ReportGenerationPackage,
 ]:
-    configuration, evidence, visualizations = _report_assets(
+    configuration, evidence, visualizations, manual_boards = _report_assets(
         dataset_id,
         profile,
     )
@@ -3349,14 +3775,42 @@ def _current_report_package(
         configuration=configuration,
         evidence_payload=evidence,
         visualizations=visualizations,
+        manual_boards=manual_boards,
     )
     package = build_report_generation_package(
         report,
         configuration=configuration,
         evidence_payload=evidence,
         visualizations=visualizations,
+        visualization_insights=_load_visualization_insights(
+            (*visualizations, *manual_boards)
+        ),
+        manual_boards=manual_boards,
     )
-    return configuration, evidence, visualizations, package
+    return configuration, evidence, visualizations, manual_boards, package
+
+
+def _load_visualization_insights(
+    visualizations: tuple[
+        VisualizationArtifact | ManualVisualizationArtifact,
+        ...,
+    ],
+) -> tuple[VisualizationInsightArtifact, ...]:
+    """Load only insight artifacts that still match their saved charts."""
+
+    insight_dir = Path(current_app.config["VISUALIZATION_INSIGHT_DIR"])
+    loaded = [
+        insight
+        for artifact in visualizations
+        if (
+            insight := load_visualization_insight(
+                artifact,
+                insight_dir=insight_dir,
+            )
+        )
+        is not None
+    ]
+    return tuple(loaded)
 
 
 def _current_package_sha256(dataset_id: str) -> str | None:
@@ -3364,9 +3818,13 @@ def _current_package_sha256(dataset_id: str) -> str | None:
 
     try:
         profile = _load_profile(dataset_id)
-        _configuration, _evidence, _visualizations, package = (
-            _current_report_package(dataset_id, profile)
-        )
+        (
+            _configuration,
+            _evidence,
+            _visualizations,
+            _manual_boards,
+            package,
+        ) = _current_report_package(dataset_id, profile)
     except (
         BusinessConfigurationError,
         DatasetProfileError,
@@ -3393,9 +3851,7 @@ def _render_generated_report(
     published_summary_points = included_executive_summary_points(report)
     chart_url_by_id: dict[str, str] = {}
     historical_chart_ids = (
-        set(_historical_report_chart_paths(report))
-        if historical_snapshot
-        else set()
+        set(_historical_report_chart_paths(report)) if historical_snapshot else set()
     )
     for item in report.items:
         if historical_snapshot:
@@ -3414,8 +3870,13 @@ def _render_generated_report(
                 evidence_id=item.evidence_id,
             )
         elif item.visualization_id is not None:
+            endpoint = (
+                "core.saved_manual_visualization_chart"
+                if item.visualization_id.startswith("MBV-")
+                else "core.saved_visualization_chart"
+            )
             chart_url_by_id[item.evidence_id] = url_for(
-                "core.saved_visualization_chart",
+                endpoint,
                 dataset_id=report.dataset_id,
                 visualization_id=item.visualization_id,
             )
@@ -3430,9 +3891,7 @@ def _render_generated_report(
         published_summary_points=published_summary_points,
         story_sections=_generated_story_sections(published_stories),
         sections=_generated_report_sections(report.items),
-        item_by_id={
-            item.evidence_id: item for item in report.items
-        },
+        item_by_id={item.evidence_id: item for item in report.items},
         report_json=json.dumps(
             report.to_dict(),
             ensure_ascii=False,
@@ -3446,6 +3905,7 @@ def _generated_report_chart_paths(
     report: GeneratedReport,
     *,
     visualizations: tuple[VisualizationArtifact, ...],
+    manual_boards: tuple[ManualVisualizationArtifact, ...] = (),
 ) -> dict[str, Path]:
     chart_dir = Path(current_app.config["CHART_DIR"])
     visualization_by_id = {
@@ -3454,12 +3914,25 @@ def _generated_report_chart_paths(
         if artifact.visualization_id is not None
     }
     chart_paths: dict[str, Path] = {}
+    manual_board_by_id = {
+        artifact.visualization_id: artifact for artifact in manual_boards
+    }
     for item in report.items:
         filename = item.chart_filename
         if filename is None and item.visualization_id is not None:
             artifact = visualization_by_id.get(item.visualization_id)
             if artifact is not None:
                 filename = artifact_chart_filename(artifact)
+            else:
+                manual_board = manual_board_by_id.get(item.visualization_id)
+                if manual_board is not None:
+                    png_path = manual_visualization_png_path(
+                        manual_board,
+                        visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+                    )
+                    if png_path is not None:
+                        chart_paths[item.evidence_id] = png_path
+                    continue
         if filename is None:
             continue
         chart_path = chart_dir / filename
@@ -3472,14 +3945,13 @@ def _save_generated_report_with_charts(
     report: GeneratedReport,
     *,
     visualizations: tuple[VisualizationArtifact, ...],
+    manual_boards: tuple[ManualVisualizationArtifact, ...] = (),
 ) -> tuple[GeneratedReport, Path]:
     """Save one report and roll it back if its chart snapshot cannot persist."""
 
     saved, report_path = save_generated_report(
         report,
-        generated_report_dir=Path(
-            current_app.config["GENERATED_REPORT_DIR"]
-        ),
+        generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
     )
     try:
         snapshot_generated_report_charts(
@@ -3487,10 +3959,9 @@ def _save_generated_report_with_charts(
             _generated_report_chart_paths(
                 saved,
                 visualizations=visualizations,
+                manual_boards=manual_boards,
             ),
-            generated_report_asset_dir=Path(
-                current_app.config["GENERATED_REPORT_ASSET_DIR"]
-            ),
+            generated_report_asset_dir=Path(current_app.config["GENERATED_REPORT_ASSET_DIR"]),
         )
     except ReportNarrationError:
         report_path.unlink(missing_ok=True)
@@ -3505,9 +3976,7 @@ def _historical_report_chart_paths(
 
     snapshots = generated_report_chart_snapshots(
         report,
-        generated_report_asset_dir=Path(
-            current_app.config["GENERATED_REPORT_ASSET_DIR"]
-        ),
+        generated_report_asset_dir=Path(current_app.config["GENERATED_REPORT_ASSET_DIR"]),
     )
     if snapshots:
         return snapshots
@@ -3515,8 +3984,7 @@ def _historical_report_chart_paths(
     return {
         item.evidence_id: chart_dir / item.chart_filename
         for item in report.items
-        if item.chart_filename is not None
-        and (chart_dir / item.chart_filename).is_file()
+        if item.chart_filename is not None and (chart_dir / item.chart_filename).is_file()
     }
 
 
@@ -3565,9 +4033,7 @@ def _generated_story_sections(
     return tuple(
         (
             label,
-            tuple(
-                story for story in stories if story.section == section
-            ),
+            tuple(story for story in stories if story.section == section),
         )
         for section, label in labels
         if any(story.section == section for story in stories)
@@ -3580,9 +4046,7 @@ def _sorted_evidence_records(
     if evidence_payload is None:
         return ()
     records = evidence_payload.get("records")
-    if not isinstance(records, list) or not all(
-        isinstance(record, dict) for record in records
-    ):
+    if not isinstance(records, list) or not all(isinstance(record, dict) for record in records):
         raise EvidenceError("Saved evidence records are invalid.")
 
     def sort_key(record: dict[str, object]) -> tuple[int, str]:
@@ -3614,8 +4078,7 @@ def _recommended_evidence_ids(
     eligible = [
         record
         for record in _sorted_evidence_records(evidence_payload)
-        if _evidence_kind(record) != "diagnostic"
-        and isinstance(record.get("id"), str)
+        if _evidence_kind(record) != "diagnostic" and isinstance(record.get("id"), str)
     ]
     selected: list[dict[str, object]] = []
     selected_ids: set[str] = set()
@@ -3657,6 +4120,7 @@ def _default_report_form(
     *,
     evidence_payload: dict[str, object] | None,
     visualizations: tuple[VisualizationArtifact, ...],
+    manual_boards: tuple[ManualVisualizationArtifact, ...] = (),
 ) -> MultiDict[str, str]:
     values = MultiDict[str, str]()
     values["title"] = f"{configuration.primary_metric.name} insight report"
@@ -3685,8 +4149,15 @@ def _default_report_form(
         [
             artifact.visualization_id
             for artifact in visualizations
-            if artifact.visualization_id is not None
-            and artifact.spec.include_in_report
+            if artifact.visualization_id is not None and artifact.spec.include_in_report
+        ],
+    )
+    values.setlist(
+        "selected_manual_board_ids",
+        [
+            artifact.visualization_id
+            for artifact in manual_boards
+            if artifact.png_filename is not None
         ],
     )
     return values
@@ -3704,9 +4175,7 @@ def _report_form_from_configuration(
     values["tone"] = report.tone
     values["detail_level"] = report.detail_level
     values["user_notes"] = report.user_notes
-    values["include_evidence_appendix"] = (
-        "yes" if report.include_evidence_appendix else ""
-    )
+    values["include_evidence_appendix"] = "yes" if report.include_evidence_appendix else ""
     values.setlist(
         "selected_metric_ids",
         list(report.selected_metric_ids),
@@ -3719,14 +4188,15 @@ def _report_form_from_configuration(
         "selected_visualization_ids",
         list(report.selected_visualization_ids),
     )
+    values.setlist(
+        "selected_manual_board_ids",
+        list(report.selected_manual_board_ids),
+    )
     return values
 
 
 def _report_configuration_path(dataset_id: str) -> Path:
-    return (
-        Path(current_app.config["REPORT_CONFIGURATION_DIR"])
-        / f"{dataset_id}.json"
-    )
+    return Path(current_app.config["REPORT_CONFIGURATION_DIR"]) / f"{dataset_id}.json"
 
 
 def _render_visualization(
@@ -3735,6 +4205,9 @@ def _render_visualization(
     artifact_json: str,
     preview_token: str | None = None,
     configuration: BusinessConfiguration | None = None,
+    visualization_insight: VisualizationInsightArtifact | None = None,
+    insight_notice: str | None = None,
+    insight_error: str | None = None,
 ):  # type: ignore[no-untyped-def]
     return render_template(
         "visualization.html",
@@ -3742,6 +4215,9 @@ def _render_visualization(
         artifact_json=artifact_json,
         preview_token=preview_token,
         configuration=configuration,
+        visualization_insight=visualization_insight,
+        insight_notice=insight_notice,
+        insight_error=insight_error,
     )
 
 
@@ -3771,9 +4247,7 @@ def _load_existing_configuration(
     return load_business_configuration(path, profile=profile)
 
 
-def _require_configuration(
-    dataset_id: str, profile: DatasetProfile
-) -> BusinessConfiguration:
+def _require_configuration(dataset_id: str, profile: DatasetProfile) -> BusinessConfiguration:
     configuration = _load_existing_configuration(dataset_id, profile)
     if configuration is None:
         raise BusinessConfigurationError("No saved business configuration exists.")
@@ -3793,9 +4267,7 @@ def _redirect_configuration_error(dataset_id: str, message: str):  # type: ignor
     )
 
 
-def _populate_formula_fields(
-    form_data: MultiDict[str, str], metric: DerivedMetric
-) -> None:
+def _populate_formula_fields(form_data: MultiDict[str, str], metric: DerivedMetric) -> None:
     form_data["formula"] = metric.formula_label
     form_data["calculation_level"] = metric.calculation_level
     form_data["aggregation"] = metric.aggregation
@@ -3823,17 +4295,17 @@ def _redirect_with_state(
     payload: dict[str, object],
     *,
     dataset_id: str | None = None,
+    **additional_route_values: str,
 ):  # type: ignore[no-untyped-def]
     token = save_navigation_state(payload, state_dir=_navigation_state_dir())
     route_values: dict[str, str] = {"state": token}
     if dataset_id is not None:
         route_values["dataset_id"] = dataset_id
+    route_values.update(additional_route_values)
     return redirect(url_for(endpoint, **route_values), code=303)
 
 
-def _redirect_profile_state(
-    dataset_id: str, *, status_code: int = 200, **values: object
-):  # type: ignore[no-untyped-def]
+def _redirect_profile_state(dataset_id: str, *, status_code: int = 200, **values: object):  # type: ignore[no-untyped-def]
     return _redirect_with_state(
         "core.dataset_profile",
         {
@@ -3846,9 +4318,7 @@ def _redirect_profile_state(
     )
 
 
-def _load_view_state(
-    expected_view: str, *, dataset_id: str | None = None
-) -> dict[str, object]:
+def _load_view_state(expected_view: str, *, dataset_id: str | None = None) -> dict[str, object]:
     token = request.args.get("state", "")
     if not token:
         return {}
@@ -3897,8 +4367,10 @@ def _form_from_state(value: object) -> MultiDict[str, str] | None:
         return None
     pairs: list[tuple[str, str]] = []
     for key, items in value.items():
-        if not isinstance(key, str) or not isinstance(items, list) or not all(
-            isinstance(item, str) for item in items
+        if (
+            not isinstance(key, str)
+            or not isinstance(items, list)
+            or not all(isinstance(item, str) for item in items)
         ):
             return None
         pairs.extend((key, item) for item in items)

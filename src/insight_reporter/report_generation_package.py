@@ -11,13 +11,18 @@ from pathlib import Path
 from insight_reporter.business_config import BusinessConfiguration
 from insight_reporter.manual_visualization_evidence import (
     ManualVisualizationEvidence,
+    generate_manual_board_evidence,
     generate_manual_visualization_evidence,
 )
+from insight_reporter.manual_visualization_store import ManualVisualizationArtifact
 from insight_reporter.report_configuration import (
     ReportConfiguration,
     artifact_sha256,
 )
 from insight_reporter.visualization_builder import VisualizationArtifact
+from insight_reporter.visualization_insights import (
+    VisualizationInsightArtifact,
+)
 
 _DATASET_ID = re.compile(r"[0-9a-f]{32}")
 _MAX_EVIDENCE_RECORDS = 50
@@ -39,9 +44,7 @@ class ReportGenerationPackage:
     sources: tuple[dict[str, object], ...]
     kpis: tuple[dict[str, object], ...]
     deterministic_evidence: tuple[dict[str, object], ...]
-    manual_visualization_evidence: tuple[
-        ManualVisualizationEvidence, ...
-    ]
+    manual_visualization_evidence: tuple[ManualVisualizationEvidence, ...]
     omissions: dict[str, object]
     model_input_policy: dict[str, object]
 
@@ -49,18 +52,13 @@ class ReportGenerationPackage:
         return {
             "schema_version": self.schema_version,
             "dataset_id": self.dataset_id,
-            "report_configuration_sha256": (
-                self.report_configuration_sha256
-            ),
+            "report_configuration_sha256": (self.report_configuration_sha256),
             "report_settings": self.report_settings,
             "sources": list(self.sources),
             "kpis": list(self.kpis),
-            "deterministic_evidence": list(
-                self.deterministic_evidence
-            ),
+            "deterministic_evidence": list(self.deterministic_evidence),
             "manual_visualization_evidence": [
-                evidence.to_dict()
-                for evidence in self.manual_visualization_evidence
+                evidence.to_dict() for evidence in self.manual_visualization_evidence
             ],
             "omissions": self.omissions,
             "model_input_policy": self.model_input_policy,
@@ -73,6 +71,8 @@ def build_report_generation_package(
     configuration: BusinessConfiguration,
     evidence_payload: dict[str, object] | None,
     visualizations: tuple[VisualizationArtifact, ...],
+    visualization_insights: tuple[VisualizationInsightArtifact, ...] = (),
+    manual_boards: tuple[ManualVisualizationArtifact, ...] = (),
 ) -> ReportGenerationPackage:
     """Build the exact bounded JSON contract that Milestone 5B may narrate."""
 
@@ -80,21 +80,15 @@ def build_report_generation_package(
         _DATASET_ID.fullmatch(report.dataset_id) is None
         or configuration.dataset_id != report.dataset_id
     ):
-        raise ReportGenerationPackageError(
-            "Report generation inputs belong to different datasets."
-        )
-    metrics = {
-        metric.metric_id: metric for metric in configuration.metrics
-    }
+        raise ReportGenerationPackageError("Report generation inputs belong to different datasets.")
+    metrics = {metric.metric_id: metric for metric in configuration.metrics}
     selected_kpis = tuple(
         metrics[metric_id].to_dict()
         for metric_id in report.selected_metric_ids
         if metric_id in metrics
     )
     if len(selected_kpis) != len(report.selected_metric_ids):
-        raise ReportGenerationPackageError(
-            "A selected report KPI is no longer configured."
-        )
+        raise ReportGenerationPackageError("A selected report KPI is no longer configured.")
 
     evidence_by_id = _evidence_by_id(evidence_payload)
     selected_records = [
@@ -114,9 +108,7 @@ def build_report_generation_package(
                 "deterministic insights before report generation."
             )
     included_records = selected_records[:_MAX_EVIDENCE_RECORDS]
-    compact_evidence = tuple(
-        _compact_evidence(record) for record in included_records
-    )
+    compact_evidence = tuple(_compact_evidence(record) for record in included_records)
 
     visualization_by_id = {
         artifact.visualization_id: artifact
@@ -128,25 +120,65 @@ def build_report_generation_package(
         for visualization_id in report.selected_visualization_ids
         if visualization_id in visualization_by_id
     ]
-    if len(selected_visualizations) != len(
-        report.selected_visualization_ids
-    ):
+    if len(selected_visualizations) != len(report.selected_visualization_ids):
         raise ReportGenerationPackageError(
             "A selected manual visualization is unavailable or stale."
         )
-    included_visualizations = selected_visualizations[
-        :_MAX_MANUAL_VISUALIZATIONS
+    manual_board_by_id = {
+        artifact.visualization_id: artifact for artifact in manual_boards
+    }
+    selected_manual_boards = [
+        manual_board_by_id[visualization_id]
+        for visualization_id in report.selected_manual_board_ids
+        if visualization_id in manual_board_by_id
     ]
+    if len(selected_manual_boards) != len(report.selected_manual_board_ids):
+        raise ReportGenerationPackageError(
+            "A selected manual-board visualization is unavailable or stale."
+        )
+    included_visualizations = selected_visualizations[:_MAX_MANUAL_VISUALIZATIONS]
+    remaining_board_slots = _MAX_MANUAL_VISUALIZATIONS - len(included_visualizations)
+    included_manual_boards = selected_manual_boards[:remaining_board_slots]
+    report_artifact_by_id: dict[
+        str,
+        VisualizationArtifact | ManualVisualizationArtifact,
+    ] = {
+        **visualization_by_id,
+        **manual_board_by_id,
+    }
+    insight_by_visualization_id = {
+        insight.visualization_id: insight
+        for insight in visualization_insights
+        if insight.dataset_id == report.dataset_id
+        and insight.include_in_reports
+        and (artifact := report_artifact_by_id.get(insight.visualization_id)) is not None
+        and insight.visualization_sha256 == artifact_sha256(artifact.to_dict())
+    }
     manual_evidence = tuple(
-        generate_manual_visualization_evidence(artifact)
+        generate_manual_visualization_evidence(
+            artifact,
+            requested_insight_observations=(
+                insight_by_visualization_id[artifact.visualization_id].report_observations()
+                if artifact.visualization_id in insight_by_visualization_id
+                else ()
+            ),
+        )
         for artifact in included_visualizations
+    ) + tuple(
+        generate_manual_board_evidence(
+            artifact,
+            requested_insight_observations=(
+                insight_by_visualization_id[artifact.visualization_id].report_observations()
+                if artifact.visualization_id in insight_by_visualization_id
+                else ()
+            ),
+        )
+        for artifact in included_manual_boards
     )
     package = ReportGenerationPackage(
         schema_version=1,
         dataset_id=report.dataset_id,
-        report_configuration_sha256=artifact_sha256(
-            report.to_dict()
-        ),
+        report_configuration_sha256=artifact_sha256(report.to_dict()),
         report_settings={
             "title": report.title,
             "company_name": report.company_name,
@@ -159,9 +191,7 @@ def build_report_generation_package(
                 "content": report.user_notes,
                 "source": "user_provided",
             },
-            "include_evidence_appendix": (
-                report.include_evidence_appendix
-            ),
+            "include_evidence_appendix": (report.include_evidence_appendix),
         },
         sources=report.sources,
         kpis=selected_kpis,
@@ -171,20 +201,24 @@ def build_report_generation_package(
             "selected_evidence_record_count": len(selected_records),
             "included_evidence_record_count": len(included_records),
             "omitted_evidence_ids": [
-                str(record["id"])
-                for record in selected_records[_MAX_EVIDENCE_RECORDS:]
+                str(record["id"]) for record in selected_records[_MAX_EVIDENCE_RECORDS:]
             ],
-            "selected_manual_visualization_count": len(
-                selected_visualizations
+            "selected_manual_visualization_count": (
+                len(selected_visualizations) + len(selected_manual_boards)
             ),
-            "included_manual_visualization_count": len(
-                included_visualizations
+            "included_manual_visualization_count": len(manual_evidence),
+            "selected_manual_board_count": len(selected_manual_boards),
+            "included_manual_board_count": len(included_manual_boards),
+            "included_visualization_insight_count": sum(
+                artifact.visualization_id in insight_by_visualization_id
+                for artifact in (*included_visualizations, *included_manual_boards)
             ),
             "omitted_visualization_ids": [
                 str(artifact.visualization_id)
-                for artifact in selected_visualizations[
-                    _MAX_MANUAL_VISUALIZATIONS:
-                ]
+                for artifact in selected_visualizations[_MAX_MANUAL_VISUALIZATIONS:]
+            ] + [
+                artifact.visualization_id
+                for artifact in selected_manual_boards[remaining_board_slots:]
             ],
         },
         model_input_policy={
@@ -194,16 +228,13 @@ def build_report_generation_package(
             "verified_categorical_evidence_values_included": True,
             "user_notes_label": "user_provided",
             "all_numbers_calculated_by": "python",
+            "visualization_insight_interpretation_may_use_ollama": True,
             "causal_claims_allowed": False,
             "unknown_evidence_ids_allowed": False,
             "unknown_visualization_ids_allowed": False,
             "maximum_evidence_records": _MAX_EVIDENCE_RECORDS,
-            "maximum_supporting_rows_per_evidence": (
-                _MAX_EVIDENCE_SUPPORTING_ROWS
-            ),
-            "maximum_manual_visualizations": (
-                _MAX_MANUAL_VISUALIZATIONS
-            ),
+            "maximum_supporting_rows_per_evidence": (_MAX_EVIDENCE_SUPPORTING_ROWS),
+            "maximum_manual_visualizations": (_MAX_MANUAL_VISUALIZATIONS),
         },
     )
     encoded = json.dumps(
@@ -228,14 +259,10 @@ def save_report_generation_package(
     """Atomically save one package outside Flask static files."""
 
     if _DATASET_ID.fullmatch(package.dataset_id) is None:
-        raise ReportGenerationPackageError(
-            "Report package dataset ID is invalid."
-        )
+        raise ReportGenerationPackageError("Report package dataset ID is invalid.")
     package_dir.mkdir(parents=True, exist_ok=True)
     final_path = package_dir / f"{package.dataset_id}.json"
-    temporary_path = package_dir / (
-        f".{package.dataset_id}.{secrets.token_hex(8)}.part"
-    )
+    temporary_path = package_dir / (f".{package.dataset_id}.{secrets.token_hex(8)}.part")
     encoded = json.dumps(
         package.to_dict(),
         ensure_ascii=False,
@@ -260,9 +287,7 @@ def _evidence_by_id(
         return {}
     records = evidence_payload.get("records")
     if not isinstance(records, list):
-        raise ReportGenerationPackageError(
-            "Deterministic evidence is invalid."
-        )
+        raise ReportGenerationPackageError("Deterministic evidence is invalid.")
     return {
         str(record["id"]): record
         for record in records
@@ -279,10 +304,7 @@ def _compact_evidence(
         if isinstance(supporting_data, list)
         else []
     )
-    included_rows = [
-        _strip_row_identity(row)
-        for row in rows[:_MAX_EVIDENCE_SUPPORTING_ROWS]
-    ]
+    included_rows = [_strip_row_identity(row) for row in rows[:_MAX_EVIDENCE_SUPPORTING_ROWS]]
     return {
         "id": record.get("id"),
         "insight_id": record.get("insight_id"),
@@ -293,9 +315,7 @@ def _compact_evidence(
         "source_columns": record.get("source_columns"),
         "filters": record.get("filters"),
         "periods": record.get("periods"),
-        "calculation_description": record.get(
-            "calculation_description"
-        ),
+        "calculation_description": record.get("calculation_description"),
         "observation": record.get("observation"),
         "record_count": record.get("record_count"),
         "ranking": record.get("ranking"),

@@ -397,9 +397,13 @@
                 <p>No AI commentary was added to this evidence record.</p>
               {% endif %}
               {% if item.visualization_id %}
+                {% set supporting_visualization_endpoint =
+                  'core.saved_manual_visualization'
+                  if item.visualization_id[:4] == 'MBV-'
+                  else 'core.saved_visualization' %}
                 <p>
                   <a href="{{ url_for(
-                    'core.saved_visualization',
+                    supporting_visualization_endpoint,
                     dataset_id=report.dataset_id,
                     visualization_id=item.visualization_id
                   ) }}">
@@ -519,9 +523,13 @@
               </ul>
             {% endif %}
             {% if item.visualization_id %}
+              {% set supporting_visualization_endpoint =
+                'core.saved_manual_visualization'
+                if item.visualization_id[:4] == 'MBV-'
+                else 'core.saved_visualization' %}
               <p>
                 <a href="{{ url_for(
-                  'core.saved_visualization',
+                  supporting_visualization_endpoint,
                   dataset_id=report.dataset_id,
                   visualization_id=item.visualization_id
                 ) }}">

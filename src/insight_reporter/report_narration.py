@@ -73,12 +73,14 @@ _MAX_SUMMARY_FACT_REFERENCES = 3
 _MAX_SUMMARY_ATTEMPTS = 3
 _MAX_SUMMARY_INPUT_CHARACTERS = 12_000
 _MAX_CONTEXT_LABELS = 24
+_MAX_COMPACT_CONTEXT_DESCRIPTORS = 8
+_MAX_COMPACT_INSIGHT_CHARACTERS = 160
 _MAX_REPORT_BYTES = 1_000_000
 _OLLAMA_CONTEXT_TOKENS = 4_096
 _OLLAMA_OUTPUT_TOKENS = 900
 _OLLAMA_SUMMARY_OUTPUT_TOKENS = 1_100
 _OMITTED_MODEL_VALUE = object()
-_STORY_PROMPT_VERSION = "report_story.v1"
+_STORY_PROMPT_VERSION = "report_story.v2"
 _SUMMARY_PROMPT_VERSION = "executive_summary.v1"
 
 _SYSTEM_PROMPT = """You write an understandable, decision-useful business-report story from a
@@ -140,6 +142,10 @@ value from that context."""
 
 class ReportNarrationError(ValueError):
     """Raised when a safe generated report cannot be produced or loaded."""
+
+
+class _OversizedStoryPack(Exception):
+    """Signal that one story cannot fit even after safe compaction."""
 
 
 class _ChatClient(Protocol):
@@ -380,6 +386,7 @@ def generate_narrated_report(
     stories: list[NarrativeStory] = []
     ai_narrated_ids: list[str] = []
     rejected_story_ids: list[str] = []
+    oversized_story_ids: list[str] = []
     executive_summary: tuple[ExecutiveSummaryPoint, ...] = ()
     summary_fell_back = False
     if story_packs:
@@ -387,17 +394,27 @@ def generate_narrated_report(
         if client is None:
             client = Client(host=host, timeout=float(timeout_seconds))
         for display_order, story_pack in enumerate(story_packs, start=1):
-            draft = _generate_story(
-                story_pack,
-                package=package,
-                model=model,
-                client=client,
-                temperature=temperature,
-                metrics_dir=metrics_dir,
-                task_type="report_story",
-                report_id="",
-                workflow_run_id=workflow_run_id,
-            )
+            try:
+                draft = _generate_story(
+                    story_pack,
+                    package=package,
+                    model=model,
+                    client=client,
+                    temperature=temperature,
+                    metrics_dir=metrics_dir,
+                    task_type="report_story",
+                    report_id="",
+                    workflow_run_id=workflow_run_id,
+                )
+            except _OversizedStoryPack:
+                oversized_story_ids.append(story_pack.story_id)
+                stories.append(
+                    replace(
+                        _deterministic_story(story_pack),
+                        display_order=display_order,
+                    )
+                )
+                continue
             if draft is None:
                 rejected_story_ids.append(story_pack.story_id)
                 stories.append(_deterministic_story(story_pack))
@@ -463,6 +480,12 @@ def generate_narrated_report(
             "summaries: "
             f"{', '.join(dict.fromkeys(rejected_story_ids))}."
         )
+    if oversized_story_ids:
+        limitations.append(
+            "Story packs that remained above the local-model input limit "
+            "after compaction were replaced by deterministic summaries: "
+            f"{', '.join(dict.fromkeys(oversized_story_ids))}."
+        )
     if summary_fell_back:
         limitations.append(
             "The five-point executive summary did not pass model-output "
@@ -483,12 +506,15 @@ def generate_narrated_report(
         else "not_generated"
     )
     generation_diagnostics: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "story_pack_count": len(story_packs),
         "ai_story_count": ai_story_count,
         "fallback_story_count": len(stories) - ai_story_count,
         "rejected_story_ids": list(
             dict.fromkeys(rejected_story_ids)
+        ),
+        "oversized_story_ids": list(
+            dict.fromkeys(oversized_story_ids)
         ),
         "executive_summary_source": summary_source,
         "validation_policy": {
@@ -613,17 +639,22 @@ def regenerate_generated_story(
     if client is None:
         client = Client(host=host, timeout=float(timeout_seconds))
     workflow_run_id = secrets.token_hex(16)
-    draft = _generate_story(
-        story_pack,
-        package=package,
-        model=model,
-        client=client,
-        temperature=temperature,
-        metrics_dir=metrics_dir,
-        task_type="report_story_regeneration",
-        report_id=report.report_id,
-        workflow_run_id=workflow_run_id,
-    )
+    oversized = False
+    try:
+        draft = _generate_story(
+            story_pack,
+            package=package,
+            model=model,
+            client=client,
+            temperature=temperature,
+            metrics_dir=metrics_dir,
+            task_type="report_story_regeneration",
+            report_id=report.report_id,
+            workflow_run_id=workflow_run_id,
+        )
+    except _OversizedStoryPack:
+        oversized = True
+        draft = None
     replacement_story = (
         _narrative_story(
             story_pack,
@@ -663,7 +694,22 @@ def regenerate_generated_story(
                         )
                         if story != story_id
                     ),
-                    *((story_id,) if draft is None else ()),
+                    *((story_id,) if draft is None and not oversized else ()),
+                )
+            )
+        ),
+        oversized_story_ids=tuple(
+            dict.fromkeys(
+                (
+                    *(
+                        story
+                        for story in report.generation_diagnostics.get(
+                            "oversized_story_ids",
+                            [],
+                        )
+                        if story != story_id
+                    ),
+                    *((story_id,) if oversized else ()),
                 )
             )
         ),
@@ -705,6 +751,7 @@ def _revised_report(
     model: str | None = None,
     temperature: float | None = None,
     rejected_story_ids: tuple[str, ...] | None = None,
+    oversized_story_ids: tuple[str, ...] | None = None,
 ) -> GeneratedReport:
     ai_ids = tuple(
         dict.fromkeys(
@@ -735,6 +782,11 @@ def _revised_report(
             **(
                 {"rejected_story_ids": list(rejected_story_ids)}
                 if rejected_story_ids is not None
+                else {}
+            ),
+            **(
+                {"oversized_story_ids": list(oversized_story_ids)}
+                if oversized_story_ids is not None
                 else {}
             ),
         }
@@ -1146,19 +1198,26 @@ def latest_generated_report(
     )
 
 
-def _generate_story(
+def _story_prompt_payload(
     story_pack: _StoryPack,
     *,
     package: ReportGenerationPackage,
-    model: str,
-    client: _ChatClient,
-    temperature: float,
-    metrics_dir: Path | None,
-    task_type: str,
-    report_id: str,
-    workflow_run_id: str,
-) -> _StoryDraft | None:
-    prompt_payload = {
+    compact: bool,
+) -> dict[str, object]:
+    descriptor = (
+        _compact_model_descriptor if compact else _model_descriptor
+    )
+    business_context = list(
+        _story_business_context_descriptors(story_pack)
+    )
+    if compact:
+        business_context = [
+            _compact_context_descriptor(context)
+            for context in business_context[
+                :_MAX_COMPACT_CONTEXT_DESCRIPTORS
+            ]
+        ]
+    payload: dict[str, object] = {
         "report_context": {
             "business_objective": _redact_numeric_text(
                 _text(
@@ -1178,26 +1237,58 @@ def _generate_story(
         },
         "story_id": story_pack.story_id,
         "evidence": [
-            _model_descriptor(
+            descriptor(
                 item,
                 fact_limit=_MODEL_FACTS_PER_EVIDENCE,
             )
             for item in story_pack.items
         ],
-        "verified_business_context": list(
-            _story_business_context_descriptors(story_pack)
-        ),
+        "verified_business_context": business_context,
     }
-    prompt_json = json.dumps(
-        prompt_payload,
+    if compact:
+        payload["input_compaction"] = {
+            "applied": True,
+            "policy": "shortened_saved_insights_and_bounded_context",
+        }
+    return payload
+
+
+def _compact_json(payload: object) -> str:
+    return json.dumps(
+        payload,
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
     )
+
+
+def _generate_story(
+    story_pack: _StoryPack,
+    *,
+    package: ReportGenerationPackage,
+    model: str,
+    client: _ChatClient,
+    temperature: float,
+    metrics_dir: Path | None,
+    task_type: str,
+    report_id: str,
+    workflow_run_id: str,
+) -> _StoryDraft | None:
+    prompt_payload = _story_prompt_payload(
+        story_pack,
+        package=package,
+        compact=False,
+    )
+    prompt_json = _compact_json(prompt_payload)
     if len(prompt_json) > _MAX_BATCH_CHARACTERS:
-        raise ReportNarrationError(
-            "A synthesis story pack is too large for the local model."
+        prompt_payload = _story_prompt_payload(
+            story_pack,
+            package=package,
+            compact=True,
         )
+        prompt_json = _compact_json(prompt_payload)
+    if len(prompt_json) > _MAX_BATCH_CHARACTERS:
+        raise _OversizedStoryPack
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {
@@ -2576,6 +2667,130 @@ def _model_descriptor(
     }
 
 
+def _compact_model_descriptor(
+    item: NarratedEvidence,
+    *,
+    fact_limit: int = 8,
+) -> dict[str, object]:
+    descriptor = _model_descriptor(item, fact_limit=fact_limit)
+    descriptor["qualitative_facts"] = _compact_qualitative_facts(
+        item.facts
+    )
+    descriptor["verified_context"] = [
+        _compact_context_descriptor(context)
+        for context in _item_context_descriptors(item)[
+            :_MAX_COMPACT_CONTEXT_DESCRIPTORS
+        ]
+    ]
+    descriptor["verified_business_context"] = [
+        _compact_context_descriptor(context)
+        for context in _item_business_context_descriptors(item)[
+            :_MAX_COMPACT_CONTEXT_DESCRIPTORS
+        ]
+    ]
+    descriptor["limitations"] = descriptor["limitations"][:2]
+    return descriptor
+
+
+def _compact_qualitative_facts(value: object) -> object:
+    redacted = _redact_numbers(value)
+    if not isinstance(redacted, list):
+        return _compact_model_value(redacted)
+    compacted: list[object] = []
+    seen_questions: set[str] = set()
+    for fact in redacted:
+        if (
+            isinstance(fact, dict)
+            and fact.get("type")
+            == "user_requested_visualization_insight"
+        ):
+            compacted.append(
+                _compact_saved_visualization_insight(
+                    fact,
+                    seen_questions=seen_questions,
+                )
+            )
+        else:
+            compacted.append(_compact_model_value(fact))
+    return compacted
+
+
+def _compact_saved_visualization_insight(
+    fact: dict[str, object],
+    *,
+    seen_questions: set[str],
+) -> dict[str, object]:
+    compacted = {
+        key: _compact_model_value(fact[key])
+        for key in ("type", "measure", "confidence")
+        if key in fact
+    }
+    observation = fact.get("observation")
+    if not isinstance(observation, dict):
+        compacted["observation"] = _compact_model_value(observation)
+        return compacted
+    concise_observation: dict[str, object] = {}
+    for key in (
+        "finding",
+        "management_implication",
+        "suggested_action",
+        "question",
+    ):
+        field = observation.get(key)
+        if not isinstance(field, str) or not field.strip():
+            continue
+        shortened = _shortened_insight_text(field)
+        if key == "question":
+            normalized = shortened.casefold()
+            if normalized in seen_questions:
+                continue
+            seen_questions.add(normalized)
+        concise_observation[key] = shortened
+    compacted["observation"] = concise_observation
+    return compacted
+
+
+def _compact_model_value(value: object, *, depth: int = 0) -> object:
+    if depth > 4:
+        return "<bounded>"
+    if isinstance(value, str):
+        return _shortened_insight_text(value)
+    if isinstance(value, list):
+        return [
+            _compact_model_value(item, depth=depth + 1)
+            for item in value[:8]
+        ]
+    if isinstance(value, dict):
+        return {
+            str(key)[:120]: _compact_model_value(
+                item,
+                depth=depth + 1,
+            )
+            for key, item in list(value.items())[:8]
+        }
+    return value
+
+
+def _compact_context_descriptor(
+    descriptor: dict[str, str],
+) -> dict[str, str]:
+    return {
+        "metric": _redact_numeric_text(descriptor["metric"]),
+        "path": descriptor["path"][:240],
+        "value": _shortened_insight_text(descriptor["value"]),
+    }
+
+
+def _shortened_insight_text(value: str) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= _MAX_COMPACT_INSIGHT_CHARACTERS:
+        return normalized
+    prefix = normalized[: _MAX_COMPACT_INSIGHT_CHARACTERS - 3]
+    if " " in prefix:
+        prefix = prefix.rsplit(" ", maxsplit=1)[0]
+    return prefix.rstrip(" ,;:-") + "..."
+
+
 def _redact_numbers(value: object, *, depth: int = 0) -> object:
     if depth > 4:
         return "<bounded>"
@@ -2985,7 +3200,8 @@ def _parse_generation_diagnostics(
             )
         return {}
     diagnostics = _dict(value)
-    if set(diagnostics) != {
+    schema_version = diagnostics.get("schema_version")
+    expected_fields = {
         "schema_version",
         "story_pack_count",
         "ai_story_count",
@@ -2993,7 +3209,10 @@ def _parse_generation_diagnostics(
         "rejected_story_ids",
         "executive_summary_source",
         "validation_policy",
-    }:
+    }
+    if schema_version == 2:
+        expected_fields.add("oversized_story_ids")
+    if schema_version not in {1, 2} or set(diagnostics) != expected_fields:
         raise ReportNarrationError(
             "Generated report AI diagnostics are invalid."
         )
@@ -3002,7 +3221,7 @@ def _parse_generation_diagnostics(
         "ai_story_count",
         "fallback_story_count",
     )
-    if diagnostics.get("schema_version") != 1 or any(
+    if any(
         isinstance(diagnostics.get(field), bool)
         or not isinstance(diagnostics.get(field), int)
         or int(diagnostics[field]) < 0
@@ -3028,6 +3247,22 @@ def _parse_generation_diagnostics(
         raise ReportNarrationError(
             "Generated report rejected-story diagnostics are invalid."
         )
+    oversized_story_ids = (
+        _string_tuple(diagnostics.get("oversized_story_ids"))
+        if schema_version == 2
+        else ()
+    )
+    if (
+        len(set(oversized_story_ids)) != len(oversized_story_ids)
+        or any(
+            _STORY_ID.fullmatch(story_id) is None
+            for story_id in oversized_story_ids
+        )
+        or set(oversized_story_ids) & set(rejected_story_ids)
+    ):
+        raise ReportNarrationError(
+            "Generated report oversized-story diagnostics are invalid."
+        )
     summary_source = diagnostics.get("executive_summary_source")
     if summary_source not in {
         "ollama",
@@ -3051,8 +3286,8 @@ def _parse_generation_diagnostics(
         raise ReportNarrationError(
             "Generated report validation diagnostics are invalid."
         )
-    return {
-        "schema_version": 1,
+    parsed = {
+        "schema_version": schema_version,
         "story_pack_count": story_pack_count,
         "ai_story_count": ai_story_count,
         "fallback_story_count": fallback_story_count,
@@ -3060,6 +3295,9 @@ def _parse_generation_diagnostics(
         "executive_summary_source": summary_source,
         "validation_policy": policy,
     }
+    if schema_version == 2:
+        parsed["oversized_story_ids"] = list(oversized_story_ids)
+    return parsed
 
 
 def _parse_saved_summary_fact_reference(

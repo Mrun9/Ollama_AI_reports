@@ -61,6 +61,7 @@ def test_evidence_and_chart_directories_are_outside_static_directory(
         "EVIDENCE_DIR",
         "CHART_DIR",
         "VISUALIZATION_DIR",
+        "VISUALIZATION_INSIGHT_DIR",
         "VISUALIZATION_PREVIEW_DIR",
         "REPORT_CONFIGURATION_DIR",
         "REPORT_PACKAGE_DIR",

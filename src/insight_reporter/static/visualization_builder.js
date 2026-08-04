@@ -23,12 +23,34 @@
     return;
   }
 
-  const singleMeasureCharts = new Set(["scatter", "histogram", "box"]);
+  const singleMeasureCharts = new Set([
+    "scatter",
+    "histogram",
+    "box",
+    "pareto",
+    "donut",
+    "heatmap",
+    "waterfall",
+    "funnel",
+    "scorecard",
+  ]);
   const chartRules = {
     time_line: {
       allowedKinds: new Set(["date"]),
       label: "Which date should be used?",
       help: "The chart will place dates from this field in time order.",
+      hideGrouping: false,
+    },
+    time_area: {
+      allowedKinds: new Set(["date"]),
+      label: "Which date should be used?",
+      help: "The chart will emphasize change across this date field.",
+      hideGrouping: false,
+    },
+    time_area_stacked: {
+      allowedKinds: new Set(["date"]),
+      label: "Which date should be used?",
+      help: "Choose a date, then optionally split the total in Advanced options.",
       hideGrouping: false,
     },
     category_bar: {
@@ -41,6 +63,24 @@
       allowedKinds: new Set(["category"]),
       label: "Which groups should be ranked?",
       help: "Choose a field such as region, product, team, or customer type.",
+      hideGrouping: false,
+    },
+    category_bar_stacked: {
+      allowedKinds: new Set(["category"]),
+      label: "Which groups should be compared?",
+      help: "Choose a group, then split its composition in Advanced options.",
+      hideGrouping: false,
+    },
+    pareto: {
+      allowedKinds: new Set(["category"]),
+      label: "Which contributors should be ranked?",
+      help: "Categories will be sorted from largest to smallest automatically.",
+      hideGrouping: false,
+    },
+    donut: {
+      allowedKinds: new Set(["category"]),
+      label: "Which categories make up the whole?",
+      help: "Choose a field containing no more than seven category values.",
       hideGrouping: false,
     },
     scatter: {
@@ -61,6 +101,36 @@
       help: "Choose a group to compare distributions, or leave it ungrouped.",
       hideGrouping: false,
     },
+    heatmap: {
+      allowedKinds: new Set(["category"]),
+      label: "Which groups should run across the chart?",
+      help: "A second group will create the heatmap rows.",
+      hideGrouping: false,
+    },
+    waterfall: {
+      allowedKinds: new Set(["category"]),
+      label: "Which ordered steps explain the change?",
+      help: "Choose a stage or ordered category field.",
+      hideGrouping: false,
+    },
+    funnel: {
+      allowedKinds: new Set(["category"]),
+      label: "Which field contains the process stages?",
+      help: "Stages will be compared from the largest value to the smallest.",
+      hideGrouping: false,
+    },
+    combo: {
+      allowedKinds: new Set(["category"]),
+      label: "Which groups should compare the two measures?",
+      help: "Select exactly two compatible numbers for bars and a line.",
+      hideGrouping: false,
+    },
+    scorecard: {
+      allowedKinds: new Set(["none"]),
+      label: "No grouping is needed",
+      help: "The selected value will be aggregated into one headline number.",
+      hideGrouping: true,
+    },
   };
 
   function selectedChart() {
@@ -70,9 +140,18 @@
   function limitMeasures(chartType) {
     const singleMeasure = singleMeasureCharts.has(chartType);
     if (measureHelp !== null) {
-      measureHelp.textContent = singleMeasure
+      measureHelp.textContent = chartType === "combo"
+        ? "Select exactly two compatible numbers: one for bars and one for the line."
+        : singleMeasure
         ? "This view uses one number. Selecting another will replace the current choice."
         : "Select one number, or up to five compatible numbers for comparison.";
+    }
+    if (chartType === "combo") {
+      const checked = measures.filter((measure) => measure.checked);
+      checked.slice(2).forEach((measure) => {
+        measure.checked = false;
+      });
+      return;
     }
     if (!singleMeasure) {
       return;
@@ -111,14 +190,30 @@
 
     const supportsSeries = new Set([
       "time_line",
+      "time_area",
+      "time_area_stacked",
       "category_bar",
       "category_bar_horizontal",
+      "category_bar_stacked",
+      "heatmap",
     ]).has(chartType);
     if (seriesField !== null) {
       seriesField.hidden = !supportsSeries;
     }
     if (!supportsSeries && seriesColumn !== null) {
       seriesColumn.value = "";
+    }
+    if (chartType === "heatmap" && seriesColumn !== null) {
+      const alternatives = Array.from(seriesColumn.options).filter(
+        (option) => option.value && option.value !== xColumn.value
+      );
+      if (!seriesColumn.value || seriesColumn.value === xColumn.value) {
+        seriesColumn.value = alternatives[0]?.value ?? "";
+      }
+      const advanced = seriesField?.closest("details");
+      if (advanced !== null && advanced !== undefined) {
+        advanced.open = true;
+      }
     }
   }
 
@@ -134,6 +229,12 @@
   measures.forEach((measure) => {
     measure.addEventListener("change", () => {
       if (!measure.checked || !singleMeasureCharts.has(selectedChart())) {
+        if (measure.checked && selectedChart() === "combo") {
+          const checked = measures.filter((item) => item.checked);
+          if (checked.length > 2) {
+            checked[0].checked = false;
+          }
+        }
         return;
       }
       measures.forEach((other) => {

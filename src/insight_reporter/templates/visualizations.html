@@ -54,6 +54,23 @@
         text-decoration: none;
       }
       .primary-action:hover { background: var(--accent-dark); }
+      .dashboard-actions {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+      }
+      .secondary-action {
+        background: var(--panel-background);
+        border: 1px solid var(--accent);
+        border-radius: 0.45rem;
+        color: var(--accent-dark);
+        display: inline-block;
+        font-weight: 650;
+        padding: 0.6rem 0.85rem;
+        text-decoration: none;
+      }
+      .secondary-action:hover { background: #eff6ff; }
       .dashboard-status,
       .report-panel,
       .empty-dashboard {
@@ -146,6 +163,7 @@
         object-fit: contain;
         width: 100%;
       }
+      .chart-frame img.manual-chart-image { aspect-ratio: 800 / 460; }
       .card-details {
         color: var(--text-muted);
         display: grid;
@@ -198,10 +216,16 @@
             become available as visualization measures.
           </p>
         </div>
-        <a class="primary-action"
-          href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
-          + Build visualization
-        </a>
+        <div class="dashboard-actions" aria-label="Create a visualization">
+          <a class="primary-action"
+            href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
+            Automated Visualization
+          </a>
+          <a class="secondary-action"
+            href="{{ url_for('core.manual_visualization_builder', dataset_id=dataset_id) }}">
+            Build Manual Visualization
+          </a>
+        </div>
       </header>
 
       <section class="dashboard-status" aria-label="Dashboard status">
@@ -224,9 +248,9 @@
 
       <div class="dashboard-heading" id="saved-visualizations">
         <h2>Saved visualizations</h2>
-        <p>{{ visualizations|length }} chart(s) on this dashboard</p>
+        <p>{{ visualizations|length + manual_visualizations|length }} chart(s) on this dashboard</p>
       </div>
-      {% if visualizations %}
+      {% if visualizations or manual_visualizations %}
         <section class="visualization-grid" aria-label="Saved dashboard charts">
           {% for artifact in visualizations %}
             <article class="visualization-card">
@@ -238,6 +262,9 @@
                   <span class="badge">{{ artifact.chart.chart_type|replace("_", " ") }}</span>
                   {% if artifact.spec.include_in_report %}
                     <span class="badge badge-report">Included in report</span>
+                  {% endif %}
+                  {% if artifact.assistant %}
+                    <span class="badge">Ollama suggested</span>
                   {% endif %}
                 </div>
                 <h3>{{ artifact.spec.title }}</h3>
@@ -279,6 +306,65 @@
               </footer>
             </article>
           {% endfor %}
+          {% for artifact in manual_visualizations %}
+            <article class="visualization-card">
+              <header class="card-header">
+                <div class="badges">
+                  <span class="badge">Manual board</span>
+                  <span class="badge">{{ artifact.chart_type|replace("_", " ") }}</span>
+                  {% if artifact.png_filename %}
+                    <span class="badge badge-report">Report ready</span>
+                  {% endif %}
+                </div>
+                <h3>{{ artifact.title }}</h3>
+                <p>Interactive manual visualization</p>
+              </header>
+              <figure class="chart-frame">
+                {% set manual_chart_url = url_for(
+                  'core.saved_manual_visualization_chart_png',
+                  dataset_id=dataset_id,
+                  visualization_id=artifact.visualization_id
+                ) if artifact.png_filename else url_for(
+                  'core.saved_manual_visualization_chart',
+                  dataset_id=dataset_id,
+                  visualization_id=artifact.visualization_id
+                ) %}
+                <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                  <img
+                    class="manual-chart-image"
+                    src="{{ manual_chart_url }}"
+                    alt="{{ artifact.title }} — {{ artifact.chart_type|replace('_', ' ') }}"
+                    width="800"
+                    height="460"
+                    loading="lazy"
+                    decoding="async"
+                  >
+                </a>
+              </figure>
+              <dl class="card-details">
+                <dt>Fields</dt>
+                <dd>{{ artifact.fields.values()|select|join(", ") }}</dd>
+                <dt>Records</dt>
+                <dd>{{ artifact.preview.get("record_count", 0) }}</dd>
+                <dt>Report</dt>
+                <dd>
+                  {% if artifact.png_filename %}
+                    Available for report selection
+                  {% else %}
+                    Re-save once to enable report export
+                  {% endif %}
+                </dd>
+              </dl>
+              <footer class="card-actions">
+                <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+                  Open details
+                </a>
+                <a href="{{ url_for('core.manual_visualization_builder', dataset_id=dataset_id, edit=artifact.visualization_id) }}">
+                  Edit
+                </a>
+              </footer>
+            </article>
+          {% endfor %}
         </section>
       {% else %}
         <section class="empty-dashboard">
@@ -286,10 +372,16 @@
           <p>
             Create and save a visualization to display its chart here.
           </p>
-          <a class="primary-action"
-            href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
-            Build the first visualization
-          </a>
+          <div class="dashboard-actions" aria-label="Create the first visualization">
+            <a class="primary-action"
+              href="{{ url_for('core.visualization_builder', dataset_id=dataset_id) }}">
+              Automated Visualization
+            </a>
+            <a class="secondary-action"
+              href="{{ url_for('core.manual_visualization_builder', dataset_id=dataset_id) }}">
+              Build Manual Visualization
+            </a>
+          </div>
         </section>
       {% endif %}
 

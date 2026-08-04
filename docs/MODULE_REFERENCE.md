@@ -588,11 +588,82 @@ Important internals:
   `_group_measure_value` calculate displayed values. Grouped conditional KPIs
   call `evaluate_conditional_metric` over the exact group's rows rather than
   averaging row indicators.
-- `_render_chart`, `_render_line`, `_render_bars`, `_render_scatter`, and
-  `_render_box` produce images through Matplotlib’s non-interactive backend.
+- `_render_chart` dispatches to deterministic Matplotlib renderers for line,
+  area, stacked area, grouped/stacked bars, Pareto, donut, scatter, histogram,
+  box, heatmap, waterfall, funnel, combo, and scorecard charts.
 - `_validate_dataset` and `_source_metadata` bind artifacts to the source.
 
-Primary test: `tests/test_visualization_builder.py`.
+Primary test: `tests/test_visualization_builder.py`. The complete mapping and
+deferred schema extensions are documented in `docs/CHART_MAPPING.md`.
+
+### `manual_visualization_preview.py` and `manual_visualization_store.py`
+
+Own the separate drag-and-drop manual board. Preview calculation is bounded
+and server-validated for every supported field role and chart type. Saved
+`MBV-*` artifacts retain the selected roles, settings, calculated preview,
+source fingerprint, sanitized SVG, and an 800-by-460 PNG prepared by the
+browser for report/PDF export. Older artifacts without the PNG remain
+viewable, but must be reopened and saved once before report selection.
+
+`manual_visualization_evidence.generate_manual_board_evidence(...)` converts
+the retained preview into deterministic report facts such as displayed
+extremes, time changes, numeric association, box summaries, target gaps, and
+Pareto contribution. The report package includes these bounded facts rather
+than raw dataset rows. Generated reports use the SVG for the current HTML view
+and snapshot the PNG for immutable history and PDF export.
+
+### `visualization_suggestions.py`
+
+Requests one optional chart recommendation from local Ollama and accepts it
+only if the normal manual-visualization contract validates it.
+
+- `build_visualization_suggestion_schema(...)` constrains chart type, measure
+  selectors, x/series columns, aggregation, and date granularity.
+- `build_visualization_profile_summary(...)` sends bounded semantic metadata
+  without raw source rows.
+- `generate_visualization_suggestion(...)` performs the measured local-model
+  call as `visualization_suggestions`.
+- `parse_visualization_suggestion(...)` rejects malformed, hallucinated, or
+  incompatible proposals through `parse_visualization_spec(...)` and
+  `validate_visualization_spec(...)`.
+- `VisualizationSuggestion.assistant_metadata(...)` retains model, user
+  request, confidence, and rationale on the preview and saved artifact.
+
+Primary tests: `tests/test_visualization_suggestions.py` and
+`tests/test_visualization_builder.py`.
+
+### `visualization_insights.py`
+
+Owns post-save, user-requested management findings for automated `VIS-*` and
+manual-board `MBV-*` visualizations. It keeps interpretation separate from
+the immutable chart definition.
+
+- `VisualizationInsightArtifact` stores the question, exact visualization
+  fingerprint, report-inclusion preference, model status, grounded points,
+  and limitations.
+- `generate_visualization_insight(...)` asks Python for chart-specific facts
+  first and optionally asks Ollama to add an implication and action for each
+  fact ID.
+- `_deterministic_findings(...)`, `_observation_finding(...)`,
+  `_chart_specific_findings(...)`, and `_period_movement_findings(...)`
+  calculate and phrase the factual layer from retained supporting data.
+- `_generate_annotations(...)` sends only the question, chart metadata, and
+  Python findings to Ollama as the measured `visualization_insights` task.
+- `_parse_annotations(...)` requires one response per known fact ID and
+  rejects added digits or numeric symbols.
+- `save_visualization_insight(...)` and
+  `load_visualization_insight(...)` atomically persist and reload only an
+  artifact whose SHA-256 still matches the saved chart.
+- `set_visualization_insight_report_inclusion(...)` changes only the editorial
+  carry-forward preference.
+- `VisualizationInsightArtifact.report_observations()` converts opted-in
+  points into the existing manual-visualization evidence contract.
+- Manual-board detail pages expose the same question, optional Ollama
+  interpretation, saved-findings display, report-inclusion preference, and a
+  bounded supporting-data table. Fingerprinting invalidates the insight when
+  the board is edited and saved again.
+
+Primary test: `tests/test_visualization_insights.py`.
 
 ### `manual_visualization_evidence.py`
 
@@ -600,8 +671,9 @@ Creates deterministic evidence from a saved manual chart.
 
 - `ManualVisualizationEvidence` stores chart purpose, classification, source,
   measures, filters, observations, supporting data, and limitations.
-- `generate_manual_visualization_evidence(artifact)` derives evidence from the
-  actual plotted values.
+- `generate_manual_visualization_evidence(...)` derives evidence from the
+  actual plotted values and can append already-grounded, opted-in requested
+  insight observations.
 - `_aggregate_observations` calculates displayed extrema.
 - `_time_changes` calculates changes between displayed periods.
 - `_scatter_observation` calculates a displayed association.
@@ -886,7 +958,7 @@ Route behaviour is covered across the route test files, especially
   builder and row-grain confirmation.
 - `configuration.html` — saved KPI registry.
 - `insights.html` — deterministic insights and evidence cards.
-- `visualization_builder.html` — manual chart editor.
+- `visualization_builder.html` — guided manual and Ollama-assisted chart editor.
 - `visualization.html` — saved chart detail.
 - `visualizations.html` — report dashboard and saved chart collection.
 - `_report_project_navigation.html` — persistent Data source, KPI/evidence,

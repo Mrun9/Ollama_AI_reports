@@ -98,6 +98,19 @@
         border-radius: 0.5rem;
         padding: 0.8rem;
       }
+      .assistant-panel {
+        background: #f5f3ff;
+        border: 1px solid #c4b5fd;
+        border-radius: 0.75rem;
+        margin: 1.25rem 0;
+        padding: 1rem;
+      }
+      .assistant-panel form {
+        background: transparent;
+        border: 0;
+        padding: 0;
+      }
+      .assistant-panel h2 { margin-top: 0; }
       button[type="submit"] {
         background: var(--accent);
         border: 0;
@@ -129,6 +142,26 @@
         <p role="alert"><strong>Visualization rejected:</strong> {{ error }}</p>
       {% endif %}
 
+      <section class="assistant-panel" aria-labelledby="ollama-chart-heading">
+        <h2 id="ollama-chart-heading">Let Ollama recommend a chart</h2>
+        <p>
+          Describe the decision or question in everyday language. {{ suggestion_model }}
+          will select from compatible chart styles and detected columns; Python
+          validates the complete setup and generates the preview.
+        </p>
+        <form method="post"
+          action="{{ url_for('core.suggest_visualization', dataset_id=dataset_id) }}">
+          <label for="assistant-request">What do you want to understand?</label>
+          <textarea id="assistant-request" name="user_request" maxlength="2000"
+            required>{{ assistant_request or "" }}</textarea>
+          <button type="submit">Suggest and preview a chart</button>
+        </form>
+        <p class="help">
+          The suggestion is never saved automatically. Review the chart before
+          deciding whether it belongs on the dashboard.
+        </p>
+      </section>
+
       <form method="post"
         action="{{ url_for('core.preview_visualization', dataset_id=dataset_id) }}">
         <input type="hidden" name="replaces_visualization_id"
@@ -142,6 +175,14 @@
               "See change over time",
               "Monthly, quarterly, or yearly trends"
             ),
+            "time_area": (
+              "Show a trend with emphasis",
+              "Area shading makes the size of change easier to see"
+            ),
+            "time_area_stacked": (
+              "Show parts of a trend",
+              "See how categories contribute to a total over time"
+            ),
             "category_bar": (
               "Compare groups",
               "Compare regions, products, teams, or categories"
@@ -149,6 +190,18 @@
             "category_bar_horizontal": (
               "Rank groups",
               "Show highest or lowest groups clearly"
+            ),
+            "category_bar_stacked": (
+              "Compare group composition",
+              "Show how categories contribute within each group"
+            ),
+            "pareto": (
+              "Find the vital few",
+              "Rank contributors and show their cumulative percentage"
+            ),
+            "donut": (
+              "Show share of a whole",
+              "Use only for a small number of categories"
             ),
             "scatter": (
               "Find a relationship",
@@ -161,10 +214,39 @@
             "box": (
               "Find spread and outliers",
               "See typical ranges and unusual values"
+            ),
+            "heatmap": (
+              "Find hot and cold spots",
+              "Compare one number across two category fields"
+            ),
+            "waterfall": (
+              "Explain step-by-step change",
+              "Show positive and negative contributions in sequence"
+            ),
+            "funnel": (
+              "Show stage conversion",
+              "Compare ordered process stages from largest to smallest"
+            ),
+            "combo": (
+              "Compare two measures",
+              "Use bars and a line across the same groups"
+            ),
+            "scorecard": (
+              "Highlight one headline number",
+              "Display a single aggregated KPI or value"
             )
           } %}
+          {% set primary_chart_types = (
+            "time_line",
+            "category_bar",
+            "category_bar_horizontal",
+            "scatter",
+            "histogram",
+            "box",
+            "scorecard"
+          ) %}
           <div class="goal-grid">
-            {% for chart_type in chart_types %}
+            {% for chart_type in primary_chart_types %}
               <label class="goal-card">
                 <input type="radio" name="chart_type" value="{{ chart_type }}"
                   {% if form_data.get('chart_type') == chart_type %}checked{% endif %}
@@ -174,6 +256,21 @@
               </label>
             {% endfor %}
           </div>
+          <details
+            {% if form_data.get('chart_type') not in primary_chart_types %}open{% endif %}>
+            <summary>More chart styles</summary>
+            <div class="goal-grid">
+              {% for chart_type in chart_types if chart_type not in primary_chart_types %}
+                <label class="goal-card">
+                  <input type="radio" name="chart_type" value="{{ chart_type }}"
+                    {% if form_data.get('chart_type') == chart_type %}checked{% endif %}
+                    required>
+                  {{ chart_choices[chart_type][0] }}
+                  <small>{{ chart_choices[chart_type][1] }}</small>
+                </label>
+              {% endfor %}
+            </div>
+          </details>
         </fieldset>
 
         <fieldset class="step">
@@ -376,6 +473,10 @@
                 {% if form_data.get('sort_by') == 'value' %}selected{% endif %}>value</option>
               <option value="label"
                 {% if form_data.get('sort_by') == 'label' %}selected{% endif %}>label</option>
+              <option value="source"
+                {% if form_data.get('sort_by') == 'source' %}selected{% endif %}>
+                source order
+              </option>
             </select>
           </p>
           <p>

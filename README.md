@@ -533,6 +533,62 @@ made it difficult to move back and forth between KPIs and charts.
 between both repeatedly. Report generation still receives the final reviewed
 KPIs, deterministic evidence, and selected dashboard visualizations.
 
+### Milestone 6D.1 — Expanded charts and Ollama-assisted visualization
+
+**Problem:** The guided builder exposed only six common chart styles and still
+required the user to decide which chart-to-column mapping fit the question.
+
+**Implemented:**
+
+- Ten additional management chart styles: area, stacked area, stacked bar,
+  Pareto, donut, heatmap, waterfall, funnel, combo bar-and-line, and KPI
+  scorecard.
+- Deterministic compatibility rules for temporal, categorical, numeric,
+  row-level, summable, low-cardinality, ordered, and multi-measure mappings.
+- An optional “Suggest and preview” action using local Ollama. The model sees
+  bounded semantic metadata and exact allowed selectors—not raw dataset rows.
+- JSON-Schema-constrained output plus the same Python parsing, measure
+  resolution, compatibility validation, calculation, and rendering used by
+  manual charts.
+- Saved assistant provenance containing model, user request, confidence, and
+  rationale. Suggestions never save automatically.
+- A documented mapping contract and explicit list of chart families that
+  require future visualization-spec roles.
+
+**Result:** Non-technical users can describe a management question in ordinary
+language and receive a reviewable chart, while invalid or hallucinated model
+mappings cannot reach preview or dashboard persistence. See
+[Chart-to-column mapping](docs/CHART_MAPPING.md).
+
+### Milestone 6D.2 — On-demand visualization insights
+
+**Problem:** A saved chart could enter a report as deterministic evidence, but
+the dashboard did not explain the chart in decision-oriented language and the
+user could not explicitly carry that explanation into later reports.
+
+**Implemented:**
+
+- An on-demand question on every saved visualization that derives up to five
+  precise findings from its retained supporting data.
+- Python-authored findings that use actual displayed category, region,
+  product, series, and period values plus chart-specific changes, shares,
+  gaps, distributions, funnel retention, or waterfall contributions.
+- Optional Ollama implications and suggested actions. The model sees only the
+  user question and Python-written facts, cannot replace those findings, and
+  is rejected if it adds numeric claims.
+- A separate, atomic `visualization_insights/` artifact bound to the exact
+  saved-chart SHA-256 fingerprint. Editing or regenerating the chart makes an
+  older insight unavailable until it is regenerated.
+- Explicit report inclusion. An opted-in insight follows the chart only when
+  that visualization is selected in report configuration; it remains saved
+  for dashboard use when excluded.
+- Graceful local-model failure: safe Python findings are still retained when
+  Ollama is offline or its output fails validation.
+
+**Result:** Users can ask what a chart means, review its factual and advisory
+layers separately, and choose whether those reviewed points contribute to
+HTML, JSON, and PDF report generation.
+
 ### Cross-cutting instrumentation — Model-run benchmark log
 
 **Problem:** Prompt revisions could be judged only by reading their output.
@@ -586,18 +642,24 @@ CSV contract and comparison method.
 - **Milestone 6C.3 — Explicit target scope:** implemented.
 - **Milestone 6D.0 — Report-project navigation and dashboard entry:**
   implemented.
+- **Milestone 6D.1 — Expanded charts and Ollama-assisted visualization:**
+  implemented.
+- **Milestone 6D.2 — On-demand visualization insights:** implemented.
 - **Milestone 6D — Report presentation improvements:** planned after the
   remaining functionality, while retaining HTML, JSON, and PDF exports.
 
-The project currently implements **Milestone 6D.0: report-project navigation
-and dashboard entry**, building on explicit target scope, insight
+The project currently implements **Milestone 6D.2: on-demand visualization
+insights**, building on expanded charts, Ollama-assisted visualization,
+report-project navigation,
+explicit target scope, insight
 applicability, configurable source and conditional KPIs,
 the workspace lifecycle,
 period/cohort comparisons, and management-focused reporting. It profiles one
 securely ingested CSV, flat JSON dataset, or selected XLSX worksheet; supports one to five source,
 derived, or conditional KPIs; optionally asks local Ollama for advisory configuration suggestions; performs
 every KPI calculation and insight in Python; turns each insight into reviewer-verifiable automatic
-evidence; lets users configure, review, and save validated KPI or supplementary charts; and creates
+evidence; lets users manually configure or request Ollama suggestions for
+reviewed KPI or supplementary charts; and creates
 a source-bound selection of the trusted KPIs, evidence, and charts. It then builds a bounded,
 evidence-only JSON package and uses local Ollama for structured stories whose numerical claims are
 validated against Python facts. The narrative can naturally quote several verified values and add
@@ -721,10 +783,14 @@ print-ready HTML, and verified PDF downloads.
 - Randomized chart filenames and validated chart serving from non-public `instance/charts/`
 - Versioned evidence JSON under `instance/evidence/`
 - Evidence generation for CSV, JSON, XLSX, source KPIs, derived KPIs, and one-to-five KPI registries
-- Manual visualization builder with preview, save, reopen, edit, and regeneration flows
+- Guided manual visualization builder with preview, save, reopen, edit, and regeneration flows
+- Optional Ollama chart suggestion from a plain-language question, constrained
+  to detected columns and revalidated by Python before preview
 - Report-selectable KPI visualizations and clearly labelled supplementary visualizations
 - Supplementary numeric-column and record-count measures that do not become configured KPIs
-- Time-series line, vertical/horizontal category bar, scatter, histogram, and box charts
+- Line, area, stacked area, vertical/horizontal/stacked bar, Pareto, donut,
+  scatter, histogram, box, heatmap, waterfall, funnel, combo, and KPI
+  scorecard charts
 - Day, month, quarter, and year grouping for time-series visualizations
 - Structured date/category filters, include/exclude modes, sorting, Top-N, bin count, and scale
 - One-to-five compatible measures on line and category charts
@@ -732,6 +798,10 @@ print-ready HTML, and verified PDF downloads.
 - Secure versioned visualization JSON under `instance/visualizations/`
 - Short-lived validated preview artifacts under `instance/visualization_previews/`
 - Optional user-provided question or purpose stored with each manual visualization
+- On-demand, Python-grounded saved-chart findings with optional Ollama
+  implications/actions and explicit report carry-forward
+- Atomic, source-fingerprinted insight JSON under
+  `instance/visualization_insights/<dataset_id>/`
 - Deterministic evidence for saved manual charts, including displayed extrema, period change,
   descriptive distribution statistics, or Pearson association as applicable
 - Stable `MVE-...` manual-visualization evidence IDs and bounded supporting tables
@@ -860,6 +930,11 @@ and open **Advanced options** only when needed. The optional visualization quest
 what the user wants the chart to answer. Previewed charts are not retained
 until explicitly saved. A saved supplementary chart may be included in the
 final report, but remains labelled as supplementary rather than KPI evidence.
+Open a saved chart and use **Insights from this visualization** to ask a
+management question. Python calculates up to five chart-specific findings;
+Ollama may add plain-language implications and actions. Select the report
+carry-forward option when those reviewed findings should accompany the chart
+into reports.
 From the KPI page, select **Generate deterministic insights** to run the
 Python-only engine and review ranked evidence cards, supporting tables, charts,
 and JSON artifacts.
@@ -999,6 +1074,8 @@ POST  /insights/<dataset_id>
 POST  /visualizations/<dataset_id>/preview
 POST  /visualizations/<dataset_id>/preview/<token>/save
 POST  /visualizations/<dataset_id>/<visualization_id>/regenerate
+POST  /visualizations/<dataset_id>/<visualization_id>/insights
+POST  /visualizations/<dataset_id>/<visualization_id>/insights/report-inclusion
 POST  /reports/<dataset_id>/configure
 POST  /reports/<dataset_id>/generate
 POST  /reports/<dataset_id>/generated/<report_id>/presentation
@@ -1102,25 +1179,37 @@ New users should begin with the worked examples and decision guide in
   evidence claim.
 - Time-series charts require a recognized date column. Category charts require a recognized
   category column. Scatter plots require a numeric x-axis and exactly one row-level measure.
+- Stacked, Pareto, and donut charts require summable measures; donut charts
+  accept at most seven categories. Heatmaps require two different category
+  fields. Combo charts require exactly two compatible measures.
 - Histograms and box plots accept one source or row-derived measure. Aggregate-formula KPIs are
   rejected for row-level charts because they do not have one value per source row.
 - Aggregate-formula KPIs are recalculated from the applicable rows in every period or category.
-- Multiple measures must share a display format. Dual-axis charts are deliberately unsupported.
+- Multiple measures must share a display format. The explicit combo chart is
+  the only dual-axis style; it requires exactly two measures.
 - Structured category filters may include or exclude up to 50 exact values. Date filters require
   valid ISO start/end dates, Top-N is limited to 1–50, and series grouping is limited to 12 values.
-- Logarithmic scale is rejected when any plotted value is zero or negative and is not offered for
-  histogram or box charts.
+- Logarithmic scale is rejected when any plotted value is zero or negative and
+  is unavailable for chart types where it would distort shares, distributions,
+  stages, deltas, heatmaps, or scorecards.
 - Every preview and saved chart includes source hash/format/worksheet, measure definitions,
   filters, axes, aggregation, supporting data, and a randomized chart filename.
 - The optional visualization question is stored as user-provided context, escaped when displayed,
   and limited to 500 characters.
-- Report readiness derives chart observations in Python from the saved supporting data. It never
-  asks Ollama to interpret a manual chart.
+- Ollama suggestions receive semantic profile metadata but no raw rows. Their
+  exact model, request, confidence, and rationale remain attached as
+  provenance; the user must still save the preview explicitly.
+- Report readiness derives chart observations in Python from saved supporting
+  data. If the user separately requested and opted in a saved-chart insight,
+  the package also includes its exact Python finding plus any validated
+  Ollama implication/action.
 - Manual-chart evidence is descriptive only: category and distribution facts do not imply causes,
   while scatter correlation is explicitly labelled as association rather than causation.
 - Drafts use unguessable preview tokens and expire after 24 hours. Saved charts receive stable
   `VIS-...` identifiers.
-- Manual visualization generation never calls Ollama.
+- Manual chart calculation and rendering never call Ollama. Chart
+  configuration suggestions and post-save interpretation are separate,
+  optional calls whose outputs remain subject to Python validation.
 
 ## Report configuration and readiness rules
 
@@ -1155,6 +1244,19 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
   supporting table.
 - Every selected manual visualization receives stable deterministic evidence derived from its
   validated chart specification and supporting data.
+- Saved drag-and-drop manual-board charts are independently selectable. Python derives bounded
+  extremes, trends, associations, distributions, target gaps, and Pareto contribution from their
+  retained preview data; raw source rows are not sent for report narration.
+- A saved manual board exposes its supporting-point table and the same grounded management-insight
+  workflow as an automated chart, including optional Ollama interpretation and an **Include these
+  saved insights in reports** preference.
+- Newly saved or updated manual-board charts retain a sanitized SVG for the dashboard and an
+  800-by-460 PNG for immutable report snapshots and PDF export. Older boards must be reopened and
+  saved once before report selection so the export image exists.
+- A requested visualization insight enters that evidence only when its
+  report-inclusion preference is enabled and the chart itself is selected.
+  Insight artifacts are fingerprinted to the exact chart, so stale
+  interpretations cannot silently carry forward.
 - The package is bounded to 50 evidence records, 12 supporting rows per deterministic evidence
   record, and 20 manual visualizations. Any omitted selected IDs are listed explicitly.
 - Raw dataset rows, internal row numbers, identifier columns, and free-text
