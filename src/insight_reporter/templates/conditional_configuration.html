@@ -1,199 +1,108 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Conditional KPI | AI Insight Reporter</title>
-  </head>
-  <body>
-    <main>
-      {% set current_section = "kpi" %}
-      {% include "_report_project_navigation.html" %}
-      <h1>Build a conditional percentage KPI</h1>
-      <p>
-        Use this for rates and shares whose numerator depends on exact
-        categorical values. Python performs the filtering and division.
-      </p>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import page_header, alert %}
 
-      {% if configuration_error %}
-        <p role="alert"><strong>Conditional KPI rejected:</strong> {{ configuration_error }}</p>
-      {% endif %}
+{% block title %}Conditional KPI | AI Insight Reporter{% endblock %}
 
-      {% if configuration and configuration.metrics|length >= 5 %}
-        <p>The KPI registry already contains the maximum of five KPIs.</p>
-      {% elif condition_values %}
-        <form method="post"
-          action="{{ url_for('core.configure_conditional_kpi', dataset_id=dataset_id) }}">
-          <p>
-            <label for="conditional-name">KPI name</label>
-            <input id="conditional-name" name="name" required maxlength="120"
-              value="{{ form_data.get('name', 'Return/Cancellation Rate') }}">
-          </p>
+{% block content %}
+  {{ page_header(
+    "Build a conditional percentage KPI",
+    "Create a rate or value share whose numerator is defined by exact category values. Python performs the filtering and division.",
+    "KPI configuration"
+  ) }}
 
-          <fieldset>
-            <legend>Calculation base</legend>
-            <label>
-              <input type="radio" name="calculation_base" value="record_count" required
-                {% if form_data.get('calculation_base', 'record_count') == 'record_count' %}checked{% endif %}>
-              Record count: matching rows ÷ all rows
-            </label>
-            <label>
-              <input type="radio" name="calculation_base" value="value_sum"
-                {% if form_data.get('calculation_base') == 'value_sum' %}checked{% endif %}>
-              Value share: matching value sum ÷ total value sum
-            </label>
-          </fieldset>
+  {% if configuration_error %}{{ alert(configuration_error, "Conditional KPI rejected") }}{% endif %}
 
-          <p>
-            <label for="conditional-value-column">
-              Numeric value column (required only for value share)
-            </label>
-            <select id="conditional-value-column" name="value_column">
-              <option value="">Not used for record count</option>
-              {% for column in profile.kpi_candidates %}
-                <option value="{{ column }}"
-                  {% if form_data.get('value_column') == column %}selected{% endif %}>
-                  {{ column }}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
-
-          <p>
-            <label for="condition-column">Condition column</label>
-            <select id="condition-column" name="condition_column" required>
-              <option value="">Select a condition column</option>
-              {% for column in condition_values %}
-                <option value="{{ column }}"
-                  {% if form_data.get('condition_column') == column %}selected{% endif %}>
-                  {{ column }}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
-
-          <h2>Numerator values</h2>
-          <p>
-            Select values only under the condition column chosen above.
-            Other groups are ignored.
-          </p>
-          {% for column, values in condition_values.items() %}
-            <fieldset>
-              <legend>{{ column }}</legend>
-              {% for value in values %}
-                <label>
-                  <input type="checkbox"
-                    name="included_values::{{ column }}" value="{{ value }}"
-                    {% if value in form_data.getlist('included_values::' ~ column) %}checked{% endif %}>
-                  {{ value }}
-                </label>
-              {% endfor %}
+  {% if configuration and configuration.metrics|length >= 5 %}
+    <div class="alert alert-warning">The KPI registry already contains the maximum of five KPIs.</div>
+  {% elif condition_values %}
+    <form class="app-card" method="post"
+      action="{{ url_for('core.configure_conditional_kpi', dataset_id=dataset_id) }}"
+      data-conditional-form data-loading-form>
+      <div class="row g-4">
+        <div class="col-xl-7">
+          <section class="form-section">
+            <h2 class="h5 mb-3">1. Define the calculation</h2>
+            <div class="mb-3">
+              <label class="form-label" for="conditional-name">KPI name</label>
+              <input class="form-control" id="conditional-name" name="name" required maxlength="120"
+                value="{{ form_data.get('name', 'Return/Cancellation Rate') }}">
+            </div>
+            <fieldset class="mb-3">
+              <legend class="form-label">Calculation base</legend>
+              <div class="choice-grid">
+                <label class="choice-card"><input class="form-check-input" type="radio" name="calculation_base" value="record_count" required {% if form_data.get('calculation_base', 'record_count') == 'record_count' %}checked{% endif %}><span><strong class="d-block">Record count</strong><small class="app-muted">Matching rows ÷ all rows</small></span></label>
+                <label class="choice-card"><input class="form-check-input" type="radio" name="calculation_base" value="value_sum" {% if form_data.get('calculation_base') == 'value_sum' %}checked{% endif %}><span><strong class="d-block">Value share</strong><small class="app-muted">Matching value sum ÷ total value sum</small></span></label>
+              </div>
             </fieldset>
-          {% endfor %}
+            <div class="mb-3" data-value-column-field>
+              <label class="form-label" for="conditional-value-column">Numeric value column</label>
+              <select class="form-select" id="conditional-value-column" name="value_column">
+                <option value="">Select a numeric value</option>
+                {% for column in profile.kpi_candidates %}<option value="{{ column }}" {% if form_data.get('value_column') == column %}selected{% endif %}>{{ column }}</option>{% endfor %}
+              </select>
+              <div class="form-text">Required only for value share.</div>
+            </div>
+            <div>
+              <label class="form-label" for="condition-column">Condition column</label>
+              <select class="form-select" id="condition-column" name="condition_column" required>
+                <option value="">Select a condition column</option>
+                {% for column in condition_values %}<option value="{{ column }}" {% if form_data.get('condition_column') == column %}selected{% endif %}>{{ column }}</option>{% endfor %}
+              </select>
+            </div>
+          </section>
 
-          <label>
-            <input type="checkbox" name="row_grain_confirmed" value="yes"
-              {% if form_data.get('row_grain_confirmed') == 'yes' %}checked{% endif %}>
-            For record-count rates, I confirm that one row represents one
-            denominator event. Line-item data should not be treated as one row
-            per order.
-          </label>
-
-          <fieldset>
-            <legend>KPI direction</legend>
-            <label>
-              <input type="radio" name="kpi_direction" value="lower" required
-                {% if form_data.get('kpi_direction', 'lower') == 'lower' %}checked{% endif %}>
-              Lower is better
-            </label>
-            <label>
-              <input type="radio" name="kpi_direction" value="higher"
-                {% if form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>
-              Higher is better
-            </label>
-          </fieldset>
-
-          <p>
-            <label for="conditional-target">Optional percentage target</label>
-            <input id="conditional-target" name="target_or_benchmark"
-              type="number" min="0" max="100" step="any"
-              value="{{ form_data.get('target_or_benchmark', '') }}">
-          </p>
-          <p>
-            <label for="conditional-target-scope">Target applies to</label>
-            <select id="conditional-target-scope" name="target_scope" required>
-              {% for scope in target_scope_options %}
-                <option value="{{ scope }}"
-                  {% if form_data.get('target_scope', 'dataset') == scope %}selected{% endif %}>
-                  {% if scope == "period" %}Each period
-                  {% elif scope == "segment" %}Each segment
-                  {% else %}Complete dataset aggregate
-                  {% endif %}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
-
-          {% if configuration %}
-            <fieldset>
-              <legend>KPI role</legend>
-              <label>
-                <input type="radio" name="metric_role" value="secondary"
-                  {% if form_data.get('metric_role', 'secondary') == 'secondary' %}checked{% endif %}>
-                Add as secondary KPI
-              </label>
-              <label>
-                <input type="radio" name="metric_role" value="primary"
-                  {% if form_data.get('metric_role') == 'primary' %}checked{% endif %}>
-                Make this the primary KPI
-              </label>
-            </fieldset>
-          {% else %}
-            <input type="hidden" name="metric_role" value="primary">
-          {% endif %}
-
-          <h2>Shared analysis context</h2>
-          <p>
-            <label for="conditional-date">Date column</label>
-            <select id="conditional-date" name="date_column">
-              <option value="">No date column</option>
-              {% for column in profile.date_candidates %}
-                <option value="{{ column }}"
-                  {% if form_data.get('date_column') == column %}selected{% endif %}>
-                  {{ column }}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
-
-          <fieldset>
-            <legend>Category or segment columns</legend>
-            {% for column in profile.category_candidates %}
-              <label>
-                <input type="checkbox" name="category_columns" value="{{ column }}"
-                  {% if column in form_data.getlist('category_columns') %}checked{% endif %}>
-                {{ column }}
-              </label>
+          <section class="form-section">
+            <h2 class="h5 mb-1">2. Select numerator values</h2>
+            <p class="form-text mb-3">Choose the exact values counted in the numerator. Only the selected condition column is submitted.</p>
+            {% for column, values in condition_values.items() %}
+              <fieldset data-condition-values="{{ column }}" data-selection-group>
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                  <legend class="form-label mb-0">{{ column }}</legend>
+                  <span class="selection-status" data-selection-count></span>
+                </div>
+                <div class="choice-grid">
+                  {% for value in values %}<label class="choice-card"><input class="form-check-input" type="checkbox" name="included_values::{{ column }}" value="{{ value }}" {% if value in form_data.getlist('included_values::' ~ column) %}checked{% endif %}>{{ value }}</label>{% endfor %}
+                </div>
+              </fieldset>
             {% endfor %}
-          </fieldset>
+            <label class="choice-card mt-3">
+              <input class="form-check-input" type="checkbox" name="row_grain_confirmed" value="yes" {% if form_data.get('row_grain_confirmed') == 'yes' %}checked{% endif %}>
+              <span><strong class="d-block">Confirm row grain for record counts</strong><small class="app-muted">One row represents one denominator event. Line-item data should not be treated as one row per order.</small></span>
+            </label>
+          </section>
 
-          <p>
-            <label for="conditional-objective">Business objective</label>
-            <textarea id="conditional-objective" name="business_objective"
-              maxlength="2000" required>{{ form_data.get('business_objective', '') }}</textarea>
-          </p>
+          <section class="form-section">
+            <h2 class="h5 mb-3">3. Set KPI meaning</h2>
+            <fieldset class="mb-3"><legend class="form-label">KPI direction</legend><div class="choice-grid"><label class="choice-card"><input class="form-check-input" type="radio" name="kpi_direction" value="lower" required {% if form_data.get('kpi_direction', 'lower') == 'lower' %}checked{% endif %}>Lower is better</label><label class="choice-card"><input class="form-check-input" type="radio" name="kpi_direction" value="higher" {% if form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>Higher is better</label></div></fieldset>
+            {% if configuration %}
+              <fieldset class="mb-3"><legend class="form-label">KPI role</legend><div class="choice-grid"><label class="choice-card"><input class="form-check-input" type="radio" name="metric_role" value="secondary" {% if form_data.get('metric_role', 'secondary') == 'secondary' %}checked{% endif %}>Add as secondary KPI</label><label class="choice-card"><input class="form-check-input" type="radio" name="metric_role" value="primary" {% if form_data.get('metric_role') == 'primary' %}checked{% endif %}>Make this the primary KPI</label></div></fieldset>
+            {% else %}<input type="hidden" name="metric_role" value="primary">{% endif %}
+            <div class="row g-3">
+              <div class="col-md-6"><label class="form-label" for="conditional-target">Optional percentage target</label><div class="input-group"><input class="form-control" id="conditional-target" name="target_or_benchmark" type="number" min="0" max="100" step="any" value="{{ form_data.get('target_or_benchmark', '') }}"><span class="input-group-text">%</span></div></div>
+              <div class="col-md-6"><label class="form-label" for="conditional-target-scope">Target applies to</label><select class="form-select" id="conditional-target-scope" name="target_scope" required>{% for scope in target_scope_options %}<option value="{{ scope }}" {% if form_data.get('target_scope', 'dataset') == scope %}selected{% endif %}>{% if scope == "period" %}Each period{% elif scope == "segment" %}Each segment{% else %}Complete dataset aggregate{% endif %}</option>{% endfor %}</select></div>
+            </div>
+          </section>
+        </div>
 
-          <button type="submit">Confirm conditional KPI</button>
-        </form>
-      {% else %}
-        <p>No bounded categorical or boolean fields are available for a condition.</p>
-      {% endif %}
+        <div class="col-xl-5">
+          <div class="kpi-sidebar">
+            <section class="form-section">
+              <h2 class="h5 mb-1">Shared analysis context</h2>
+              <p class="form-text">This context applies across the configured KPI set.</p>
+              <div class="mb-3"><label class="form-label" for="conditional-date">Date column</label><select class="form-select" id="conditional-date" name="date_column"><option value="">No date column</option>{% for column in profile.date_candidates %}<option value="{{ column }}" {% if form_data.get('date_column') == column %}selected{% endif %}>{{ column }}</option>{% endfor %}</select></div>
+              <fieldset class="mb-3" data-selection-group><legend class="form-label">Category or segment columns <span class="selection-status ms-2" data-selection-count></span></legend><div class="choice-grid">{% for column in profile.category_candidates %}<label class="choice-card"><input class="form-check-input" type="checkbox" name="category_columns" value="{{ column }}" {% if column in form_data.getlist('category_columns') %}checked{% endif %}>{{ column }}</label>{% else %}<p class="app-muted">No category candidates were detected.</p>{% endfor %}</div></fieldset>
+              <label class="form-label" for="conditional-objective">Business objective</label><textarea class="form-control" id="conditional-objective" name="business_objective" rows="5" maxlength="2000" required>{{ form_data.get('business_objective', '') }}</textarea>
+            </section>
+            <button class="btn btn-primary btn-lg w-100 mt-3" type="submit" data-loading-text="Saving KPI…">Confirm conditional KPI</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  {% else %}
+    <div class="alert alert-warning">No bounded categorical or boolean fields are available for a condition.</div>
+  {% endif %}
 
-      <p>
-        <a href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}">
-          Return to dataset configuration
-        </a>
-      </p>
-    </main>
-  </body>
-</html>
+  <div class="mt-4"><a class="btn btn-outline-secondary" href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}">Return to dataset configuration</a></div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='kpi_configuration.js') }}"></script>{% endblock %}

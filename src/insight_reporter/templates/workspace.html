@@ -1,367 +1,432 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ workspace.record.name }} | AI Insight Reporter</title>
-    <style>
-      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
-      main { max-width: 960px; margin: 0 auto; }
-      article, section.panel { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
-      dl { display: grid; grid-template-columns: 11rem 1fr; gap: 0.4rem 1rem; }
-      dt { font-weight: 700; }
-      dd { margin: 0; overflow-wrap: anywhere; }
-      label { display: block; margin: 0.5rem 0; }
-      input, textarea { box-sizing: border-box; max-width: 38rem; width: 100%; }
-      form.inline { display: inline-block; margin-right: 0.5rem; }
-      .warning { color: #754b00; }
-      .danger { color: #8a1c1c; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <p><a href="{{ url_for('core.workspace_history') }}">All workspaces</a></p>
+{% extends "base.html" %}
+
+{% block title %}{{ workspace.record.name }} | AI Insight Reporter{% endblock %}
+
+{% block content %}
+  {% set dataset_id = workspace.record.dataset_id %}
+
+  <nav aria-label="Breadcrumb" class="mb-3">
+    <a class="small text-decoration-none" href="{{ url_for('core.workspace_history') }}">
+      ← All workspaces
+    </a>
+  </nav>
+
+  <header class="d-flex flex-column flex-lg-row align-items-lg-start
+    justify-content-between gap-3 mb-4">
+    <div class="app-page-header mb-0">
+      <p class="app-eyebrow">Analysis workspace</p>
       <h1>{{ workspace.record.name }}</h1>
-      {% set dataset_id = workspace.record.dataset_id %}
-      {% set current_section = "source" %}
-      {% if workspace.record.has_source and not workspace.record.is_archived %}
-        {% include "_report_project_navigation.html" %}
+      <p class="app-page-lead">
+        {{ workspace.record.description or
+          "Manage the source, verified evidence, visualizations, and report history." }}
+      </p>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="app-status-badge">{{ workspace.stage_label }}</span>
+      {% if not workspace.record.is_archived and resume_url %}
+        <a class="btn btn-primary" href="{{ resume_url }}">Continue workspace</a>
       {% endif %}
+    </div>
+  </header>
 
-      {% if workspace.metadata_warning %}
-        <p class="warning">{{ workspace.metadata_warning }}</p>
-      {% endif %}
+  {% include "_workspace_progress.html" %}
 
-      {% if workspace.record.is_archived %}
-        <section class="panel">
-          <h2>Workspace archived</h2>
-          <p>
-            Its source, reports, and history remain retained and recoverable.
-          </p>
-          <form method="post" action="{{ url_for(
-            'core.undelete_workspace',
-            dataset_id=workspace.record.dataset_id
-          ) }}">
-            <button type="submit">Restore workspace</button>
-          </form>
-        </section>
-      {% else %}
-        <section class="panel">
-          <h2>Edit workspace</h2>
-          <form method="post" action="{{ url_for(
-            'core.update_workspace_name',
-            dataset_id=workspace.record.dataset_id
-          ) }}">
-            <label>
-              Workspace name
-              <input name="name" type="text" maxlength="120"
-                value="{{ workspace.record.name }}" required>
-            </label>
-            <label>
-              Description
-              <textarea name="description" maxlength="1000">{{ workspace.record.description }}</textarea>
-            </label>
-            <button type="submit">Save workspace</button>
-          </form>
-        </section>
-      {% endif %}
+  {% if workspace.metadata_warning %}
+    <div class="alert alert-warning mt-4" role="status">
+      <strong>Workspace needs attention.</strong>
+      {{ workspace.metadata_warning }}
+    </div>
+  {% endif %}
 
-      <section class="panel">
-        <h2>Workspace status</h2>
-        <dl>
-          <dt>Workspace ID</dt>
-          <dd>{{ workspace.record.dataset_id }}</dd>
-          <dt>Current stage</dt>
-          <dd>{{ workspace.stage_label }}</dd>
-          <dt>Created</dt>
-          <dd>{{ workspace.record.created_at }}</dd>
-          <dt>Last activity</dt>
-          <dd>{{ workspace.last_activity_at }}</dd>
-          <dt>Active reports</dt>
-          <dd>{{ workspace.report_run_count }}</dd>
-          <dt>Report versions</dt>
-          <dd>{{ workspace.report_version_count }}</dd>
-        </dl>
-      </section>
+  {% if workspace.record.is_archived %}
+    <section class="alert alert-warning d-flex flex-column flex-md-row
+      align-items-md-center justify-content-between gap-3 mt-4 mb-4" role="status">
+      <div>
+        <h2 class="h6 mb-1">Workspace archived</h2>
+        <p class="mb-0">Its source, reports, and history remain retained and recoverable.</p>
+      </div>
+      <form method="post" action="{{ url_for(
+        'core.undelete_workspace', dataset_id=dataset_id
+      ) }}" data-loading-form>
+        <button class="btn btn-warning" type="submit"
+          data-loading-text="Restoring…">Restore workspace</button>
+      </form>
+    </section>
+  {% endif %}
 
-      <section class="panel" id="data-source">
-        <h2>1. Data source</h2>
-        {% if workspace.record.has_source %}
-          <dl>
-            <dt>Display name</dt>
-            <dd>{{ workspace.record.original_filename }}</dd>
-            <dt>Retained source</dt>
-            <dd>{{ workspace.record.internal_filename }}</dd>
-            <dt>Format</dt>
-            <dd>{{ workspace.record.source_format|upper }}</dd>
-            <dt>Size</dt>
-            <dd>{{ workspace.record.size_bytes }} bytes</dd>
-          </dl>
-          {% if not workspace.record.is_archived %}
-            <form method="post" action="{{ url_for(
-              'core.update_workspace_source_name',
-              dataset_id=workspace.record.dataset_id
-            ) }}">
-              <label>
-                Data-source display name
-                <input name="name" type="text" maxlength="255"
-                  value="{{ workspace.record.original_filename }}" required>
-              </label>
-              <button type="submit">Rename data source</button>
-            </form>
-          {% endif %}
-          <p>
-            <a href="{{ url_for(
-              'core.dataset_profile',
-              dataset_id=workspace.record.dataset_id
-            ) }}">Open dataset profile</a>
-          </p>
-          {% if not workspace.record.is_archived %}
-            <form method="post" action="{{ url_for(
-              'core.delete_workspace_source',
-              dataset_id=workspace.record.dataset_id
-            ) }}">
-              <button class="danger" type="submit">
-                Delete data source recoverably
-              </button>
-            </form>
-            <p>
-              Deleting the source moves it to local trash. Existing immutable
-              report history remains available.
-            </p>
-          {% endif %}
-        {% elif workspace.record.source_archived_at %}
-          <p>
-            The data source was moved to recoverable trash on
-            {{ workspace.record.source_archived_at }}.
-          </p>
-          {% if not workspace.record.is_archived %}
-            <form method="post" action="{{ url_for(
-              'core.undelete_workspace_source',
-              dataset_id=workspace.record.dataset_id
-            ) }}">
-              <button type="submit">Restore data source</button>
-            </form>
-          {% endif %}
-        {% else %}
-          <p>No source file has been selected for this workspace.</p>
-          <p>
-            <a href="{{ url_for(
-              'core.workspace_source_form',
-              dataset_id=workspace.record.dataset_id
-            ) }}">Select source file</a>
-          </p>
-        {% endif %}
-      </section>
+  <div class="row g-4 mt-1 align-items-start">
+    <div class="col-xl-8">
+      <div class="d-grid gap-4">
+        <section class="app-card" id="data-source">
+          <div class="app-panel-header">
+            <div>
+              <p class="app-eyebrow mb-1">Step 1</p>
+              <h2 class="h4 mb-1">1. Data source</h2>
+              <p class="app-muted mb-0">The validated file used by every downstream result.</p>
+            </div>
+            <span class="badge {{ 'text-bg-success' if workspace.record.has_source else 'text-bg-light border' }}">
+              {{ "Ready" if workspace.record.has_source else "Required" }}
+            </span>
+          </div>
 
-      {% if workspace.record.has_source %}
-        <section class="panel" id="kpi-evidence">
-          <h2>2. KPI configuration and deterministic evidence</h2>
-          {% if configuration_ready %}
-            <p>
-              {{ configuration.metrics|length if configuration else "Saved" }}
-              KPI configuration is available.
-              {{ "Deterministic evidence is ready." if evidence_ready else "Evidence has not been generated yet." }}
-            </p>
-            <p>
-              <a href="{{ url_for(
-                'core.saved_configuration',
-                dataset_id=workspace.record.dataset_id
-              ) }}">Open KPI configuration</a>
-            </p>
-            {% if evidence_ready %}
-              <p>
-                <a href="{{ url_for(
-                  'core.saved_insights',
-                  dataset_id=workspace.record.dataset_id
-                ) }}">Review deterministic evidence</a>
-                ·
-                <a href="{{ url_for(
-                  'core.report_configuration_form',
-                  dataset_id=workspace.record.dataset_id
-                ) }}">Configure and generate report</a>
-              </p>
-            {% endif %}
-          {% else %}
-            <p>No KPIs have been configured yet.</p>
-            <p>
-              <a href="{{ url_for(
-                'core.dataset_profile',
-                dataset_id=workspace.record.dataset_id
-              ) }}">Configure KPIs</a>
-            </p>
-          {% endif %}
-        </section>
+          {% if workspace.record.has_source %}
+            <dl class="app-definition-list mt-4">
+              <dt>Display name</dt>
+              <dd>{{ workspace.record.original_filename }}</dd>
+              <dt>Retained source</dt>
+              <dd class="font-monospace small">{{ workspace.record.internal_filename }}</dd>
+              <dt>Format</dt>
+              <dd>{{ workspace.record.source_format|upper }}</dd>
+              <dt>Size</dt>
+              <dd>{{ workspace.record.size_bytes }} bytes</dd>
+            </dl>
 
-        <section class="panel" id="dashboard">
-          <h2>3. Dashboard and visualizations</h2>
-          <p>
-            {{ visualization_count }} saved visualization(s). Source-column
-            charts can be created before KPIs; configured KPIs appear
-            automatically when available.
-          </p>
-          <p>
-            <a href="{{ url_for(
-              'core.saved_visualizations',
-              dataset_id=workspace.record.dataset_id
-            ) }}">Open dashboard</a>
-            ·
-            <a href="{{ url_for(
-              'core.visualization_builder_choice',
-              dataset_id=workspace.record.dataset_id
-            ) }}">Build a visualization</a>
-          </p>
-        </section>
-      {% endif %}
-
-      {% if not workspace.record.is_archived %}
-        <section class="panel" id="next-actions">
-          <h2>4. Next actions</h2>
-          {% if not workspace.record.has_source %}
-            <p>Add or restore a source before building a report.</p>
-          {% elif not workspace.report_run_count %}
-            <p>No reports exist yet.</p>
-            {% if create_report_url %}
-              <p><a href="{{ create_report_url }}">Create the first report</a></p>
-            {% endif %}
-          {% else %}
-            <p><a href="{{ resume_url }}">Resume from {{ workspace.stage_label }}</a></p>
-            {% if create_report_url %}
-              <p><a href="{{ create_report_url }}">Create another report</a></p>
-            {% endif %}
-          {% endif %}
-        </section>
-      {% endif %}
-
-      <section class="panel" id="report-revisions">
-        <h2>5. Report revisions</h2>
-        {% if reports %}
-          {% for report in reports %}
-            <article>
-              <h3>
-                {{ workspace.record.report_names.get(
-                  report.report_id,
-                  report.report_settings.title
-                ) }}
-              </h3>
-              <p>
-                Latest saved version {{ report.version }} · generated
-                {{ report.generated_at }}
-              </p>
-              <p>
-                {% if workspace.record.has_source
-                      and not workspace.record.is_archived %}
-                  <a href="{{ url_for(
-                    'core.generated_report',
-                    dataset_id=workspace.record.dataset_id,
-                    report_id=report.report_id
-                  ) }}">Open report</a>
-                {% else %}
-                  <a href="{{ url_for(
-                    'core.generated_report_version',
-                    dataset_id=workspace.record.dataset_id,
-                    report_id=report.report_id,
-                    version=report.version
-                  ) }}">Open saved report</a>
-                {% endif %}
-                {% if not workspace.record.is_archived
-                      and workspace.record.has_source %}
-                  ·
-                  <a href="{{ url_for(
-                    'core.report_configuration_form',
-                    dataset_id=workspace.record.dataset_id
-                  ) }}">Edit report configuration</a>
-                {% endif %}
-              </p>
+            <div class="d-flex flex-wrap gap-2 mt-4">
+              <a class="btn btn-primary btn-sm" href="{{ url_for(
+                'core.dataset_profile', dataset_id=dataset_id
+              ) }}">Open dataset profile</a>
               {% if not workspace.record.is_archived %}
-                <form class="inline" method="post" action="{{ url_for(
-                  'core.update_workspace_report_name',
-                  dataset_id=workspace.record.dataset_id,
-                  report_id=report.report_id
-                ) }}">
-                  <label>
-                    Report display name
-                    <input name="name" type="text" maxlength="160"
-                      value="{{ workspace.record.report_names.get(
-                        report.report_id,
-                        report.report_settings.title
-                      ) }}" required>
-                  </label>
-                  <button type="submit">Rename report</button>
-                </form>
-                <form class="inline" method="post" action="{{ url_for(
-                  'core.delete_workspace_report',
-                  dataset_id=workspace.record.dataset_id,
-                  report_id=report.report_id
-                ) }}">
-                  <button class="danger" type="submit">
-                    Delete report recoverably
+                <form method="post" action="{{ url_for(
+                  'core.delete_workspace_source', dataset_id=dataset_id
+                ) }}" data-confirm="Move this data source to recoverable trash? Existing immutable report history will remain available.">
+                  <button class="btn btn-outline-danger btn-sm" type="submit">
+                    Delete data source recoverably
                   </button>
                 </form>
               {% endif %}
-            </article>
-          {% endfor %}
-          <p>
-            <a href="{{ url_for(
-              'core.generated_report_history',
-              dataset_id=workspace.record.dataset_id
-            ) }}">Open complete report history</a>
-          </p>
-        {% else %}
-          <p>No generated report revisions yet.</p>
-          {% if evidence_ready %}
-            <p>
-              <a href="{{ url_for(
-                'core.report_configuration_form',
-                dataset_id=workspace.record.dataset_id
-              ) }}">Configure and generate the first report</a>
-            </p>
+            </div>
+
+            {% if not workspace.record.is_archived %}
+              <details class="app-details border-top mt-4 pt-3">
+                <summary>Rename data source</summary>
+                <form class="mt-3" method="post" action="{{ url_for(
+                  'core.update_workspace_source_name', dataset_id=dataset_id
+                ) }}" data-loading-form>
+                  <div class="row g-2 align-items-end">
+                    <div class="col-sm">
+                      <label class="form-label" for="source-name">Display name</label>
+                      <input class="form-control" id="source-name" name="name" type="text"
+                        maxlength="255" value="{{ workspace.record.original_filename }}" required>
+                    </div>
+                    <div class="col-sm-auto">
+                      <button class="btn btn-outline-primary" type="submit"
+                        data-loading-text="Saving…">Rename data source</button>
+                    </div>
+                  </div>
+                </form>
+              </details>
+            {% endif %}
+          {% elif workspace.record.source_archived_at %}
+            <div class="app-empty-state mt-4">
+              <h3>Data source is in recoverable trash</h3>
+              <p>
+                The data source was moved to recoverable trash on
+                {{ workspace.record.source_archived_at }}.
+                Existing report history is still available.
+              </p>
+              {% if not workspace.record.is_archived %}
+                <form method="post" action="{{ url_for(
+                  'core.undelete_workspace_source', dataset_id=dataset_id
+                ) }}" data-loading-form>
+                  <button class="btn btn-primary" type="submit"
+                    data-loading-text="Restoring source…">Restore data source</button>
+                </form>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="app-empty-state mt-4">
+              <h3>No source file has been selected</h3>
+              <p>Select one CSV, flat JSON, or XLSX file to begin.</p>
+              {% if not workspace.record.is_archived %}
+                <a class="btn btn-primary" href="{{ url_for(
+                  'core.workspace_source_form', dataset_id=dataset_id
+                ) }}">Select source file</a>
+              {% endif %}
+            </div>
           {% endif %}
-        {% endif %}
-
-        {% if archived_reports %}
-          <details>
-            <summary>Recoverably deleted reports ({{ archived_reports|length }})</summary>
-            {% for report in archived_reports %}
-              <article>
-                <h3>
-                  {{ workspace.record.report_names.get(
-                    report.report_id,
-                    report.report_settings.title
-                  ) }}
-                </h3>
-                {% if not workspace.record.is_archived %}
-                  <form method="post" action="{{ url_for(
-                    'core.undelete_workspace_report',
-                    dataset_id=workspace.record.dataset_id,
-                    report_id=report.report_id
-                  ) }}">
-                    <button type="submit">Restore report</button>
-                  </form>
-                {% endif %}
-              </article>
-            {% endfor %}
-          </details>
-        {% endif %}
-      </section>
-
-      {% if not workspace.record.is_archived %}
-        <section class="panel">
-          <h2>Delete workspace and all</h2>
-          <p>
-            This is recoverable: all sources, configurations, and immutable
-            reports remain retained until the workspace is restored.
-          </p>
-          <form method="post" action="{{ url_for(
-            'core.delete_workspace',
-            dataset_id=workspace.record.dataset_id
-          ) }}">
-            <button class="danger" type="submit">
-              Delete workspace and all recoverably
-            </button>
-          </form>
         </section>
-      {% endif %}
-    </main>
-  </body>
-</html>
+
+        <section class="app-card" id="kpi-evidence">
+          <div class="app-panel-header">
+            <div>
+              <p class="app-eyebrow mb-1">Steps 2–3</p>
+              <h2 class="h4 mb-1">2. KPI configuration and deterministic evidence</h2>
+              <p class="app-muted mb-0">Define the business measures, then calculate reproducible findings.</p>
+            </div>
+            <span class="badge {{ 'text-bg-success' if evidence_ready else 'text-bg-light border' }}">
+              {% if evidence_ready %}Evidence ready{% elif configuration_ready %}KPIs ready{% else %}Not started{% endif %}
+            </span>
+          </div>
+
+          {% if not workspace.record.has_source %}
+            <p class="app-muted mt-4 mb-0">Add or restore the data source to configure KPIs.</p>
+          {% elif configuration_ready %}
+            <p class="mt-4">
+              <strong>{{ configuration.metrics|length if configuration else "Saved" }}</strong>
+              KPI configuration is available.
+              {{ "Deterministic evidence is ready." if evidence_ready else "Evidence has not been generated yet." }}
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+              <a class="btn btn-outline-primary btn-sm" href="{{ url_for(
+                'core.saved_configuration', dataset_id=dataset_id
+              ) }}">Open KPI configuration</a>
+              {% if evidence_ready %}
+                <a class="btn btn-primary btn-sm" href="{{ url_for(
+                  'core.saved_insights', dataset_id=dataset_id
+                ) }}">Review deterministic evidence</a>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="app-empty-state mt-4">
+              <h3>No KPIs have been configured yet</h3>
+              <p>Review the detected columns and choose the measures that matter.</p>
+              <a class="btn btn-primary" href="{{ url_for(
+                'core.dataset_profile', dataset_id=dataset_id
+              ) }}">Configure KPIs</a>
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="app-card" id="dashboard">
+          <div class="app-panel-header">
+            <div>
+              <p class="app-eyebrow mb-1">Step 4</p>
+              <h2 class="h4 mb-1">3. Dashboard and visualizations</h2>
+              <p class="app-muted mb-0">Build source-column charts or visualize configured KPIs.</p>
+            </div>
+            <span class="badge text-bg-light border">
+              {{ visualization_count }} saved
+            </span>
+          </div>
+
+          {% if workspace.record.has_source %}
+            <p class="mt-4">
+              {{ visualization_count }} saved visualization(s). Source-column charts can be
+              created before KPIs; configured KPIs appear automatically when available.
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+              <a class="btn btn-primary btn-sm" href="{{ url_for(
+                'core.saved_visualizations', dataset_id=dataset_id
+              ) }}">Open dashboard</a>
+              <a class="btn btn-outline-primary btn-sm" href="{{ url_for(
+                'core.visualization_builder_choice', dataset_id=dataset_id
+              ) }}">Build a visualization</a>
+            </div>
+          {% else %}
+            <p class="app-muted mt-4 mb-0">Add or restore the data source to build visualizations.</p>
+          {% endif %}
+        </section>
+
+        {% if not workspace.record.is_archived %}
+          <section class="app-card workspace-next-card" id="next-actions">
+            <p class="app-eyebrow mb-1">Recommended</p>
+            <h2 class="h4">4. Next actions</h2>
+            {% if not workspace.record.has_source %}
+              <p>Add or restore a source before building a report.</p>
+            {% elif not workspace.report_run_count %}
+              <p>No reports exist yet. Continue from the latest completed analysis step.</p>
+            {% else %}
+              <p>Your saved work is ready to continue from {{ workspace.stage_label }}.</p>
+            {% endif %}
+            <div class="d-flex flex-wrap gap-2">
+              {% if resume_url %}
+                <a class="btn btn-primary" href="{{ resume_url }}">
+                  Resume from {{ workspace.stage_label }}
+                </a>
+              {% endif %}
+              {% if create_report_url %}
+                <a class="btn btn-outline-primary" href="{{ create_report_url }}">
+                  {{ "Create another report" if workspace.report_run_count else "Create the first report" }}
+                </a>
+              {% endif %}
+            </div>
+          </section>
+        {% endif %}
+
+        <section class="app-card" id="report-revisions">
+          <div class="app-panel-header">
+            <div>
+              <p class="app-eyebrow mb-1">Step 5</p>
+              <h2 class="h4 mb-1">5. Report revisions</h2>
+              <p class="app-muted mb-0">Every generated version remains immutable and traceable.</p>
+            </div>
+            <span class="badge text-bg-light border">{{ reports|length }} active</span>
+          </div>
+
+          {% if reports %}
+            <div class="d-grid gap-3 mt-4">
+              {% for report in reports %}
+                <article class="report-card">
+                  <div>
+                    <h3 class="h6 mb-1">
+                      {{ workspace.record.report_names.get(
+                        report.report_id, report.report_settings.title
+                      ) }}
+                    </h3>
+                    <p class="app-muted small mb-3">
+                      Latest saved version {{ report.version }} · generated {{ report.generated_at }}
+                    </p>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% if workspace.record.has_source and not workspace.record.is_archived %}
+                      <a class="btn btn-primary btn-sm" href="{{ url_for(
+                        'core.generated_report', dataset_id=dataset_id,
+                        report_id=report.report_id
+                      ) }}">Open report</a>
+                    {% else %}
+                      <a class="btn btn-primary btn-sm" href="{{ url_for(
+                        'core.generated_report_version', dataset_id=dataset_id,
+                        report_id=report.report_id, version=report.version
+                      ) }}">Open saved report</a>
+                    {% endif %}
+                    {% if not workspace.record.is_archived and workspace.record.has_source %}
+                      <a class="btn btn-outline-primary btn-sm" href="{{ url_for(
+                        'core.report_configuration_form', dataset_id=dataset_id
+                      ) }}">Edit report configuration</a>
+                    {% endif %}
+                  </div>
+
+                  {% if not workspace.record.is_archived %}
+                    <details class="app-details">
+                      <summary>Report options</summary>
+                      <div class="row g-2 align-items-end mt-2">
+                        <div class="col-md">
+                          <form method="post" action="{{ url_for(
+                            'core.update_workspace_report_name', dataset_id=dataset_id,
+                            report_id=report.report_id
+                          ) }}" data-loading-form>
+                            <label class="form-label" for="report-name-{{ report.report_id }}">
+                              Report display name
+                            </label>
+                            <div class="input-group">
+                              <input class="form-control" id="report-name-{{ report.report_id }}"
+                                name="name" type="text" maxlength="160"
+                                value="{{ workspace.record.report_names.get(
+                                  report.report_id, report.report_settings.title
+                                ) }}" required>
+                              <button class="btn btn-outline-primary" type="submit"
+                                data-loading-text="Saving…">Rename report</button>
+                            </div>
+                          </form>
+                        </div>
+                        <div class="col-md-auto">
+                          <form method="post" action="{{ url_for(
+                            'core.delete_workspace_report', dataset_id=dataset_id,
+                            report_id=report.report_id
+                          ) }}" data-confirm="Move this report to the recoverable archive?">
+                            <button class="btn btn-outline-danger" type="submit">
+                              Delete report recoverably
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </details>
+                  {% endif %}
+                </article>
+              {% endfor %}
+            </div>
+            <a class="d-inline-block mt-4" href="{{ url_for(
+              'core.generated_report_history', dataset_id=dataset_id
+            ) }}">Open complete report history</a>
+          {% else %}
+            <div class="app-empty-state mt-4">
+              <h3>No generated report revisions yet</h3>
+              <p>Generate deterministic evidence before creating the first report.</p>
+              {% if evidence_ready %}
+                <a class="btn btn-primary" href="{{ url_for(
+                  'core.report_configuration_form', dataset_id=dataset_id
+                ) }}">Configure and generate the first report</a>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if archived_reports %}
+            <details class="app-details border-top mt-4 pt-3">
+              <summary>Recoverably deleted reports ({{ archived_reports|length }})</summary>
+              <div class="d-grid gap-2 mt-3">
+                {% for report in archived_reports %}
+                  <article class="border rounded-3 p-3 bg-light d-flex flex-column
+                    flex-sm-row align-items-sm-center justify-content-between gap-2">
+                    <h3 class="h6 mb-0">
+                      {{ workspace.record.report_names.get(
+                        report.report_id, report.report_settings.title
+                      ) }}
+                    </h3>
+                    {% if not workspace.record.is_archived %}
+                      <form method="post" action="{{ url_for(
+                        'core.undelete_workspace_report', dataset_id=dataset_id,
+                        report_id=report.report_id
+                      ) }}" data-loading-form>
+                        <button class="btn btn-outline-primary btn-sm" type="submit"
+                          data-loading-text="Restoring…">Restore report</button>
+                      </form>
+                    {% endif %}
+                  </article>
+                {% endfor %}
+              </div>
+            </details>
+          {% endif %}
+        </section>
+      </div>
+    </div>
+
+    <aside class="col-xl-4">
+      <div class="workspace-sidebar d-grid gap-4">
+        <section class="app-card">
+          <h2 class="h5 mb-3">Workspace status</h2>
+          <dl class="app-definition-list workspace-status-list">
+            <dt>Current stage</dt>
+            <dd>{{ workspace.stage_label }}</dd>
+            <dt>Created</dt>
+            <dd>{{ workspace.record.created_at }}</dd>
+            <dt>Last activity</dt>
+            <dd>{{ workspace.last_activity_at }}</dd>
+            <dt>Active reports</dt>
+            <dd>{{ workspace.report_run_count }}</dd>
+            <dt>Report versions</dt>
+            <dd>{{ workspace.report_version_count }}</dd>
+            <dt>Workspace ID</dt>
+            <dd class="font-monospace small">{{ workspace.record.dataset_id }}</dd>
+          </dl>
+        </section>
+
+        {% if not workspace.record.is_archived %}
+          <section class="app-card">
+            <h2 class="h5 mb-3">Workspace details</h2>
+            <form method="post" action="{{ url_for(
+              'core.update_workspace_name', dataset_id=dataset_id
+            ) }}" data-loading-form>
+              <div class="mb-3">
+                <label class="form-label" for="workspace-detail-name">Workspace name</label>
+                <input class="form-control" id="workspace-detail-name" name="name"
+                  type="text" maxlength="120" value="{{ workspace.record.name }}" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="workspace-detail-description">Description</label>
+                <textarea class="form-control" id="workspace-detail-description"
+                  name="description" maxlength="1000" rows="4">{{ workspace.record.description }}</textarea>
+              </div>
+              <button class="btn btn-outline-primary" type="submit"
+                data-loading-text="Saving…">Save workspace</button>
+            </form>
+          </section>
+
+          <section class="app-card danger-zone">
+            <h2 class="h5 text-danger">Delete workspace and all</h2>
+            <p class="small app-muted">
+              This is recoverable: sources, configurations, and immutable reports remain
+              retained until the workspace is restored.
+            </p>
+            <form method="post" action="{{ url_for(
+              'core.delete_workspace', dataset_id=dataset_id
+            ) }}" data-confirm="Archive this workspace and all of its retained work? You can restore it from the workspace list.">
+              <button class="btn btn-outline-danger" type="submit">
+                Delete workspace and all recoverably
+              </button>
+            </form>
+          </section>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+{% endblock %}

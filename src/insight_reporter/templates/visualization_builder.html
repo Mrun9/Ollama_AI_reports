@@ -1,145 +1,20 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Visualization Builder | AI Insight Reporter</title>
-    <style>
-      :root {
-        --background: #f4f7fb;
-        --panel: #fff;
-        --border: #d8e0ec;
-        --muted: #536174;
-        --accent: #2563eb;
-      }
-      * { box-sizing: border-box; }
-      body {
-        background: var(--background);
-        color: #172033;
-        font-family: system-ui, sans-serif;
-        line-height: 1.5;
-        margin: 0;
-      }
-      main {
-        margin: 0 auto;
-        max-width: 1080px;
-        padding: 1.5rem clamp(1rem, 3vw, 3rem) 3rem;
-      }
-      form {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 0.75rem;
-        padding: clamp(1rem, 3vw, 2rem);
-      }
-      label { display: block; font-weight: 650; }
-      input[type="text"], input:not([type]), input[type="date"],
-      input[type="number"], select, textarea {
-        border: 1px solid #aeb9c8;
-        border-radius: 0.4rem;
-        font: inherit;
-        margin-top: 0.3rem;
-        max-width: 42rem;
-        padding: 0.55rem 0.65rem;
-        width: 100%;
-      }
-      textarea { min-height: 5rem; }
-      .intro, .help { color: var(--muted); }
-      .step {
-        border: 0;
-        border-top: 1px solid var(--border);
-        margin: 1.5rem 0 0;
-        padding: 1.5rem 0 0;
-      }
-      .step:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
-      .step legend { font-size: 1.1rem; font-weight: 750; }
-      .goal-grid, .measure-grid {
-        display: grid;
-        gap: 0.75rem;
-        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-      }
-      .goal-card, .measure-card {
-        border: 1px solid var(--border);
-        border-radius: 0.55rem;
-        cursor: pointer;
-        font-weight: 500;
-        padding: 0.8rem;
-      }
-      .goal-card:has(input:checked) {
-        background: #eff6ff;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px var(--accent);
-      }
-      .measure-card:has(input:checked) {
-        background: #f0fdf4;
-        border-color: #16a34a;
-      }
-      .goal-card small {
-        color: var(--muted);
-        display: block;
-        margin: 0.3rem 0 0 1.35rem;
-      }
-      .tag {
-        background: #e8eef7;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        margin-left: 0.35rem;
-        padding: 0.12rem 0.4rem;
-      }
-      details {
-        border-top: 1px solid var(--border);
-        margin-top: 1.5rem;
-        padding-top: 1.2rem;
-      }
-      details summary { cursor: pointer; font-size: 1.05rem; font-weight: 750; }
-      details > fieldset { margin-top: 1rem; }
-      .report-option {
-        background: #f8fafc;
-        border: 1px solid var(--border);
-        border-radius: 0.5rem;
-        padding: 0.8rem;
-      }
-      .assistant-panel {
-        background: #f5f3ff;
-        border: 1px solid #c4b5fd;
-        border-radius: 0.75rem;
-        margin: 1.25rem 0;
-        padding: 1rem;
-      }
-      .assistant-panel form {
-        background: transparent;
-        border: 0;
-        padding: 0;
-      }
-      .assistant-panel h2 { margin-top: 0; }
-      button[type="submit"] {
-        background: var(--accent);
-        border: 0;
-        border-radius: 0.45rem;
-        color: white;
-        cursor: pointer;
-        font: inherit;
-        font-weight: 750;
-        padding: 0.7rem 1rem;
-      }
-      [hidden] { display: none !important; }
-    </style>
-    <script
-      src="{{ url_for('static', filename='visualization_builder.js') }}"
-      defer></script>
-  </head>
-  <body>
-    <main>
-      {% set current_section = "dashboard" %}
-      {% include "_report_project_navigation.html" %}
-      <h1>Create a visualization</h1>
-      <p class="intro">
-        Start with the business question—not chart terminology. A recommended
-        setup is already selected, so you can preview it immediately or change
-        any of the simple choices below.
-      </p>
+{% extends "base.html" %}
+
+{% block title %}Visualization Builder | AI Insight Reporter{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='visualization_builder.css') }}">
+{% endblock %}
+
+{% block content %}
+      <header class="app-page-header">
+        <p class="app-eyebrow">Guided chart builder</p>
+        <h1>Create a visualization</h1>
+        <p class="app-page-lead">Start with the business question—not chart terminology. A recommended setup is already selected, so you can preview it immediately or change any simple choice below.</p>
+      </header>
 
       {% if error %}
-        <p role="alert"><strong>Visualization rejected:</strong> {{ error }}</p>
+        <div class="alert alert-danger" role="alert"><strong>Visualization rejected:</strong> {{ error }}</div>
       {% endif %}
 
       <section class="assistant-panel" aria-labelledby="ollama-chart-heading">
@@ -149,12 +24,12 @@
           will select from compatible chart styles and detected columns; Python
           validates the complete setup and generates the preview.
         </p>
-        <form method="post"
+        <form method="post" data-loading-form
           action="{{ url_for('core.suggest_visualization', dataset_id=dataset_id) }}">
           <label for="assistant-request">What do you want to understand?</label>
           <textarea id="assistant-request" name="user_request" maxlength="2000"
             required>{{ assistant_request or "" }}</textarea>
-          <button type="submit">Suggest and preview a chart</button>
+          <button type="submit" data-loading-text="Generating suggestion…">Suggest and preview a chart</button>
         </form>
         <p class="help">
           The suggestion is never saved automatically. Review the chart before
@@ -162,7 +37,7 @@
         </p>
       </section>
 
-      <form method="post"
+      <form method="post" data-loading-form
         action="{{ url_for('core.preview_visualization', dataset_id=dataset_id) }}">
         <input type="hidden" name="replaces_visualization_id"
           value="{{ form_data.get('replaces_visualization_id', '') }}">
@@ -524,16 +399,15 @@
           </label>
         </p>
 
-        <button type="submit">Preview my chart</button>
+        <button type="submit" data-loading-text="Building preview…">Preview my chart</button>
         <span class="help">Nothing is saved until you approve the preview.</span>
       </form>
 
-      <p>
-        <a href="{{ url_for('core.saved_visualizations', dataset_id=dataset_id) }}">
-          Return to dashboard
-        </a>
+      <p class="mt-4">
+        <a class="btn btn-outline-secondary" href="{{ url_for('core.saved_visualizations', dataset_id=dataset_id) }}">Return to dashboard</a>
       </p>
+{% endblock %}
 
-    </main>
-  </body>
-</html>
+{% block scripts %}
+  <script src="{{ url_for('static', filename='visualization_builder.js') }}"></script>
+{% endblock %}

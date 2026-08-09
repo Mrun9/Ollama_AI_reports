@@ -202,6 +202,8 @@ def test_multi_sheet_xlsx_requires_explicit_selection(
     assert b"Select an Excel worksheet" in selection_page.data
     assert b"Sales" in selection_page.data
     assert b"Costs" in selection_page.data
+    assert b"app-workflow" in selection_page.data
+    assert b"/static/vendor/bootstrap.min.css" in selection_page.data
     dataset_id = _sheet_dataset_id(selection_page.data)
 
     profile = client.post(

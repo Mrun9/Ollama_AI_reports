@@ -406,23 +406,23 @@ def test_manual_board_is_report_selectable_grounded_and_exported(
         f"/visualizations/{dataset_id}/manual/{manual_board_id}"
     )
     assert initial_detail.status_code == 200
-    assert b"Insights from this visualization" in initial_detail.data
+    assert b"Verified observations" in initial_detail.data
+    assert b"Ask about this visualization" not in initial_detail.data
+    assert b"Suggest questions with Ollama" not in initial_detail.data
+    assert b"visualization_insights.js" not in initial_detail.data
     assert b"Supporting data" in initial_detail.data
-    assert b"Include these saved insights in reports" in initial_detail.data
+    assert b"Include these verified insights in reports" in initial_detail.data
     assert b"North" in initial_detail.data
     assert b"South" in initial_detail.data
 
     insight_response = client.post(
-        f"/visualizations/{dataset_id}/manual/{manual_board_id}/insights",
-        data={
-            "question": "Which segment should management review?",
-            "include_in_reports": "yes",
-        },
+        f"/visualizations/{dataset_id}/manual/{manual_board_id}/insights/report-inclusion",
+        data={"include_in_reports": "yes"},
     )
     assert insight_response.status_code == 303
     insight_detail = client.get(insight_response.headers["Location"])
     assert insight_detail.status_code == 200
-    assert b"Saved management findings" in insight_detail.data
+    assert b"Verified observations" in insight_detail.data
     assert b"Included when this manual-board visualization" in insight_detail.data
     insight_path = (
         Path(app.config["VISUALIZATION_INSIGHT_DIR"])
@@ -432,14 +432,14 @@ def test_manual_board_is_report_selectable_grounded_and_exported(
     saved_insight = json.loads(insight_path.read_text(encoding="utf-8"))
     assert saved_insight["visualization_id"] == manual_board_id
     assert saved_insight["include_in_reports"] is True
-    assert saved_insight["points"]
+    assert saved_insight["facts"]
 
     form = client.get(f"/reports/{dataset_id}/configure")
     assert form.status_code == 200
     assert b"Saved manual-board visualizations" in form.data
     assert manual_board_id.encode("ascii") in form.data
     assert b"Manual revenue board" in form.data
-    assert b"grounded finding(s) will" in form.data
+    assert b"observation(s) will" in form.data
     assert b"accompany this board into the report" in form.data
 
     saved = client.post(
@@ -474,12 +474,11 @@ def test_manual_board_is_report_selectable_grounded_and_exported(
     requested_insights = [
         observation
         for observation in board_evidence["observations"]
-        if observation["type"] == "user_requested_visualization_insight"
+        if observation["type"] == "verified_visualization_observation"
     ]
-    assert len(requested_insights) == len(saved_insight["points"])
-    assert requested_insights[0]["observation"]["question"] == (
-        "Which segment should management review?"
-    )
+    assert len(requested_insights) == len(saved_insight["facts"])
+    assert requested_insights[0]["observation"]["finding"]
+    assert "question" not in requested_insights[0]["observation"]
     assert package.json["omissions"]["included_visualization_insight_count"] == 1
     assert package.json["model_input_policy"]["raw_dataset_rows_included"] is False
 
@@ -532,7 +531,7 @@ def test_manual_board_is_report_selectable_grounded_and_exported(
     excluded_package = client.get(f"/reports/{dataset_id}/package")
     assert excluded_package.status_code == 200
     assert all(
-        observation["type"] != "user_requested_visualization_insight"
+        observation["type"] != "verified_visualization_observation"
         for observation in excluded_package.json["manual_visualization_evidence"][0][
             "observations"
         ]
@@ -923,8 +922,9 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
         f"/reports/{dataset_id}/generate",
         follow_redirects=True,
     )
-    assert zero_ai.status_code == 503
-    assert b"none passed evidence validation" in zero_ai.data
+    assert zero_ai.status_code == 200
+    assert b"Deterministic fallback summary" in zero_ai.data
+    assert b"no AI-written stories" in zero_ai.data
     assert len(
         tuple(
             (
@@ -932,7 +932,7 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
                 / dataset_id
             ).glob("V*.json")
         )
-    ) == 3
+    ) == 4
 
     def unavailable(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise ReportNarrationError("Ollama test failure.")
@@ -955,7 +955,7 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
                 / dataset_id
             ).glob("V*.json")
         )
-    ) == 3
+    ) == 4
     assert client.get(generated.headers["Location"]).status_code == 200
 
     renamed_report = client.post(

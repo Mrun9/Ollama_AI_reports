@@ -1,37 +1,52 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Select Excel Worksheet | AI Insight Reporter</title>
-  </head>
-  <body>
-    <main>
-      <h1>Select an Excel worksheet</h1>
-      <p>
-        Choose the one worksheet that contains the tabular dataset. Hidden worksheets are not
-        available, and the selected sheet is validated before profiling.
-      </p>
-      {% if error %}
-        <p role="alert"><strong>Worksheet rejected:</strong> {{ error }}</p>
-      {% endif %}
-      <form method="post"
-        action="{{ url_for('core.select_excel_sheet', dataset_id=dataset_id) }}">
-        <label for="table-name">Worksheet</label>
-        <select id="table-name" name="table_name" required>
-          <option value="">Select a worksheet</option>
-          {% for table_name in table_names %}
-            <option value="{{ table_name }}">{{ table_name }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit">Validate and profile worksheet</button>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import alert, page_header %}
+
+{% block title %}Select Excel Worksheet | AI Insight Reporter{% endblock %}
+
+{% block content %}
+  <nav aria-label="Breadcrumb" class="mb-3">
+    <a class="small text-decoration-none" href="{{ url_for(
+      'core.workspace_detail', dataset_id=dataset_id
+    ) }}">← Return to workspace</a>
+  </nav>
+
+  {{ page_header(
+    "Select an Excel worksheet",
+    "Choose the visible worksheet containing the tabular dataset to validate and profile.",
+    "Complete source setup"
+  ) }}
+
+  {% include "_workspace_progress.html" %}
+
+  <div class="app-content-narrow mt-4">
+    {% if error %}
+      {{ alert(error, "Worksheet rejected") }}
+    {% endif %}
+
+    <section class="app-card">
+      <form method="post" action="{{ url_for(
+        'core.select_excel_sheet', dataset_id=dataset_id
+      ) }}" data-loading-form>
+        <div class="mb-4">
+          <label class="form-label" for="table-name">Worksheet</label>
+          <select class="form-select" id="table-name" name="table_name" required>
+            <option value="">Select a worksheet</option>
+            {% for table_name in table_names %}
+              <option value="{{ table_name }}">{{ table_name }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">
+            Hidden worksheets are unavailable. The selected sheet is validated before profiling.
+          </div>
+        </div>
+        <div class="d-flex flex-column flex-sm-row gap-2">
+          <button class="btn btn-primary" type="submit"
+            data-loading-text="Validating worksheet…">Validate and profile worksheet</button>
+          <a class="btn btn-outline-secondary" href="{{ url_for(
+            'core.workspace_detail', dataset_id=dataset_id
+          ) }}">Cancel</a>
+        </div>
       </form>
-      <p>
-        <a href="{{ url_for(
-          'core.workspace_detail',
-          dataset_id=dataset_id
-        ) }}">Return to workspace</a>
-      </p>
-    </main>
-  </body>
-</html>
+    </section>
+  </div>
+{% endblock %}

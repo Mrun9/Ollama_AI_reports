@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import secrets
+import shutil
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from insight_reporter.dataset_ingestion import DatasetUploadResult
 _DATASET_ID = re.compile(r"[0-9a-f]{32}")
 _REPORT_ID = re.compile(r"RPT-[0-9A-F]{16}")
 _REPORT_FILENAME = re.compile(r"V([0-9]{4})-(RPT-[0-9A-F]{16})\.json")
+_CHART_FILENAME = re.compile(r"[0-9a-f]{32}\.png")
 _SOURCE_EXTENSIONS = frozenset({"csv", "json", "xlsx"})
 _MAX_WORKSPACE_NAME_CHARACTERS = 120
 _MAX_WORKSPACE_DESCRIPTION_CHARACTERS = 1_000
@@ -40,6 +42,27 @@ class WorkspaceDirectories:
     report_configuration_dir: Path
     report_package_dir: Path
     generated_report_dir: Path
+    trash_dir: Path
+
+
+@dataclass(frozen=True)
+class WorkspacePurgeDirectories:
+    """Filesystem locations containing data owned by one workspace."""
+
+    upload_dir: Path
+    workspace_dir: Path
+    configuration_dir: Path
+    insight_dir: Path
+    evidence_dir: Path
+    chart_dir: Path
+    visualization_dir: Path
+    visualization_insight_dir: Path
+    report_configuration_dir: Path
+    report_package_dir: Path
+    generated_report_dir: Path
+    generated_report_asset_dir: Path
+    visualization_preview_dir: Path
+    navigation_state_dir: Path
     trash_dir: Path
 
 
@@ -326,6 +349,107 @@ def restore_workspace(
     )
     _save_workspace_record(updated, workspace_dir=workspace_dir)
     return updated
+
+
+def permanently_delete_workspace(
+    dataset_id: str,
+    *,
+    directories: WorkspacePurgeDirectories,
+) -> None:
+    """Permanently remove an archived workspace and its dataset-owned artifacts."""
+
+    _validate_dataset_id(dataset_id)
+    record = _required_workspace_record(
+        dataset_id,
+        workspace_dir=directories.workspace_dir,
+    )
+    if not record.is_archived:
+        raise WorkspaceHistoryError(
+            "Archive the workspace before deleting it permanently."
+        )
+
+    evidence_path = _exact_child(
+        directories.evidence_dir,
+        f"{dataset_id}.json",
+    )
+    visualization_directory = _exact_child(
+        directories.visualization_dir,
+        dataset_id,
+    )
+    preview_files = _shared_json_files_for_dataset(
+        directories.visualization_preview_dir,
+        dataset_id,
+    )
+    navigation_files = _shared_json_files_for_dataset(
+        directories.navigation_state_dir,
+        dataset_id,
+    )
+
+    chart_filenames: set[str] = set()
+    if evidence_path.is_file():
+        chart_filenames.update(_chart_filenames_in_json(evidence_path))
+    if visualization_directory.is_dir():
+        for artifact_path in visualization_directory.glob("*.json"):
+            chart_filenames.update(_chart_filenames_in_json(artifact_path))
+    for preview_path in preview_files:
+        chart_filenames.update(_chart_filenames_in_json(preview_path))
+
+    targets: list[tuple[str, Path]] = []
+    for label, root in (
+        ("configuration", directories.configuration_dir),
+        ("insight", directories.insight_dir),
+        ("evidence", directories.evidence_dir),
+        ("report-configuration", directories.report_configuration_dir),
+        ("report-package", directories.report_package_dir),
+    ):
+        targets.append(
+            (f"records/{label}.json", _exact_child(root, f"{dataset_id}.json"))
+        )
+    for extension in (*sorted(_SOURCE_EXTENSIONS), "selection.json"):
+        targets.append(
+            (
+                f"uploads/{dataset_id}.{extension}",
+                _exact_child(directories.upload_dir, f"{dataset_id}.{extension}"),
+            )
+        )
+    for label, root in (
+        ("visualizations", directories.visualization_dir),
+        ("visualization-insights", directories.visualization_insight_dir),
+        ("generated-reports", directories.generated_report_dir),
+        ("generated-report-assets", directories.generated_report_asset_dir),
+    ):
+        targets.append((f"directories/{label}", _exact_child(root, dataset_id)))
+    targets.append(
+        (
+            "directories/source-trash",
+            _exact_descendant(directories.trash_dir, "sources", dataset_id),
+        )
+    )
+    targets.extend(
+        (f"charts/{filename}", _exact_child(directories.chart_dir, filename))
+        for filename in sorted(chart_filenames)
+    )
+    targets.extend(
+        (f"visualization-previews/{path.name}", path)
+        for path in preview_files
+    )
+    targets.extend(
+        (f"navigation-state/{path.name}", path)
+        for path in navigation_files
+    )
+    # Move the identity record last so a failed staging operation can be rolled
+    # back without making the workspace disappear from the archive index.
+    targets.append(
+        (
+            "workspace/record.json",
+            _exact_child(directories.workspace_dir, f"{dataset_id}.json"),
+        )
+    )
+    _stage_and_remove_workspace_targets(
+        dataset_id,
+        targets=targets,
+        trash_dir=directories.trash_dir,
+    )
 
 
 def archive_workspace_source(
@@ -958,6 +1082,118 @@ def _source_path(upload_dir: Path, dataset_id: str) -> Path | None:
     if len(matches) > 1:
         raise WorkspaceHistoryError("Workspace source identity is ambiguous.")
     return matches[0] if matches else None
+
+
+def _shared_json_files_for_dataset(
+    directory: Path,
+    dataset_id: str,
+) -> tuple[Path, ...]:
+    """Find token-named transient JSON that explicitly belongs to a dataset."""
+
+    matches: list[Path] = []
+    if not directory.is_dir():
+        return ()
+    for path in directory.glob("[0-9a-f]" * 32 + ".json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and payload.get("dataset_id") == dataset_id:
+            matches.append(path)
+    return tuple(matches)
+
+
+def _chart_filenames_in_json(path: Path) -> set[str]:
+    """Collect path-safe shared chart basenames from one owned artifact."""
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise WorkspaceHistoryError(
+            "Workspace artifacts are unreadable and cannot be deleted safely."
+        ) from error
+
+    filenames: set[str] = set()
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            filename = value.get("filename")
+            if isinstance(filename, str) and _CHART_FILENAME.fullmatch(filename):
+                filenames.add(filename)
+            for nested in value.values():
+                visit(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                visit(nested)
+
+    visit(payload)
+    return filenames
+
+
+def _exact_child(root: Path, name: str) -> Path:
+    """Resolve one exact direct child without accepting traversal."""
+
+    resolved_root = root.resolve()
+    candidate = (resolved_root / name).resolve()
+    if candidate.parent != resolved_root:
+        raise WorkspaceHistoryError("Workspace deletion target is unsafe.")
+    return candidate
+
+
+def _exact_descendant(root: Path, *parts: str) -> Path:
+    """Resolve one known nested target beneath its configured root."""
+
+    resolved_root = root.resolve()
+    candidate = resolved_root.joinpath(*parts).resolve()
+    if not candidate.is_relative_to(resolved_root) or candidate == resolved_root:
+        raise WorkspaceHistoryError("Workspace deletion target is unsafe.")
+    return candidate
+
+
+def _stage_and_remove_workspace_targets(
+    dataset_id: str,
+    *,
+    targets: list[tuple[str, Path]],
+    trash_dir: Path,
+) -> None:
+    """Stage exact targets for rollback, then permanently remove the staging tree."""
+
+    staging_root = _exact_descendant(
+        trash_dir,
+        "permanent-deletions",
+        f"{dataset_id}-{secrets.token_hex(8)}",
+    )
+    moved: list[tuple[Path, Path]] = []
+    seen: set[Path] = set()
+    try:
+        for label, target in targets:
+            if target in seen or not target.exists():
+                continue
+            seen.add(target)
+            destination = staging_root / label
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            target.replace(destination)
+            moved.append((target, destination))
+    except OSError as error:
+        for original, staged in reversed(moved):
+            try:
+                original.parent.mkdir(parents=True, exist_ok=True)
+                if staged.exists() and not original.exists():
+                    staged.replace(original)
+            except OSError:
+                pass
+        shutil.rmtree(staging_root, ignore_errors=True)
+        raise WorkspaceHistoryError(
+            "Workspace could not be staged for permanent deletion."
+        ) from error
+
+    try:
+        if staging_root.exists():
+            shutil.rmtree(staging_root)
+    except OSError as error:
+        raise WorkspaceHistoryError(
+            "Workspace was removed but its deletion staging area could not be cleared."
+        ) from error
 
 
 def _file_sha256(path: Path) -> str:

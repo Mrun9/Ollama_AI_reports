@@ -1,134 +1,34 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Report History | AI Insight Reporter</title>
-    <style>
-      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
-      main { max-width: 960px; margin: 0 auto; }
-      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
-      dl { display: grid; grid-template-columns: 11rem 1fr; gap: 0.35rem 1rem; }
-      dt { font-weight: 700; }
-      dd { margin: 0; overflow-wrap: anywhere; }
-      .current { color: #176b35; font-weight: 700; }
-      .historical { color: #754b00; font-weight: 700; }
-    </style>
-  </head>
-  <body>
-    <main>
-      {% set current_section = "history" %}
-      {% include "_report_project_navigation.html" %}
-      <p>
-        <a href="{{ url_for(
-          'core.workspace_detail',
-          dataset_id=dataset_id
-        ) }}">
-          Return to workspace
-        </a>
-      </p>
-      <h1>Report history</h1>
-      <p>
-        {{ reports|length }} immutable version(s) across
-        {{ report_run_count }} generation run(s). Older versions are opened
-        read-only and are never replaced.
-      </p>
-      {% if current_package_sha256 is none and reports %}
-        <p class="historical">
-          The current report package cannot be rebuilt, so freshness cannot be
-          compared. Saved report snapshots remain available.
-        </p>
-      {% endif %}
+{% extends "base.html" %}
+{% from "_ui_macros.html" import page_header, empty_state %}
 
-      {% if reports %}
-        {% for report in reports %}
-          <article>
-            <h2>
-              {{ report_names.get(report.report_id, report.report_settings.title) }}
-              · version {{ report.version }}
-            </h2>
-            <dl>
-              <dt>Report ID</dt>
-              <dd>{{ report.report_id }}</dd>
-              <dt>Generated</dt>
-              <dd>{{ report.generated_at }}</dd>
-              <dt>Model</dt>
-              <dd>{{ report.model }}</dd>
-              <dt>Stories</dt>
-              <dd>{{ report.stories|length }}</dd>
-              <dt>Summary points</dt>
-              <dd>{{ report.executive_summary|length }}</dd>
-              <dt>Package status</dt>
-              <dd>
-                {% if current_package_sha256 == report.source_package_sha256 %}
-                  <span class="current">Matches current report package</span>
-                {% elif current_package_sha256 %}
-                  <span class="historical">Historical package snapshot</span>
-                {% else %}
-                  <span class="historical">Freshness unavailable</span>
-                {% endif %}
-              </dd>
-            </dl>
-            <p>
-              <a href="{{ url_for(
-                'core.generated_report_version',
-                dataset_id=dataset_id,
-                report_id=report.report_id,
-                version=report.version
-              ) }}">
-                Open this exact version
-              </a>
-              ·
-              <a href="{{ url_for(
-                'core.generated_report_version_json',
-                dataset_id=dataset_id,
-                report_id=report.report_id,
-                version=report.version
-              ) }}">
-                JSON
-              </a>
-              ·
-              <a href="{{ url_for(
-                'core.generated_report_version_pdf',
-                dataset_id=dataset_id,
-                report_id=report.report_id,
-                version=report.version
-              ) }}">
-                PDF
-              </a>
-            </p>
-          </article>
-        {% endfor %}
-      {% else %}
-        <p>No generated reports have been saved for this workspace.</p>
-      {% endif %}
+{% block title %}Report History | AI Insight Reporter{% endblock %}
 
-      {% if archived_reports %}
-        <details>
-          <summary>
-            Recoverably deleted report versions
-            ({{ archived_reports|length }})
-          </summary>
-          {% for report in archived_reports %}
-            <article>
-              <h2>
-                {{ report_names.get(report.report_id, report.report_settings.title) }}
-                · version {{ report.version }}
-              </h2>
-              <p>{{ report.report_id }} · generated {{ report.generated_at }}</p>
-              {% if not workspace_is_archived %}
-                <form method="post" action="{{ url_for(
-                  'core.undelete_workspace_report',
-                  dataset_id=dataset_id,
-                  report_id=report.report_id
-                ) }}">
-                  <button type="submit">Restore report run</button>
-                </form>
-              {% endif %}
-            </article>
-          {% endfor %}
-        </details>
-      {% endif %}
-    </main>
-  </body>
-</html>
+{% block content %}
+  <div class="dashboard-hero">
+    <div class="dashboard-hero-copy">{{ page_header("Report history", reports|length ~ " immutable version(s) across " ~ report_run_count ~ " generation run(s). Older versions are read-only and are never replaced.", "Reports") }}</div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('core.workspace_detail', dataset_id=dataset_id) }}">Return to workspace</a>
+  </div>
+
+  {% if current_package_sha256 is none and reports %}<div class="alert alert-warning">The current report package cannot be rebuilt, so freshness cannot be compared. Saved report snapshots remain available.</div>{% endif %}
+
+  {% if reports %}
+    <section class="report-history-list" aria-label="Generated report versions">
+      {% for report in reports %}
+        <article class="report-history-card">
+          <div class="app-panel-header mb-3">
+            <div><div class="d-flex flex-wrap gap-2 mb-1"><span class="badge text-bg-primary">Version {{ report.version }}</span>{% if current_package_sha256 == report.source_package_sha256 %}<span class="badge text-bg-success">Current package</span>{% elif current_package_sha256 %}<span class="badge text-bg-warning">Historical snapshot</span>{% else %}<span class="badge text-bg-secondary">Freshness unavailable</span>{% endif %}</div><h2 class="h4 mb-0">{{ report_names.get(report.report_id, report.report_settings.title) }}</h2></div>
+            <a class="btn btn-primary" href="{{ url_for('core.generated_report_version', dataset_id=dataset_id, report_id=report.report_id, version=report.version) }}">Open this exact version</a>
+          </div>
+          <dl class="app-definition-list"><dt>Report ID</dt><dd><code>{{ report.report_id }}</code></dd><dt>Generated</dt><dd>{{ report.generated_at }}</dd><dt>Model</dt><dd>{{ report.model }}</dd><dt>Stories</dt><dd>{{ report.stories|length }}</dd><dt>Summary points</dt><dd>{{ report.executive_summary|length }}</dd><dt>Package status</dt><dd>{% if current_package_sha256 == report.source_package_sha256 %}<span class="text-success fw-bold">Matches current report package</span>{% elif current_package_sha256 %}<span class="text-warning-emphasis fw-bold">Historical package snapshot</span>{% else %}<span class="app-muted fw-bold">Freshness unavailable</span>{% endif %}</dd></dl>
+          <div class="dashboard-actions mt-3"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('core.generated_report_version_json', dataset_id=dataset_id, report_id=report.report_id, version=report.version) }}">Download JSON</a><a class="btn btn-sm btn-outline-primary" href="{{ url_for('core.generated_report_version_pdf', dataset_id=dataset_id, report_id=report.report_id, version=report.version) }}">Download PDF</a></div>
+        </article>
+      {% endfor %}
+    </section>
+  {% else %}
+    {{ empty_state("No generated reports have been saved for this workspace.", "Configure report content and generate the first immutable version when you are ready.") }}
+  {% endif %}
+
+  {% if archived_reports %}
+    <details class="app-card app-details mt-4"><summary>Recoverably deleted report versions ({{ archived_reports|length }})</summary><div class="report-history-list mt-3">{% for report in archived_reports %}<article class="report-card"><h2 class="h5">{{ report_names.get(report.report_id, report.report_settings.title) }} · version {{ report.version }}</h2><p class="app-muted">{{ report.report_id }} · generated {{ report.generated_at }}</p>{% if not workspace_is_archived %}<form method="post" action="{{ url_for('core.undelete_workspace_report', dataset_id=dataset_id, report_id=report.report_id) }}" data-loading-form><button class="btn btn-outline-primary" type="submit" data-loading-text="Restoring…">Restore report run</button></form>{% endif %}</article>{% endfor %}</div></details>
+  {% endif %}
+{% endblock %}

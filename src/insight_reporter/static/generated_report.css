@@ -1,0 +1,23 @@
+body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
+main { max-width: 1050px; margin: 0 auto; }
+article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
+dl { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr; gap: 0.35rem 1rem; }
+dt { font-weight: 700; }
+dd { margin: 0; overflow-wrap: anywhere; }
+pre { background: #f4f4f4; max-height: 28rem; overflow: auto; padding: 1rem; white-space: pre-wrap; }
+.source-label { font-weight: 700; }
+.story { border-left: 0.35rem solid #315c9b; }
+.finding { font-size: 1.08rem; }
+.story-source { color: #555; font-size: 0.92rem; }
+.confidence { background: #eef5ff; border-radius: 0.3rem; padding: 0.65rem; }
+.claim-list { padding-left: 1.3rem; }
+.summary-list li { margin: 0.8rem 0; padding-left: 0.25rem; }
+.summary-source { color: #555; font-size: 0.92rem; }
+.report-chart { display: block; max-height: 32rem; max-width: 100%; margin: 1rem auto; }
+.publishing-controls { background: #f4f7fb; padding: 1rem; }
+@media print {
+  body { margin: 0; }
+  .publishing-controls, .screen-only { display: none; }
+  article { break-inside: avoid; }
+  details { display: block; }
+}

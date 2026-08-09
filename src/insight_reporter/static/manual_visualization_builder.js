@@ -7,16 +7,12 @@
   }
 
   const fields = Array.from(board.querySelectorAll(".field-card"));
-  const fieldGroups = Array.from(board.querySelectorAll("[data-field-group]"));
   const chartChoices = Array.from(board.querySelectorAll(".chart-choice"));
   const search = board.querySelector("#field-search");
-  const xZone = board.querySelector("#x-axis-zone");
-  const yZone = board.querySelector("#y-axis-zone");
-  const seriesZone = board.querySelector("#legend-zone");
-  const sizeZone = board.querySelector("#size-zone");
-  const secondaryYZone = board.querySelector("#secondary-y-zone");
-  const secondaryYFieldGroup = board.querySelector("#secondary-y-field-group");
-  const secondaryYAxisWell = board.querySelector("#secondary-y-axis-well");
+  const legendFieldSelect = board.querySelector("#legend-field-select");
+  const sizeFieldSelect = board.querySelector("#size-field-select");
+  const secondaryYFieldSelect = board.querySelector("#secondary-y-field-select");
+  const secondaryYSetting = board.querySelector("#secondary-y-setting");
   const paretoLineSetting = board.querySelector("#pareto-line-setting");
   const paretoLineMode = board.querySelector("#pareto-line-mode");
   const targetSetting = board.querySelector("#target-setting");
@@ -34,9 +30,8 @@
   const saveUrl = board.dataset.saveUrl;
 
   if (
-    search === null || xZone === null || yZone === null ||
-    seriesZone === null || sizeZone === null || secondaryYZone === null ||
-    secondaryYFieldGroup === null || secondaryYAxisWell === null ||
+    search === null || legendFieldSelect === null || sizeFieldSelect === null ||
+    secondaryYFieldSelect === null || secondaryYSetting === null ||
     paretoLineSetting === null || paretoLineMode === null ||
     targetSetting === null || targetValue === null || noChartSettings === null ||
     saveButton === null || titleInput === null || initialStateElement === null ||
@@ -166,6 +161,11 @@
       assignAutomatically(field);
       return;
     }
+    if (["y", "size", "secondary_y"].includes(axis) && !isNumeric(field)) {
+      message.textContent = `${field.name} is not numeric and cannot be used for this role.`;
+      message.hidden = false;
+      return;
+    }
     state[axis] = field;
     renderAxisWells();
     refreshPreview();
@@ -178,48 +178,36 @@
   }
 
   function renderAxisWells() {
-    renderAxisWell(xZone, "x", "Drop a category, date, or number");
-    renderAxisWell(yZone, "y", "Drop a numeric field");
-    renderAxisWell(seriesZone, "series", "Drop a category to split the values");
-    renderAxisWell(sizeZone, "size", "Drop a positive numeric field for bubbles");
-    renderAxisWell(secondaryYZone, "secondary_y", "Drop the numeric line value");
+    legendFieldSelect.value = state.series?.name ?? "";
+    sizeFieldSelect.value = state.size?.name ?? "";
+    secondaryYFieldSelect.value = state.secondary_y?.name ?? "";
     fields.forEach((field) => {
-      const axis = field.dataset.preferredAxis;
+      const preferredAxis = field.dataset.preferredAxis;
       field.classList.toggle(
         "is-assigned",
-        state[axis]?.name === field.dataset.fieldName
+        state[preferredAxis]?.name === field.dataset.fieldName
       );
     });
   }
 
-  function renderAxisWell(zone, axis, placeholderText) {
-    zone.replaceChildren();
-    const field = state[axis];
-    if (field === null) {
-      const placeholder = document.createElement("span");
-      placeholder.className = "axis-placeholder";
-      placeholder.textContent = placeholderText;
-      zone.append(placeholder);
+  function fieldWithName(name, preferredAxis) {
+    return fields.find(
+      (field) => (
+        field.dataset.fieldName === name &&
+        field.dataset.preferredAxis === preferredAxis
+      )
+    ) ?? fields.find((field) => field.dataset.fieldName === name) ?? null;
+  }
+
+  function updateOptionalField(axis, value, preferredAxis) {
+    if (value === "") {
+      removeAxis(axis);
       return;
     }
-    const pill = document.createElement("span");
-    pill.className = "field-pill";
-    const name = document.createElement("span");
-    name.textContent = field.name;
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.textContent = "×";
-    const axisLabel = axis === "series"
-      ? "Legend"
-      : axis === "size"
-      ? "Size"
-      : axis === "secondary_y"
-      ? "Secondary Y"
-      : `${axis.toUpperCase()}-axis`;
-    remove.setAttribute("aria-label", `Remove ${field.name} from ${axisLabel}`);
-    remove.addEventListener("click", () => removeAxis(axis));
-    pill.append(name, remove);
-    zone.append(pill);
+    const element = fieldWithName(value, preferredAxis);
+    if (element !== null) {
+      setAxis(axis, fieldFromElement(element));
+    }
   }
 
   function beginPointerDrag(event, element) {
@@ -290,11 +278,24 @@
     }
   }
 
+  function cancelPointerDrag(event) {
+    if (drag === null || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    const cancelled = drag;
+    drag = null;
+    cancelled.target?.classList.remove("is-target");
+    cancelled.ghost?.remove();
+    if (cancelled.element.hasPointerCapture(event.pointerId)) {
+      cancelled.element.releasePointerCapture(event.pointerId);
+    }
+  }
+
   fields.forEach((field) => {
     field.addEventListener("pointerdown", (event) => beginPointerDrag(event, field));
     field.addEventListener("pointermove", movePointerDrag);
     field.addEventListener("pointerup", finishPointerDrag);
-    field.addEventListener("pointercancel", finishPointerDrag);
+    field.addEventListener("pointercancel", cancelPointerDrag);
     field.addEventListener("click", () => {
       if (!ignoredClicks.has(field)) {
         assignAutomatically(fieldFromElement(field));
@@ -308,22 +309,9 @@
       const name = (field.dataset.fieldName ?? "").toLocaleLowerCase();
       field.hidden = query !== "" && !name.includes(query);
     });
-    fieldGroups.forEach((group) => {
-      const visibleFields = Array.from(group.querySelectorAll(".field-card")).some(
-        (field) => !field.hidden
-      );
-      const inactiveComboRole = (
-        group.dataset.fieldGroup === "secondary_y" && state.chart !== "combo"
-      );
-      group.hidden = inactiveComboRole || (query !== "" && !visibleFields);
-    });
   });
 
   chartChoices.forEach((choice) => {
-    const label = document.createElement("span");
-    label.className = "chart-choice-label";
-    label.textContent = choice.title || chartLabels[choice.dataset.chartType] || "Chart";
-    choice.append(label);
     choice.addEventListener("click", () => {
       state.chart = choice.dataset.chartType ?? "auto";
       if (state.chart !== "combo" && state.secondary_y !== null) {
@@ -338,6 +326,18 @@
       updateChartSettingsVisibility();
       refreshPreview();
     });
+  });
+
+  legendFieldSelect.addEventListener("change", () => {
+    updateOptionalField("series", legendFieldSelect.value, "x");
+  });
+
+  sizeFieldSelect.addEventListener("change", () => {
+    updateOptionalField("size", sizeFieldSelect.value, "y");
+  });
+
+  secondaryYFieldSelect.addEventListener("change", () => {
+    updateOptionalField("secondary_y", secondaryYFieldSelect.value, "y");
   });
 
   paretoLineMode.addEventListener("change", () => {
@@ -456,8 +456,7 @@
     const combo = state.chart === "combo";
     const pareto = state.chart === "pareto";
     const targetChart = state.chart === "gauge" || state.chart === "bullet";
-    secondaryYFieldGroup.hidden = !combo;
-    secondaryYAxisWell.hidden = !combo;
+    secondaryYSetting.hidden = !combo;
     paretoLineSetting.hidden = !pareto;
     targetSetting.hidden = !targetChart;
     noChartSettings.hidden = combo || pareto || targetChart;

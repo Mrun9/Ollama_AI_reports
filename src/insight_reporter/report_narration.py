@@ -968,9 +968,20 @@ def save_generated_report(
         raise ReportNarrationError("Generated report is too large to save.")
     try:
         temporary_path.write_text(f"{encoded}\n", encoding="utf-8")
+        validated = _parse_report(temporary_path)
+        if (
+            validated.dataset_id != versioned.dataset_id
+            or validated.report_id != versioned.report_id
+            or validated.version != versioned.version
+        ):
+            raise ReportNarrationError(
+                "Generated report failed its pre-save identity check."
+            )
         temporary_path.replace(final_path)
     except Exception as error:
         temporary_path.unlink(missing_ok=True)
+        if isinstance(error, ReportNarrationError):
+            raise
         raise ReportNarrationError(
             "Generated report could not be saved."
         ) from error
@@ -1056,7 +1067,7 @@ def list_generated_report_versions(
     *,
     generated_report_dir: Path,
 ) -> tuple[GeneratedReport, ...]:
-    """Return every validated immutable report version, newest first."""
+    """Return valid immutable report versions without exposing rejected artifacts."""
 
     if _DATASET_ID.fullmatch(dataset_id) is None:
         raise ReportNarrationError("Report dataset ID is invalid.")
@@ -1070,15 +1081,18 @@ def list_generated_report_versions(
             continue
         version = int(match.group(1))
         report_id = match.group(2)
-        report = _parse_report(path)
+        try:
+            report = _parse_report(path)
+        except ReportNarrationError:
+            # One unsafe or damaged historical artifact must not make its
+            # workspace and otherwise valid reports unavailable.
+            continue
         if (
             report.dataset_id != dataset_id
             or report.report_id != report_id
             or report.version != version
         ):
-            raise ReportNarrationError(
-                "Generated report history contains an invalid identity."
-            )
+            continue
         reports.append(report)
     return tuple(
         sorted(
@@ -2702,7 +2716,7 @@ def _compact_qualitative_facts(value: object) -> object:
         if (
             isinstance(fact, dict)
             and fact.get("type")
-            == "user_requested_visualization_insight"
+            == "verified_visualization_observation"
         ):
             compacted.append(
                 _compact_saved_visualization_insight(
@@ -2732,6 +2746,7 @@ def _compact_saved_visualization_insight(
     concise_observation: dict[str, object] = {}
     for key in (
         "finding",
+        "answer",
         "management_implication",
         "suggested_action",
         "question",
@@ -2746,6 +2761,16 @@ def _compact_saved_visualization_insight(
                 continue
             seen_questions.add(normalized)
         concise_observation[key] = shortened
+    status = observation.get("status")
+    if isinstance(status, str) and status in {"answered", "insufficient_evidence"}:
+        concise_observation["status"] = status
+    supporting_facts = observation.get("supporting_facts")
+    if isinstance(supporting_facts, list):
+        concise_observation["supporting_facts"] = [
+            _shortened_insight_text(fact)
+            for fact in supporting_facts[:3]
+            if isinstance(fact, str) and fact.strip()
+        ]
     compacted["observation"] = concise_observation
     return compacted
 

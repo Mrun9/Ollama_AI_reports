@@ -113,6 +113,10 @@ Public functions:
 - `rename_workspace_source(...)` edits only the source's presentation label.
 - `archive_workspace(...)` / `restore_workspace(...)` toggle the recoverable
   workspace archive timestamp without moving dependencies.
+- `permanently_delete_workspace(...)` accepts only an archived workspace,
+  stages its exact dataset-owned paths for rollback safety, then removes its
+  retained source, configuration, evidence, charts, visualizations, reports,
+  report assets, and transient UI state.
 - `archive_workspace_source(...)` / `restore_workspace_source(...)` move the
   source and optional worksheet selection between uploads and recoverable
   trash while retaining the workspace and report history.
@@ -634,32 +638,27 @@ Primary tests: `tests/test_visualization_suggestions.py` and
 
 ### `visualization_insights.py`
 
-Owns post-save, user-requested management findings for automated `VIS-*` and
-manual-board `MBV-*` visualizations. It keeps interpretation separate from
-the immutable chart definition.
+Owns post-save verified observations for automated `VIS-*` and manual-board
+`MBV-*` visualizations. It keeps deterministic observations and their editorial
+report preference separate from the immutable chart definition.
 
-- `VisualizationInsightArtifact` stores the question, exact visualization
-  fingerprint, report-inclusion preference, model status, grounded points,
-  and limitations.
-- `generate_visualization_insight(...)` asks Python for chart-specific facts
-  first and optionally asks Ollama to add an implication and action for each
-  fact ID.
+- `VisualizationInsightArtifact` stores the exact visualization fingerprint,
+  report-inclusion preference, deterministic facts, and limitations while
+  retaining compatibility with earlier question-oriented artifacts.
+- `build_verified_visualization_observations(...)` calculates chart-specific
+  facts without calling Ollama.
 - `_deterministic_findings(...)`, `_observation_finding(...)`,
   `_chart_specific_findings(...)`, and `_period_movement_findings(...)`
   calculate and phrase the factual layer from retained supporting data.
-- `_generate_annotations(...)` sends only the question, chart metadata, and
-  Python findings to Ollama as the measured `visualization_insights` task.
-- `_parse_annotations(...)` requires one response per known fact ID and
-  rejects added digits or numeric symbols.
 - `save_visualization_insight(...)` and
   `load_visualization_insight(...)` atomically persist and reload only an
   artifact whose SHA-256 still matches the saved chart.
 - `set_visualization_insight_report_inclusion(...)` changes only the editorial
   carry-forward preference.
 - `VisualizationInsightArtifact.report_observations()` converts opted-in
-  points into the existing manual-visualization evidence contract.
-- Manual-board detail pages expose the same question, optional Ollama
-  interpretation, saved-findings display, report-inclusion preference, and a
+  Python facts into the manual-visualization evidence contract.
+- Manual-board detail pages automatically expose the verified observations,
+  report-inclusion preference, and a
   bounded supporting-data table. Fingerprinting invalidates the insight when
   the board is edited and saved again.
 
@@ -865,8 +864,9 @@ Workspace routes:
 - `home` redirects product entry to `workspace_history`.
 - `workspace_history`, `create_workspace`, and `workspace_detail` list,
   create, and open workspaces, including empty and archived states.
-- `update_workspace_name`, `delete_workspace`, and
-  `undelete_workspace` edit metadata or toggle recoverable workspace state.
+- `update_workspace_name`, `delete_workspace`, and `undelete_workspace` edit
+  metadata or toggle recoverable workspace state; `purge_workspace` requires
+  an explicit confirmation and permanently deletes only an archived workspace.
 - `workspace_source_form` and `add_workspace_source` validate and attach the
   first source using the preallocated workspace ID.
 - `update_workspace_source_name`, `delete_workspace_source`, and
@@ -961,6 +961,9 @@ Route behaviour is covered across the route test files, especially
 - `visualization_builder.html` — guided manual and Ollama-assisted chart editor.
 - `visualization.html` — saved chart detail.
 - `visualizations.html` — report dashboard and saved chart collection.
+- `error.html` — shared safe HTTP error presentation with recovery links.
+- `base.html`, `_app_navigation.html`, and `_workspace_progress.html` — shared
+  Bootstrap shell, permanent project navigation, and accessible progress UI.
 - `_report_project_navigation.html` — persistent Data source, KPI/evidence,
   Dashboard, Next actions, and Report revisions navigation.
 - `report_configuration_form.html` — report content selection.

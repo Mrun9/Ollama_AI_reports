@@ -1,210 +1,65 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Deterministic Evidence | AI Insight Reporter</title>
-    <style>
-      body { font-family: system-ui, sans-serif; line-height: 1.45; margin: 2rem; }
-      main { max-width: 1100px; margin: 0 auto; }
-      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1.5rem 0; padding: 1rem; }
-      article.diagnostic { background: #f7f7f7; border-style: dashed; }
-      article.association { background: #fbfbff; }
-      .evidence-kind { font-weight: 700; }
-      details.evidence-secondary { margin: 1rem 0; }
-      details.evidence-secondary > summary { cursor: pointer; font-weight: 700; }
-      dl { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr; gap: 0.35rem 1rem; }
-      dt { font-weight: 700; }
-      dd { margin: 0; overflow-wrap: anywhere; }
-      table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
-      th, td { border: 1px solid #bbb; padding: 0.4rem 0.55rem; text-align: left; }
-      img { height: auto; max-width: 100%; }
-      pre { background: #f4f4f4; max-height: 32rem; overflow: auto; padding: 1rem; white-space: pre-wrap; }
-    </style>
-  </head>
-  <body>
-    <main>
-      {% set dataset_id = report.dataset_id %}
-      {% set current_section = "kpi" %}
-      {% include "_report_project_navigation.html" %}
-      <h1>Deterministic insights generated</h1>
-      <p>
-        {{ report.insights|length }} reproducible observations were generated with Python only.
-        Ollama was not used for calculations, evidence, rankings, or charts.
-      </p>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import page_header %}
 
-      {% if evidence %}
-        {% set counts = namespace(findings=0, associations=0, diagnostics=0) %}
-        {% for record in evidence.records %}
-          {% if record.insight_type in diagnostic_evidence_types %}
-            {% set counts.diagnostics = counts.diagnostics + 1 %}
-          {% elif record.insight_type in association_evidence_types %}
-            {% set counts.associations = counts.associations + 1 %}
-          {% else %}
-            {% set counts.findings = counts.findings + 1 %}
-          {% endif %}
-        {% endfor %}
-        <p>
-          {{ evidence.records|length }} evidence records let a reviewer trace every observation
-          to its source and supporting values.
-        </p>
-        <p>
-          <strong>{{ counts.findings }}</strong> decision-relevant findings ·
-          <strong>{{ counts.associations }}</strong> optional associations ·
-          <strong>{{ counts.diagnostics }}</strong> data or analysis diagnostics.
-          Diagnostics remain traceable but are not management findings.
-        </p>
+{% block title %}Deterministic Evidence | AI Insight Reporter{% endblock %}
 
-        {% for record in evidence.records|sort(attribute="ranking.rank") %}
-          {% set secondary = (
-            record.insight_type in diagnostic_evidence_types
-            or record.insight_type in association_evidence_types
-          ) %}
-          {% if secondary %}
-            <details class="evidence-secondary">
-              <summary>
-                #{{ record.ranking.rank }} · {{ record.insight_type }} ·
-                {{ record.metric }}
-              </summary>
-          {% endif %}
-          <article id="{{ record.id }}"
-            class="{% if record.insight_type in diagnostic_evidence_types %}diagnostic{% elif record.insight_type in association_evidence_types %}association{% endif %}">
-            <h2>#{{ record.ranking.rank }} — {{ record.insight_type }}</h2>
-            <p class="evidence-kind">
-              {% if record.insight_type in diagnostic_evidence_types %}
-                Analysis diagnostic — excluded from reports by default
-              {% elif record.insight_type in association_evidence_types %}
-                Optional descriptive association — not causal
-              {% else %}
-                Decision-relevant deterministic finding
-              {% endif %}
-            </p>
-            <dl>
-              <dt>Evidence ID</dt>
-              <dd>{{ record.id }}</dd>
-              <dt>Insight ID</dt>
-              <dd>{{ record.insight_id }}</dd>
-              <dt>KPI</dt>
-              <dd>{{ record.metric }} ({{ record.metric_id }})</dd>
-              <dt>Source</dt>
-              <dd>
-                {{ record.source.filename }} · {{ record.source.format|upper }}
-                {% if record.source.worksheet %} · worksheet {{ record.source.worksheet }}{% endif %}
-              </dd>
-              <dt>SHA-256</dt>
-              <dd>{{ record.source.sha256 }}</dd>
-              <dt>Columns</dt>
-              <dd>{{ record.source_columns|join(", ") if record.source_columns else "None" }}</dd>
-              <dt>Filters</dt>
-              <dd>{{ record.filters if record.filters else "None" }}</dd>
-              <dt>Periods</dt>
-              <dd>{{ record.periods|join(", ") if record.periods else "Not applicable" }}</dd>
-              <dt>Records analyzed</dt>
-              <dd>{{ record.record_count }}</dd>
-              <dt>Ranking scores</dt>
-              <dd>
-                impact {{ record.ranking.impact }},
-                confidence {{ record.ranking.confidence }},
-                relevance {{ record.ranking.relevance }},
-                combined {{ record.ranking.combined }}
-              </dd>
-            </dl>
+{% block content %}
+  {{ page_header("Deterministic insights generated", report.insights|length ~ " reproducible observations were generated with Python only. Ollama was not used for calculations, evidence, rankings, or charts.", "Verified evidence") }}
 
-            <h3>Calculation</h3>
-            <p>{{ record.calculation_description }}</p>
+  {% if evidence %}
+    {% set counts = namespace(findings=0, associations=0, diagnostics=0) %}
+    {% for record in evidence.records %}
+      {% if record.insight_type in diagnostic_evidence_types %}{% set counts.diagnostics = counts.diagnostics + 1 %}
+      {% elif record.insight_type in association_evidence_types %}{% set counts.associations = counts.associations + 1 %}
+      {% else %}{% set counts.findings = counts.findings + 1 %}{% endif %}
+    {% endfor %}
 
-            {% if record.kpi_definition.metric_type == "derived" %}
-              <p>
-                <strong>Derived KPI formula:</strong>
-                {{ record.kpi_definition.formula_label }}
-                ({{ record.kpi_definition.calculation_level }} calculation;
-                {{ record.kpi_definition.aggregation }} aggregation)
-              </p>
-            {% endif %}
+    <section class="evidence-grid mb-4" aria-label="Evidence summary">
+      <div class="evidence-stat"><span class="profile-stat-label">Evidence records</span><strong>{{ evidence.records|length }}</strong><span class="app-muted small">Traceable to source data</span></div>
+      <div class="evidence-stat"><span class="profile-stat-label">Decision findings</span><strong>{{ counts.findings }}</strong><span class="app-muted small">Report candidates</span></div>
+      <div class="evidence-stat"><span class="profile-stat-label">Associations</span><strong>{{ counts.associations }}</strong><span class="app-muted small">Descriptive, not causal</span></div>
+      <div class="evidence-stat"><span class="profile-stat-label">Diagnostics</span><strong>{{ counts.diagnostics }}</strong><span class="app-muted small">Excluded by default</span></div>
+    </section>
 
-            {% if record.chart %}
-              <figure>
-                <img
-                  src="{{ url_for('core.evidence_chart', dataset_id=evidence.dataset_id, evidence_id=record.id) }}"
-                  alt="{{ record.chart.alt_text }}"
-                >
-                <figcaption>
-                  {{ record.chart.title }} · generated from
-                  {{ record.chart.record_count }} supporting rows.
-                </figcaption>
-              </figure>
-            {% endif %}
+    <div class="d-flex flex-column gap-3">
+      {% for record in evidence.records|sort(attribute="ranking.rank") %}
+        {% set secondary = record.insight_type in diagnostic_evidence_types or record.insight_type in association_evidence_types %}
+        {% if secondary %}<details class="evidence-secondary app-details"><summary class="app-card">#{{ record.ranking.rank }} · {{ record.insight_type }} · {{ record.metric }}</summary>{% endif %}
+        <article id="{{ record.id }}" class="evidence-card {% if record.insight_type in diagnostic_evidence_types %}is-diagnostic{% elif record.insight_type in association_evidence_types %}is-association{% endif %}">
+          <header class="d-flex flex-column flex-sm-row align-items-sm-start gap-3 mb-3">
+            <span class="evidence-rank" aria-label="Rank {{ record.ranking.rank }}">{{ record.ranking.rank }}</span>
+            <div class="flex-grow-1"><div class="d-flex flex-wrap gap-2 mb-1"><span class="badge text-bg-light">{{ record.insight_type|replace("_", " ") }}</span><span class="badge text-bg-primary">{{ record.metric }}</span></div><h2 class="h4 mb-1">{{ record.calculation_description }}</h2><p class="app-muted small mb-0">{% if record.insight_type in diagnostic_evidence_types %}Analysis diagnostic — excluded from reports by default{% elif record.insight_type in association_evidence_types %}Optional descriptive association — not causal{% else %}Decision-relevant deterministic finding{% endif %}</p></div>
+          </header>
 
-            <h3>Supporting data</h3>
-            {% if record.supporting_data %}
-              {% set headers = record.supporting_data[0].keys() %}
-              <table>
-                <thead>
-                  <tr>
-                    {% for header in headers %}
-                      <th scope="col">{{ header }}</th>
-                    {% endfor %}
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for row in record.supporting_data %}
-                    <tr>
-                      {% for header in headers %}
-                        <td>{{ row.get(header) }}</td>
-                      {% endfor %}
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            {% else %}
-              <p>No supporting rows were produced because this analysis was skipped safely.</p>
-            {% endif %}
+          <dl class="app-definition-list mb-3">
+            <dt>Evidence ID</dt><dd><code>{{ record.id }}</code></dd><dt>Insight ID</dt><dd><code>{{ record.insight_id }}</code></dd>
+            <dt>KPI</dt><dd>{{ record.metric }} ({{ record.metric_id }})</dd><dt>Source</dt><dd>{{ record.source.filename }} · {{ record.source.format|upper }}{% if record.source.worksheet %} · worksheet {{ record.source.worksheet }}{% endif %}</dd>
+            <dt>SHA-256</dt><dd class="font-monospace small">{{ record.source.sha256 }}</dd><dt>Columns</dt><dd>{{ record.source_columns|join(", ") if record.source_columns else "None" }}</dd>
+            <dt>Filters</dt><dd>{{ record.filters if record.filters else "None" }}</dd><dt>Periods</dt><dd>{{ record.periods|join(", ") if record.periods else "Not applicable" }}</dd>
+            <dt>Records analyzed</dt><dd>{{ record.record_count }}</dd><dt>Ranking scores</dt><dd>impact {{ record.ranking.impact }}, confidence {{ record.ranking.confidence }}, relevance {{ record.ranking.relevance }}, combined {{ record.ranking.combined }}</dd>
+          </dl>
 
-            {% if record.limitations %}
-              <h3>Limitations</h3>
-              <ul>
-                {% for limitation in record.limitations %}
-                  <li>{{ limitation }}</li>
-                {% endfor %}
-              </ul>
-            {% endif %}
-          </article>
-          {% if secondary %}
-            </details>
-          {% endif %}
-        {% endfor %}
+          {% if record.kpi_definition.metric_type == "derived" %}<div class="alert alert-info"><strong>Derived KPI formula:</strong> <code>{{ record.kpi_definition.formula_label }}</code> ({{ record.kpi_definition.calculation_level }} calculation; {{ record.kpi_definition.aggregation }} aggregation)</div>{% endif %}
 
-        <details>
-          <summary>Evidence JSON</summary>
-          <pre>{{ evidence_json }}</pre>
-        </details>
-      {% else %}
-        <p>
-          This older insight result has no Milestone 4A evidence artifact. Return to the
-          configuration and generate deterministic insights again.
-        </p>
-      {% endif %}
+          {% if record.chart %}<figure class="chart-detail-frame mb-3"><img src="{{ url_for('core.evidence_chart', dataset_id=evidence.dataset_id, evidence_id=record.id) }}" alt="{{ record.chart.alt_text }}" loading="lazy"><figcaption class="app-muted small mt-2">{{ record.chart.title }} · generated from {{ record.chart.record_count }} supporting rows.</figcaption></figure>{% endif %}
 
-      <details>
-        <summary>Deterministic insight JSON</summary>
-        <pre>{{ report_json }}</pre>
-      </details>
-      <p>
-        <a href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">
-          Configure and generate report
-        </a>
-      </p>
-      <p>
-        <a href="{{ url_for('core.saved_visualizations', dataset_id=report.dataset_id) }}">
-          Open dashboard
-        </a>
-      </p>
-      <p>
-        <a href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">
-          Return to saved configuration
-        </a>
-      </p>
-      <p><a href="{{ url_for('core.workspace_history') }}">Return to workspaces</a></p>
-    </main>
-  </body>
-</html>
+          <details class="app-details" {% if not record.chart %}open{% endif %}><summary>Supporting data</summary>
+            {% if record.supporting_data %}{% set headers = record.supporting_data[0].keys() %}<div class="table-responsive mt-3"><table class="table table-sm table-hover"><thead><tr>{% for header in headers %}<th scope="col">{{ header }}</th>{% endfor %}</tr></thead><tbody>{% for row in record.supporting_data %}<tr>{% for header in headers %}<td>{{ row.get(header) }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+            {% else %}<p class="alert alert-secondary mt-3 mb-0">No supporting rows were produced because this analysis was skipped safely.</p>{% endif %}
+          </details>
+
+          {% if record.limitations %}<details class="app-details mt-3"><summary>Limitations</summary><ul class="mt-2 mb-0">{% for limitation in record.limitations %}<li>{{ limitation }}</li>{% endfor %}</ul></details>{% endif %}
+        </article>
+        {% if secondary %}</details>{% endif %}
+      {% endfor %}
+    </div>
+
+    <details class="app-card app-details mt-4"><summary>Evidence JSON</summary><pre class="code-panel mt-3">{{ evidence_json }}</pre></details>
+  {% else %}
+    <div class="alert alert-warning">This older insight result has no Milestone 4A evidence artifact. Return to the configuration and generate deterministic insights again.</div>
+  {% endif %}
+
+  <details class="app-card app-details mt-4"><summary>Deterministic insight JSON</summary><pre class="code-panel mt-3">{{ report_json }}</pre></details>
+
+  <section class="app-card workspace-next-card mt-4"><div class="app-panel-header"><div><p class="app-eyebrow mb-1">Continue</p><h2 class="h4 mb-1">Use this evidence</h2><p class="mb-0">Build supporting charts or select evidence for the final report.</p></div><div class="dashboard-actions"><a class="btn btn-primary" href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">Configure and generate report</a><a class="btn btn-outline-primary" href="{{ url_for('core.saved_visualizations', dataset_id=report.dataset_id) }}">Open dashboard</a><a class="btn btn-outline-secondary" href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">KPI configuration</a></div></div></section>
+{% endblock %}

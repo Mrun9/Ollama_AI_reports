@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{% block title %}AI Insight Reporter{% endblock %}</title>
+    <link rel="stylesheet"
+      href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    {% block styles %}{% endblock %}
+  </head>
+  <body class="app-body {% block body_class %}{% endblock %}">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div class="visually-hidden" id="app-live-region" aria-live="polite" aria-atomic="true"></div>
+    {% include "_app_navigation.html" %}
+
+    <main class="container-xxl app-main" id="main-content" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="app-footer">
+      <div class="container-xxl d-flex flex-column flex-sm-row gap-2 justify-content-between">
+        <span>AI Insight Reporter</span>
+        <span>Local-first analysis · Python-verified evidence</span>
+      </div>
+    </footer>
+
+    <button class="app-scroll-top" type="button" data-scroll-top hidden
+      aria-label="Return to the top of this page" title="Back to top">↑</button>
+
+    <script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

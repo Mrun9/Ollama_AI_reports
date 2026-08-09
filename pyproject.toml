@@ -20,7 +20,15 @@ dependencies = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-insight_reporter = ["templates/*.html", "static/*.js"]
+insight_reporter = [
+    "templates/*.html",
+    "static/*.css",
+    "static/*.js",
+    "static/vendor/*.css",
+    "static/vendor/*.js",
+    "static/vendor/*.map",
+    "static/vendor/*.LICENSE",
+]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"

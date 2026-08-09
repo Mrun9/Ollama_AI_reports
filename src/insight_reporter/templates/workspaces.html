@@ -1,112 +1,166 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Workspaces | AI Insight Reporter</title>
-    <style>
-      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
-      main { max-width: 960px; margin: 0 auto; }
-      article, form.create { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
-      dl { display: grid; grid-template-columns: 10rem 1fr; gap: 0.35rem 1rem; }
-      dt { font-weight: 700; }
-      dd { margin: 0; overflow-wrap: anywhere; }
-      label { display: block; margin: 0.5rem 0; }
-      input, textarea { box-sizing: border-box; max-width: 36rem; width: 100%; }
-      .warning { color: #754b00; }
-      .archived { opacity: 0.8; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Workspaces</h1>
-      <p>
-        Start from an existing workspace or create an empty one, then add one
-        data source and build reports inside it.
-      </p>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import empty_state, page_header %}
 
-      <form class="create" method="post" action="{{ url_for('core.create_workspace') }}">
-        <h2>Create workspace</h2>
-        <label>
-          Workspace name
-          <input name="name" type="text" maxlength="120"
-            placeholder="Quarterly sales review" required>
-        </label>
-        <label>
-          Description (optional)
-          <textarea name="description" maxlength="1000"
-            placeholder="What this workspace is for"></textarea>
-        </label>
-        <button type="submit">Create workspace</button>
-      </form>
+{% block title %}Workspaces | AI Insight Reporter{% endblock %}
 
-      <h2>Existing workspaces</h2>
-      {% if workspaces %}
-        {% for workspace in workspaces %}
-          <article>
-            <h3>
-              <a href="{{ url_for(
-                'core.workspace_detail',
-                dataset_id=workspace.record.dataset_id
-              ) }}">
-                {{ workspace.record.name }}
-              </a>
-            </h3>
-            {% if workspace.record.description %}
-              <p>{{ workspace.record.description }}</p>
-            {% endif %}
-            <dl>
-              <dt>Data source</dt>
-              <dd>
-                {{ workspace.record.original_filename
-                   if workspace.record.has_source
-                   else "No active source" }}
-              </dd>
-              <dt>Current stage</dt>
-              <dd>{{ workspace.stage_label }}</dd>
-              <dt>Last activity</dt>
-              <dd>{{ workspace.last_activity_at }}</dd>
-              <dt>Reports</dt>
-              <dd>
-                {{ workspace.report_run_count }} active report(s),
-                {{ workspace.report_version_count }} version(s)
-              </dd>
-            </dl>
-            {% if workspace.metadata_warning %}
-              <p class="warning">{{ workspace.metadata_warning }}</p>
-            {% endif %}
-          </article>
-        {% endfor %}
-      {% else %}
-        <p>
-          No active workspaces yet. Create one above, then select its source
-          file.
+{% block content %}
+  {{ page_header(
+    "Your analysis workspaces",
+    "Create a workspace for one data source, then continue from its latest completed step.",
+    "Local project library"
+  ) }}
+
+  <div class="row g-4 align-items-start">
+    <div class="col-lg-4">
+      <section class="app-card">
+        <h2 class="h5 mb-2">Create workspace</h2>
+        <p class="app-muted small mb-4">
+          Give the analysis a clear name. You will select its dataset next.
         </p>
+        <form method="post" action="{{ url_for('core.create_workspace') }}"
+          data-loading-form>
+          <div class="mb-3">
+            <label class="form-label" for="workspace-name">Workspace name</label>
+            <input class="form-control" id="workspace-name" name="name" type="text"
+              maxlength="120" placeholder="Quarterly sales review" required>
+          </div>
+          <div class="mb-4">
+            <label class="form-label" for="workspace-description">Description</label>
+            <textarea class="form-control" id="workspace-description" name="description"
+              maxlength="1000" rows="3"
+              placeholder="What this workspace is for"></textarea>
+            <div class="form-text">Optional. You can edit this later.</div>
+          </div>
+          <button class="btn btn-primary w-100" type="submit"
+            data-loading-text="Creating workspace…">Create workspace</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+        <div>
+          <p class="app-eyebrow mb-1">Continue working</p>
+          <h2 class="h4 mb-0">Existing workspaces</h2>
+        </div>
+        {% if workspaces %}
+          <span class="badge text-bg-light border">
+            {{ workspaces|length }} active
+          </span>
+        {% endif %}
+      </div>
+
+      {% if workspaces %}
+        <div class="d-grid gap-3">
+          {% for workspace in workspaces %}
+            <article class="app-card workspace-card">
+              <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 mb-3">
+                <div>
+                  <h3 class="h5 mb-1">
+                    <a href="{{ url_for(
+                      'core.workspace_detail',
+                      dataset_id=workspace.record.dataset_id
+                    ) }}">
+                      {{ workspace.record.name }}
+                    </a>
+                  </h3>
+                  {% if workspace.record.description %}
+                    <p class="app-muted mb-0">{{ workspace.record.description }}</p>
+                  {% endif %}
+                </div>
+                <div>
+                  <span class="app-status-badge">{{ workspace.stage_label }}</span>
+                </div>
+              </div>
+
+              <dl class="app-definition-list">
+                <dt>Data source</dt>
+                <dd>
+                  {{ workspace.record.original_filename
+                     if workspace.record.has_source
+                     else "No active source" }}
+                </dd>
+                <dt>Last activity</dt>
+                <dd>{{ workspace.last_activity_at }}</dd>
+                <dt>Reports</dt>
+                <dd>
+                  {{ workspace.report_run_count }} active,
+                  {{ workspace.report_version_count }} version(s)
+                </dd>
+              </dl>
+
+              {% if workspace.metadata_warning %}
+                <div class="alert alert-warning mt-3 mb-0" role="status">
+                  {{ workspace.metadata_warning }}
+                </div>
+              {% endif %}
+
+              <div class="d-flex flex-wrap align-items-center gap-2 mt-4">
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for(
+                  'core.workspace_detail',
+                  dataset_id=workspace.record.dataset_id
+                ) }}">Open workspace</a>
+                <form method="post" action="{{ url_for(
+                  'core.delete_workspace',
+                  dataset_id=workspace.record.dataset_id
+                ) }}" data-confirm="Delete {{ workspace.record.name }}? The workspace will move to the recoverable archive and can be restored later.">
+                  <button class="btn btn-outline-danger btn-sm" type="submit"
+                    aria-label="Delete workspace {{ workspace.record.name }}">
+                    Delete workspace
+                  </button>
+                </form>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty_state(
+          "No active workspaces yet",
+          "Create your first workspace, then select a CSV, JSON, or Excel source."
+        ) }}
       {% endif %}
 
       {% if archived_workspaces %}
-        <details>
-          <summary>Recoverably deleted workspaces ({{ archived_workspaces|length }})</summary>
-          {% for workspace in archived_workspaces %}
-            <article class="archived">
-              <h3>{{ workspace.record.name }}</h3>
-              <p>Archived {{ workspace.record.archived_at }}</p>
-              <form method="post" action="{{ url_for(
-                'core.undelete_workspace',
-                dataset_id=workspace.record.dataset_id
-              ) }}">
-                <button type="submit">Restore workspace</button>
-              </form>
-            </article>
-          {% endfor %}
+        <details class="app-details app-card mt-4">
+          <summary>
+            Recoverably deleted workspaces ({{ archived_workspaces|length }})
+          </summary>
+          <div class="d-grid gap-3 mt-3">
+            {% for workspace in archived_workspaces %}
+              <article class="border rounded-3 p-3 bg-light">
+                <h3 class="h6 mb-1">{{ workspace.record.name }}</h3>
+                <p class="app-muted small mb-3">
+                  Archived {{ workspace.record.archived_at }}
+                </p>
+                <div class="d-flex flex-wrap gap-2">
+                  <form method="post" action="{{ url_for(
+                    'core.undelete_workspace',
+                    dataset_id=workspace.record.dataset_id
+                  ) }}" data-loading-form>
+                    <button class="btn btn-outline-primary btn-sm" type="submit"
+                      data-loading-text="Restoring…">Restore workspace</button>
+                  </form>
+                  <form method="post" action="{{ url_for(
+                    'core.purge_workspace',
+                    dataset_id=workspace.record.dataset_id
+                  ) }}" data-confirm="Permanently delete {{ workspace.record.name }}? This cannot be undone and removes its source, KPI configuration, charts, evidence, reports, and history.">
+                    <input type="hidden" name="confirmation" value="delete-permanently">
+                    <button class="btn btn-danger btn-sm" type="submit"
+                      aria-label="Permanently delete workspace {{ workspace.record.name }}">
+                      Delete permanently
+                    </button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
         </details>
       {% endif %}
 
-      <p>
-        <a href="{{ url_for('core.upload_form') }}">
-          Use legacy upload-first flow
-        </a>
+      <p class="small app-muted mt-4 mb-0">
+        Already have a dataset ready?
+        <a href="{{ url_for('core.upload_form') }}">Use the quick upload flow</a>.
       </p>
-    </main>
-  </body>
-</html>
+    </div>
+  </div>
+{% endblock %}

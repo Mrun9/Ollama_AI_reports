@@ -1,0 +1,27 @@
+<nav class="app-workflow" aria-label="Workspace progress">
+  <ol class="app-workflow-list">
+    {% for step in workspace_steps %}
+      <li class="app-workflow-step is-{{ step.state }}">
+        {% if step.url %}
+          <a class="app-workflow-content" href="{{ step.url }}"
+            {% if step.state == "current" %}aria-current="step"{% endif %}>
+        {% else %}
+          <div class="app-workflow-content"
+            {% if step.state == "current" %}aria-current="step"{% endif %}>
+        {% endif %}
+            <span class="app-workflow-number" aria-hidden="true">
+              {% if step.state == "complete" %}✓{% else %}{{ step.number }}{% endif %}
+            </span>
+            <span class="app-workflow-copy">
+              <span class="app-workflow-label">{{ step.label }}</span>
+              <span class="app-workflow-status">{{ step.status_label }}</span>
+            </span>
+        {% if step.url %}
+          </a>
+        {% else %}
+          </div>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+</nav>

@@ -1,45 +1,12 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ artifact.title }} | AI Insight Reporter</title>
-    <style>
-      :root { color-scheme: light; --border: #d8e0ec; --muted: #64748b; }
-      * { box-sizing: border-box; }
-      body {
-        background: #f4f7fb;
-        color: #172033;
-        font-family: system-ui, sans-serif;
-        line-height: 1.5;
-        margin: 0;
-      }
-      main { margin: 0 auto; max-width: 1120px; padding: 1.5rem clamp(1rem, 3vw, 3rem) 3rem; }
-      a { color: #1d4ed8; }
-      .detail-header { align-items: start; display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; }
-      .detail-header h1 { margin-bottom: 0.2rem; }
-      .detail-header p { color: var(--muted); margin-top: 0; }
-      .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.4rem; }
-      .actions a { background: #2563eb; border-radius: 0.45rem; color: #fff; font-weight: 700; padding: 0.6rem 0.85rem; text-decoration: none; }
-      .chart-panel { background: #fff; border: 1px solid var(--border); border-radius: 0.75rem; margin-top: 1rem; padding: 1rem; }
-      .chart-panel img { display: block; height: auto; margin: 0 auto; max-height: 40rem; max-width: 100%; width: 100%; }
-      .details { background: #fff; border: 1px solid var(--border); border-radius: 0.75rem; display: grid; gap: 0.4rem; grid-template-columns: max-content minmax(0, 1fr); margin-top: 1rem; padding: 1rem; }
-      .details dt { font-weight: 750; }
-      .details dd { margin: 0; }
-      .content-panel { background: #fff; border: 1px solid var(--border); border-radius: 0.75rem; margin-top: 1rem; padding: 1rem; }
-      .content-panel h2 { margin-top: 0; }
-      textarea { font: inherit; max-width: 100%; padding: 0.65rem; width: min(100%, 46rem); }
-      button { cursor: pointer; font: inherit; padding: 0.55rem 0.8rem; }
-      .supporting-table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; width: 100%; }
-      .supporting-table th, .supporting-table td { border: 1px solid var(--border); padding: 0.45rem 0.6rem; text-align: left; white-space: nowrap; }
-      .supporting-table th { background: #eef3f9; }
-      pre { background: #f8fafc; max-width: 100%; overflow-x: auto; padding: 0.75rem; }
-    </style>
-  </head>
-  <body>
-    <main>
-      {% set current_section = "dashboard" %}
-      {% include "_report_project_navigation.html" %}
+{% extends "base.html" %}
+
+{% block title %}{{ artifact.title }} | AI Insight Reporter{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='manual_visualization.css') }}">
+{% endblock %}
+
+{% block content %}
       <header class="detail-header">
         <div>
           <h1>{{ artifact.title }}</h1>
@@ -78,11 +45,10 @@
       </dl>
 
       <section class="content-panel" aria-labelledby="manual-insights-heading">
-        <h2 id="manual-insights-heading">Insights from this visualization</h2>
+        <h2 id="manual-insights-heading">Verified observations</h2>
         <p>
-          Ask a management question to calculate up to five findings from the
-          saved board data. Python supplies every number; Ollama can optionally
-          add a plain-language implication and suggested action.
+          These observations are calculated automatically from the saved chart
+          and its retained supporting data.
         </p>
         {% if insight_notice %}
           <p role="status"><strong>{{ insight_notice }}</strong></p>
@@ -90,85 +56,32 @@
         {% if insight_error %}
           <p role="alert"><strong>{{ insight_error }}</strong></p>
         {% endif %}
+        <ol>{% for fact in visualization_insight.facts %}<li><strong>Observation {{ loop.index }}:</strong> {{ fact.finding }}</li>{% endfor %}</ol>
+        <p>
+          <strong>Report status:</strong>
+          {% if visualization_insight.include_in_reports %}
+            Included when this manual-board visualization is selected in report configuration.
+          {% else %}
+            Available on the dashboard and excluded from reports.
+          {% endif %}
+        </p>
         <form method="post"
-          action="{{ url_for('core.request_manual_visualization_insight', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
-          <p>
-            <label for="manual-insight-question">
-              <strong>What should management learn or decide?</strong>
-            </label><br>
-            <textarea id="manual-insight-question" name="question" rows="3"
-              maxlength="1000" required>{{ visualization_insight.question if visualization_insight else "What should management pay attention to in this chart?" }}</textarea>
-          </p>
-          <p>
-            <label>
-              <input type="checkbox" name="use_model" value="yes"
-                {% if not visualization_insight or visualization_insight.model_status != "not_requested" %}checked{% endif %}>
-              Ask Ollama for a plain-language implication and suggested action
-            </label>
-          </p>
-          <p>
-            <label>
-              <input type="checkbox" name="include_in_reports" value="yes"
-                {% if visualization_insight and visualization_insight.include_in_reports %}checked{% endif %}>
-              Include these saved insights in reports
-            </label>
-          </p>
-          <button type="submit">
-            {{ "Regenerate insights" if visualization_insight else "Generate insights" }}
-          </button>
+          action="{{ url_for('core.update_manual_visualization_insight_report_inclusion', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
+          <label>
+            <input type="checkbox" name="include_in_reports" value="yes"
+              {% if visualization_insight.include_in_reports %}checked{% endif %}>
+            Include these verified insights in reports
+          </label>
+          <button type="submit">Save report preference</button>
         </form>
-
-        {% if visualization_insight %}
-          <h3>Saved management findings</h3>
-          <p>
-            Generated {{ visualization_insight.generated_at }} ·
-            {% if visualization_insight.model_status == "generated" %}
-              Python facts with grounded Ollama interpretation
-            {% elif visualization_insight.model_status == "unavailable" %}
-              Python facts only; Ollama interpretation was unavailable
-            {% else %}
-              Python facts only
-            {% endif %}
-          </p>
-          <ol>
-            {% for point in visualization_insight.points %}
-              <li>
-                <p><strong>{{ point.finding }}</strong></p>
-                {% if point.implication %}
-                  <p><strong>Why it matters:</strong> {{ point.implication }}</p>
-                {% endif %}
-                {% if point.suggested_action %}
-                  <p><strong>Suggested action:</strong> {{ point.suggested_action }}</p>
-                {% endif %}
-              </li>
+        <details>
+          <summary>Grounding limitations</summary>
+          <ul>
+            {% for limitation in visualization_insight.limitations if "Ollama" not in limitation %}
+              <li>{{ limitation }}</li>
             {% endfor %}
-          </ol>
-          <p>
-            <strong>Report status:</strong>
-            {% if visualization_insight.include_in_reports %}
-              Included when this manual-board visualization is selected in report configuration.
-            {% else %}
-              Saved for dashboard use only.
-            {% endif %}
-          </p>
-          <form method="post"
-            action="{{ url_for('core.update_manual_visualization_insight_report_inclusion', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
-            <label>
-              <input type="checkbox" name="include_in_reports" value="yes"
-                {% if visualization_insight.include_in_reports %}checked{% endif %}>
-              Include these saved insights in reports
-            </label>
-            <button type="submit">Save report preference</button>
-          </form>
-          <details>
-            <summary>Grounding limitations</summary>
-            <ul>
-              {% for limitation in visualization_insight.limitations %}
-                <li>{{ limitation }}</li>
-              {% endfor %}
-            </ul>
-          </details>
-        {% endif %}
+          </ul>
+        </details>
       </section>
 
       <section class="content-panel" aria-labelledby="manual-supporting-data-heading">
@@ -209,6 +122,4 @@
           <pre>{{ artifact.to_dict()|tojson(indent=2) }}</pre>
         </details>
       </section>
-    </main>
-  </body>
-</html>
+{% endblock %}

@@ -1,39 +1,58 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Add Source | {{ workspace.record.name }}</title>
-  </head>
-  <body>
-    <main>
-      <p>
-        <a href="{{ url_for(
-          'core.workspace_detail',
-          dataset_id=workspace.record.dataset_id
-        ) }}">Return to workspace</a>
-      </p>
-      <h1>Select source file</h1>
-      <p>
-        Add one CSV, flat JSON, or XLSX source to
-        <strong>{{ workspace.record.name }}</strong>.
-      </p>
-      <form method="post" enctype="multipart/form-data" action="{{ url_for(
-        'core.add_workspace_source',
-        dataset_id=workspace.record.dataset_id
-      ) }}">
-        <label>
-          Dataset file
-          <input name="file" type="file"
-            accept=".csv,.json,.xlsx,text/csv,application/json" required>
-        </label>
-        <button type="submit">Validate and add source</button>
-      </form>
-      <ul>
-        <li>Maximum file size: {{ max_bytes }} bytes</li>
-        <li>Maximum rows: {{ max_rows }}</li>
-        <li>Maximum columns: {{ max_columns }}</li>
-      </ul>
-    </main>
-  </body>
-</html>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import page_header %}
+
+{% block title %}Add Source | {{ workspace.record.name }}{% endblock %}
+
+{% block content %}
+  <nav aria-label="Breadcrumb" class="mb-3">
+    <a class="small text-decoration-none" href="{{ url_for(
+      'core.workspace_detail', dataset_id=workspace.record.dataset_id
+    ) }}">← Return to workspace</a>
+  </nav>
+
+  {{ page_header(
+    "Select source file",
+    "Add one validated dataset to “" ~ workspace.record.name ~ "” to begin the analysis.",
+    "Step 1 of 5"
+  ) }}
+
+  {% include "_workspace_progress.html" %}
+
+  <div class="row g-4 mt-1 align-items-start">
+    <div class="col-lg-8">
+      <section class="app-card">
+        <form method="post" enctype="multipart/form-data" action="{{ url_for(
+          'core.add_workspace_source', dataset_id=workspace.record.dataset_id
+        ) }}" data-loading-form>
+          <div class="mb-4">
+            <label class="form-label" for="workspace-source-file">Dataset file</label>
+            <input class="form-control" id="workspace-source-file" name="file" type="file"
+              accept=".csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              aria-describedby="workspace-source-help workspace-source-selection"
+              data-file-input="workspace-source-selection" required>
+            <div class="form-text" id="workspace-source-selection">No file selected</div>
+          </div>
+          <button class="btn btn-primary" type="submit"
+            data-loading-text="Validating source…">Validate and add source</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="col-lg-4">
+      <aside class="app-card" id="workspace-source-help">
+        <h2 class="h5">Before you upload</h2>
+        <ul class="app-muted small ps-3 mb-0">
+          <li class="mb-2">Use UTF-8 CSV, flat JSON, or XLSX.</li>
+          <li class="mb-2">Maximum file size: {{ max_bytes }} bytes.</li>
+          <li class="mb-2">Maximum rows: {{ max_rows }}.</li>
+          <li>Maximum columns: {{ max_columns }}.</li>
+        </ul>
+        <hr>
+        <p class="small app-muted mb-0">
+          The source is validated locally before its profile is created. Uploading it does
+          not call the AI model.
+        </p>
+      </aside>
+    </div>
+  </div>
+{% endblock %}

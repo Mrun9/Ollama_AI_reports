@@ -683,19 +683,13 @@ def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
     assert b"manual_visualization_builder.js" in manual_builder.data
     assert b"Drag fields here to create a visualization" in manual_builder.data
     assert b"X-axis fields" in manual_builder.data
-    assert b"Y-axis fields" in manual_builder.data
-    assert b"Legend fields" in manual_builder.data
-    assert b"Size fields" in manual_builder.data
-    assert b"Line value fields" in manual_builder.data
+    assert b"Measures" in manual_builder.data
     assert b'data-field-group="x"' in manual_builder.data
     assert b'data-field-group="y"' in manual_builder.data
-    assert b'data-field-group="series"' in manual_builder.data
-    assert b'data-field-group="size"' in manual_builder.data
-    assert b'data-field-group="secondary_y"' in manual_builder.data
     assert b'data-field-name="segment"' in manual_builder.data
     assert b'data-field-name="revenue"' in manual_builder.data
-    assert manual_builder.data.count(b'data-field-name="segment"') == 2
-    assert manual_builder.data.count(b'data-field-name="revenue"') == 4
+    assert manual_builder.data.count(b'data-field-name="segment"') == 1
+    assert manual_builder.data.count(b'data-field-name="revenue"') == 2
     assert manual_builder.data.count(b'data-field-name="date"') == 1
     assert re.search(
         rb'data-field-name="segment"\s+data-field-kind="categorical"\s+'
@@ -703,23 +697,8 @@ def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
         manual_builder.data,
     )
     assert re.search(
-        rb'data-field-name="segment"\s+data-field-kind="categorical"\s+'
-        rb'data-preferred-axis="series"',
-        manual_builder.data,
-    )
-    assert re.search(
         rb'data-field-name="revenue"\s+data-field-kind="numeric"\s+'
         rb'data-preferred-axis="y"',
-        manual_builder.data,
-    )
-    assert re.search(
-        rb'data-field-name="revenue"\s+data-field-kind="numeric"\s+'
-        rb'data-preferred-axis="size"',
-        manual_builder.data,
-    )
-    assert re.search(
-        rb'data-field-name="revenue"\s+data-field-kind="numeric"\s+'
-        rb'data-preferred-axis="secondary_y"',
         manual_builder.data,
     )
     assert b'data-chart-type="auto"' in manual_builder.data
@@ -746,7 +725,8 @@ def test_dashboard_visualization_can_precede_kpis_and_survives_configuration(
     assert b'data-chart-type="bullet"' in manual_builder.data
     chart_script = client.get("/static/manual_visualization_builder.js")
     assert chart_script.status_code == 200
-    assert b"chart-choice-label" in chart_script.data
+    assert b"legendFieldSelect" in chart_script.data
+    assert b"updateOptionalField" in chart_script.data
     assert b"rasterizePreview" in chart_script.data
     assert b'toDataURL("image/png")' in chart_script.data
     assert b'preview.removeAttribute("hidden")' in chart_script.data
@@ -1273,20 +1253,23 @@ def test_saved_chart_insight_route_persists_findings_and_report_preference(
     saved = client.post(f"/visualizations/{dataset_id}/preview/{token}/save")
     visualization_id = saved.headers["Location"].rsplit("/", 1)[-1]
 
+    detail_before_insight = client.get(saved.headers["Location"])
+    assert b"Verified observations" in detail_before_insight.data
+    assert b"Suggest questions with Ollama" not in detail_before_insight.data
+    assert b"Ask about this visualization" not in detail_before_insight.data
+    assert b"visualization_insights.js" not in detail_before_insight.data
+
     generated = client.post(
-        f"/visualizations/{dataset_id}/{visualization_id}/insights",
-        data={
-            "question": "Which segment should management review?",
-            "include_in_reports": "yes",
-        },
+        f"/visualizations/{dataset_id}/{visualization_id}/insights/report-inclusion",
+        data={"include_in_reports": "yes"},
     )
     assert generated.status_code == 303
     detail = client.get(generated.headers["Location"])
     assert detail.status_code == 200
-    assert b"Saved management findings" in detail.data
-    assert b"Which segment should management review?" in detail.data
+    assert b"Verified observations" in detail.data
+    assert b"Observation 1" in detail.data
     assert b"Included when this visualization is selected" in detail.data
-    assert b"Five grounded chart findings were saved" in detail.data
+    assert b"Verified observations will be included" in detail.data
 
     insight_path = (
         Path(app.config["VISUALIZATION_INSIGHT_DIR"]) / dataset_id / f"{visualization_id}.json"
@@ -1294,7 +1277,8 @@ def test_saved_chart_insight_route_persists_findings_and_report_preference(
     payload = json.loads(insight_path.read_text(encoding="utf-8"))
     assert payload["include_in_reports"] is True
     assert payload["model_status"] == "not_requested"
-    assert len(payload["points"]) == 5
+    assert payload["answers"] == []
+    assert len(payload["facts"]) == 5
 
     excluded = client.post(
         (f"/visualizations/{dataset_id}/{visualization_id}/insights/report-inclusion"),

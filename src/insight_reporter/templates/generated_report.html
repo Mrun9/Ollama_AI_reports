@@ -1,38 +1,15 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ report.report_settings.title }} | AI Insight Reporter</title>
-    <style>
-      body { font-family: system-ui, sans-serif; line-height: 1.5; margin: 2rem; }
-      main { max-width: 1050px; margin: 0 auto; }
-      article { border: 1px solid #bbb; border-radius: 0.4rem; margin: 1rem 0; padding: 1rem; }
-      dl { display: grid; grid-template-columns: minmax(10rem, 15rem) 1fr; gap: 0.35rem 1rem; }
-      dt { font-weight: 700; }
-      dd { margin: 0; overflow-wrap: anywhere; }
-      pre { background: #f4f4f4; max-height: 28rem; overflow: auto; padding: 1rem; white-space: pre-wrap; }
-      .source-label { font-weight: 700; }
-      .story { border-left: 0.35rem solid #315c9b; }
-      .finding { font-size: 1.08rem; }
-      .story-source { color: #555; font-size: 0.92rem; }
-      .confidence { background: #eef5ff; border-radius: 0.3rem; padding: 0.65rem; }
-      .claim-list { padding-left: 1.3rem; }
-      .summary-list li { margin: 0.8rem 0; padding-left: 0.25rem; }
-      .summary-source { color: #555; font-size: 0.92rem; }
-      .report-chart { display: block; max-height: 32rem; max-width: 100%; margin: 1rem auto; }
-      .publishing-controls { background: #f4f7fb; padding: 1rem; }
-      @media print {
-        body { margin: 0; }
-        .publishing-controls, .screen-only { display: none; }
-        article { break-inside: avoid; }
-        details { display: block; }
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>{{ report.report_settings.title }}</h1>
+{% extends "base.html" %}
+
+{% block title %}{{ report.report_settings.title }} | AI Insight Reporter{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='generated_report.css') }}">
+{% endblock %}
+
+{% block content %}
+      <header class="report-document-header">
+      <div class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-3">
+      <div><p class="app-eyebrow">Generated management report</p><h1>{{ report.report_settings.title }}</h1>
       {% if report.report_settings.company_name %}
         <p><strong>{{ report.report_settings.company_name }}</strong></p>
       {% endif %}
@@ -47,20 +24,21 @@
           · author {{ report.report_settings.report_author }}
         {% endif %}
       </p>
-      <p class="screen-only">
-        <a href="{{ url_for(
+      </div><div class="dashboard-actions screen-only">
+        <a class="btn btn-outline-primary" href="{{ url_for(
           'core.generated_report_history',
           dataset_id=report.dataset_id
-        ) }}">
-          Open report history
-        </a>
-      </p>
+        ) }}">Open report history</a>
+        <a class="btn btn-outline-primary" href="{{ report_json_url }}">Download JSON</a>
+        <a class="btn btn-primary" href="{{ report_pdf_url }}">Download PDF</a>
+      </div></div>
       {% if historical_snapshot %}
-        <p class="warning">
+        <div class="alert alert-warning mt-3 mb-0">
           This is a read-only historical snapshot. It may not match the
           workspace's current configuration or evidence.
-        </p>
+        </div>
       {% endif %}
+      </header>
 
       <h2>Executive summary</h2>
       <p>
@@ -121,7 +99,7 @@
           </ol>
         {% else %}
           {% for story in published_stories[:3] %}
-            <article class="story">
+            <article class="story report-story">
               <h3>{{ story.headline }}</h3>
               <p class="finding">
                 <span class="source-label">What we found:</span>
@@ -147,7 +125,7 @@
       {% endif %}
 
       {% if report.stories and not historical_snapshot %}
-        <section class="publishing-controls">
+        <section class="publishing-controls report-publishing-controls screen-only">
           <h2>Report publishing controls</h2>
           <p>
             Include, exclude, or reorder stories. Saving creates another
@@ -213,7 +191,7 @@
           <section>
             <h2>{{ section_title }}</h2>
             {% for story in stories %}
-              <article class="story" id="{{ story.story_id }}">
+              <article class="story report-story" id="{{ story.story_id }}">
                 <h3>{{ story.headline }}</h3>
                 <p class="story-source">
                   {{ "AI-synthesized from verified Python evidence" if story.narration_source == "ollama" else "Deterministic fallback summary" }}
@@ -255,7 +233,7 @@
                   <span class="source-label">Keep in mind:</span>
                   {{ story.caveat }}
                 </p>
-                <p class="confidence">
+                <p class="confidence report-confidence">
                   <span class="source-label">
                     Confidence: {{ story.confidence|capitalize }}
                   </span>
@@ -328,7 +306,7 @@
         <section>
           <h2>{{ section_title }}</h2>
           {% for item in items %}
-            <article id="{{ item.evidence_id }}">
+            <article class="app-card" id="{{ item.evidence_id }}">
               <h3>{{ item.title }}</h3>
               <dl>
                 <dt>Evidence ID</dt>
@@ -541,27 +519,18 @@
         {% endfor %}
       {% endif %}
 
-      <p>
-        <a href="{{ report_json_url }}">
-          View generated report JSON
-        </a>
-        ·
-        <a href="{{ report_pdf_url }}">
-          Download this version as PDF
-        </a>
-      </p>
-      <details>
+      <div class="dashboard-actions screen-only mt-4">
+        <a class="btn btn-outline-primary" href="{{ report_json_url }}">View generated report JSON</a>
+        <a class="btn btn-primary" href="{{ report_pdf_url }}">Download this version as PDF</a>
+      </div>
+      <details class="app-card app-details mt-4">
         <summary>Generated report artifact</summary>
-        <pre>{{ report_json }}</pre>
+        <pre class="code-panel mt-3">{{ report_json }}</pre>
       </details>
-      <p>
-        <a href="{{ url_for(
+      <p class="screen-only mt-4">
+        <a class="btn btn-outline-secondary" href="{{ url_for(
           'core.saved_report_configuration',
           dataset_id=report.dataset_id
-        ) }}">
-          Return to report configuration
-        </a>
+        ) }}">Return to report configuration</a>
       </p>
-    </main>
-  </body>
-</html>
+{% endblock %}

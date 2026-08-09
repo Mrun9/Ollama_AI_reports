@@ -1,0 +1,117 @@
+:root {
+  --background: #f4f7fb;
+  --panel: #fff;
+  --border: #d8e0ec;
+  --muted: #536174;
+  --accent: #2563eb;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--background);
+  color: #172033;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+  margin: 0;
+}
+main {
+  margin: 0 auto;
+  max-width: 1080px;
+  padding: 1.5rem clamp(1rem, 3vw, 3rem) 3rem;
+}
+form {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+label { display: block; font-weight: 650; }
+input[type="text"], input:not([type]), input[type="date"],
+input[type="number"], select, textarea {
+  border: 1px solid #aeb9c8;
+  border-radius: 0.4rem;
+  font: inherit;
+  margin-top: 0.3rem;
+  max-width: 42rem;
+  padding: 0.55rem 0.65rem;
+  width: 100%;
+}
+textarea { min-height: 5rem; }
+.intro, .help { color: var(--muted); }
+.step {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0 0;
+  padding: 1.5rem 0 0;
+}
+.step:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.step legend { font-size: 1.1rem; font-weight: 750; }
+.goal-grid, .measure-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.goal-card, .measure-card {
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 0.8rem;
+}
+.goal-card:has(input:checked) {
+  background: #eff6ff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.measure-card:has(input:checked) {
+  background: #f0fdf4;
+  border-color: #16a34a;
+}
+.goal-card small {
+  color: var(--muted);
+  display: block;
+  margin: 0.3rem 0 0 1.35rem;
+}
+.tag {
+  background: #e8eef7;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  margin-left: 0.35rem;
+  padding: 0.12rem 0.4rem;
+}
+details {
+  border-top: 1px solid var(--border);
+  margin-top: 1.5rem;
+  padding-top: 1.2rem;
+}
+details summary { cursor: pointer; font-size: 1.05rem; font-weight: 750; }
+details > fieldset { margin-top: 1rem; }
+.report-option {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.8rem;
+}
+.assistant-panel {
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
+  border-radius: 0.75rem;
+  margin: 1.25rem 0;
+  padding: 1rem;
+}
+.assistant-panel form {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.assistant-panel h2 { margin-top: 0; }
+button[type="submit"] {
+  background: var(--accent);
+  border: 0;
+  border-radius: 0.45rem;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+  padding: 0.7rem 1rem;
+}
+[hidden] { display: none !important; }

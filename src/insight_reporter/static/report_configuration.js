@@ -9,6 +9,16 @@ document.addEventListener("DOMContentLoaded", () => {
     "[data-report-visualization-kpis]",
   );
 
+  const updateSelectionSummary = () => {
+    document.querySelectorAll("[data-report-count]").forEach((output) => {
+      const fieldName = output.dataset.reportCount;
+      if (!fieldName) return;
+      output.textContent = document.querySelectorAll(
+        `input[name='${fieldName}']:checked:not(:disabled)`,
+      ).length;
+    });
+  };
+
   const evidenceFor = (metricId) =>
     Array.from(evidenceInputs).filter(
       (input) => input.dataset.reportEvidenceMetric === metricId,
@@ -59,6 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
       }
+      updateSelectionSummary();
     });
   }
 
@@ -66,6 +77,14 @@ document.addEventListener("DOMContentLoaded", () => {
     selectVisualizationKpis(visualizationInput);
     visualizationInput.addEventListener("change", () => {
       selectVisualizationKpis(visualizationInput);
+      updateSelectionSummary();
     });
   }
+
+  document
+    .querySelectorAll(
+      "input[name='selected_evidence_ids'], input[name='selected_manual_board_ids']",
+    )
+    .forEach((input) => input.addEventListener("change", updateSelectionSummary));
+  updateSelectionSummary();
 });

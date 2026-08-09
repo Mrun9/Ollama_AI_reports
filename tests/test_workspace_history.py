@@ -459,6 +459,7 @@ def test_workspace_first_route_creates_then_attaches_a_source(
     dataset_id = match.group(1)
 
     empty_detail = client.get(created.headers["Location"])
+    workspace_index = client.get("/workspaces")
     source_form = client.get(f"/workspaces/{dataset_id}/source")
     attached = client.post(
         f"/workspaces/{dataset_id}/source",
@@ -472,9 +473,17 @@ def test_workspace_first_route_creates_then_attaches_a_source(
     )
 
     assert empty_detail.status_code == 200
+    assert f'/workspaces/{dataset_id}/archive'.encode() in workspace_index.data
+    assert b"Delete workspace" in workspace_index.data
+    assert b"data-confirm=" in workspace_index.data
     assert b"No source file has been selected" in empty_detail.data
     assert b"No reports exist yet" not in empty_detail.data
     assert source_form.status_code == 200
+    assert b"app-workflow" in empty_detail.data
+    assert b"app-workflow" in source_form.data
+    for step_label in (b"Source", b"KPI setup", b"Evidence", b"Dashboard", b"Report"):
+        assert step_label in source_form.data
+    assert b"/static/vendor/bootstrap.min.css" in source_form.data
     assert attached.status_code == 303
     assert attached.headers["Location"] == f"/dataset/{dataset_id}"
     assert (Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv").is_file()
@@ -499,6 +508,142 @@ def test_workspace_first_route_creates_then_attaches_a_source(
     assert b"moved to recoverable trash" in deleted_detail.data
     assert restored.status_code == 303
     assert (Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv").is_file()
+
+
+def test_only_archived_workspace_can_be_permanently_deleted(
+    app: Flask,
+    client: FlaskClient,
+) -> None:
+    created = client.post(
+        "/workspaces",
+        data={"name": "Temporary analysis", "description": "Safe to purge"},
+    )
+    match = re.search(r"/workspaces/([0-9a-f]{32})$", created.headers["Location"])
+    assert match is not None
+    dataset_id = match.group(1)
+
+    active_rejected = client.post(
+        f"/workspaces/{dataset_id}/purge",
+        data={"confirmation": "delete-permanently"},
+    )
+    assert active_rejected.status_code == 400
+
+    chart_filename = "a" * 32 + ".png"
+    preview_chart_filename = "b" * 32 + ".png"
+    unrelated_chart_filename = "c" * 32 + ".png"
+    token = "d" * 32
+    state_token = "e" * 32
+
+    owned_paths = [
+        Path(app.config["UPLOAD_DIR"]) / f"{dataset_id}.csv",
+        Path(app.config["CONFIGURATION_DIR"]) / f"{dataset_id}.json",
+        Path(app.config["INSIGHT_DIR"]) / f"{dataset_id}.json",
+        Path(app.config["REPORT_CONFIGURATION_DIR"]) / f"{dataset_id}.json",
+        Path(app.config["REPORT_PACKAGE_DIR"]) / f"{dataset_id}.json",
+    ]
+    for path in owned_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n", encoding="utf-8")
+
+    evidence_path = Path(app.config["EVIDENCE_DIR"]) / f"{dataset_id}.json"
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "dataset_id": dataset_id,
+                "records": [{"chart": {"filename": chart_filename}}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    owned_paths.append(evidence_path)
+
+    visualization_dir = Path(app.config["VISUALIZATION_DIR"]) / dataset_id
+    visualization_dir.mkdir(parents=True)
+    (visualization_dir / "VIS-AAAAAAAAAAAAAAAA.json").write_text(
+        json.dumps(
+            {
+                "dataset_id": dataset_id,
+                "chart": {"filename": chart_filename},
+            }
+        ),
+        encoding="utf-8",
+    )
+    visualization_insight_dir = (
+        Path(app.config["VISUALIZATION_INSIGHT_DIR"]) / dataset_id
+    )
+    visualization_insight_dir.mkdir(parents=True)
+    (visualization_insight_dir / "VIS-AAAAAAAAAAAAAAAA.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+    generated_report_dir = Path(app.config["GENERATED_REPORT_DIR"]) / dataset_id
+    generated_report_dir.mkdir(parents=True)
+    (generated_report_dir / "V0001-RPT-AAAAAAAAAAAAAAAA.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+    generated_asset_dir = Path(app.config["GENERATED_REPORT_ASSET_DIR"]) / dataset_id
+    generated_asset_dir.mkdir(parents=True)
+    (generated_asset_dir / "report-chart.png").write_bytes(b"chart")
+    source_trash_dir = Path(app.config["TRASH_DIR"]) / "sources" / dataset_id
+    source_trash_dir.mkdir(parents=True)
+    (source_trash_dir / f"{dataset_id}.selection.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+
+    chart_dir = Path(app.config["CHART_DIR"])
+    for filename in (chart_filename, preview_chart_filename, unrelated_chart_filename):
+        (chart_dir / filename).write_bytes(b"chart")
+    preview_path = Path(app.config["VISUALIZATION_PREVIEW_DIR"]) / f"{token}.json"
+    preview_path.write_text(
+        json.dumps(
+            {
+                "dataset_id": dataset_id,
+                "chart": {"filename": preview_chart_filename},
+            }
+        ),
+        encoding="utf-8",
+    )
+    state_path = Path(app.config["NAVIGATION_STATE_DIR"]) / f"{state_token}.json"
+    state_path.write_text(
+        json.dumps({"dataset_id": dataset_id, "view": "upload"}),
+        encoding="utf-8",
+    )
+
+    archived = client.post(f"/workspaces/{dataset_id}/archive")
+    archived_index = client.get("/workspaces")
+    unconfirmed = client.post(
+        f"/workspaces/{dataset_id}/purge",
+        data={"confirmation": "incorrect"},
+    )
+
+    assert archived.status_code == 303
+    assert b"Delete permanently" in archived_index.data
+    assert f"/workspaces/{dataset_id}/purge".encode() in archived_index.data
+    assert unconfirmed.status_code == 400
+
+    purged = client.post(
+        f"/workspaces/{dataset_id}/purge",
+        data={"confirmation": "delete-permanently"},
+    )
+
+    assert purged.status_code == 303
+    assert load_workspace_record(
+        dataset_id,
+        workspace_dir=Path(app.config["WORKSPACE_DIR"]),
+    ) is None
+    assert all(not path.exists() for path in owned_paths)
+    assert not visualization_dir.exists()
+    assert not visualization_insight_dir.exists()
+    assert not generated_report_dir.exists()
+    assert not generated_asset_dir.exists()
+    assert not source_trash_dir.exists()
+    assert not preview_path.exists()
+    assert not state_path.exists()
+    assert not (chart_dir / chart_filename).exists()
+    assert not (chart_dir / preview_chart_filename).exists()
+    assert (chart_dir / unrelated_chart_filename).is_file()
 
 
 def test_workspace_metadata_failure_rolls_back_uploaded_source(

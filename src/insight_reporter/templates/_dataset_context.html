@@ -1,10 +1,10 @@
-<aside aria-labelledby="dataset-context-heading">
+<aside class="dataset-context" aria-labelledby="dataset-context-heading">
   <h2 id="dataset-context-heading">Dataset context</h2>
-  <p>
+  <p class="app-muted small">
     Use the insert buttons instead of retyping names. The tokens are stable only for
     this dataset and are resolved by Python before use.
   </p>
-  <p>
+  <p class="mb-0">
     <strong>{{ dataset_context.row_count }}</strong> records ·
     {{ dataset_context.source.format|upper }}
     {% if dataset_context.source.worksheet %}
@@ -14,7 +14,7 @@
 
   {% macro insert_button(item, insert_value) %}
     {% if context_insert_mode != "formula" or item.kind == "numeric" %}
-      <button type="button"
+      <button class="btn btn-sm btn-outline-primary" type="button"
         data-context-target="{{ context_target }}"
         data-context-mode="{{ context_insert_mode }}"
         data-context-insert="{{ insert_value }}">
@@ -22,7 +22,7 @@
       </button>
     {% endif %}
     {% if context_secondary_target %}
-      <button type="button"
+      <button class="btn btn-sm btn-outline-secondary" type="button"
         data-context-target="{{ context_secondary_target }}"
         data-context-mode="prompt"
         data-context-insert="{{ item.insert_text }}">

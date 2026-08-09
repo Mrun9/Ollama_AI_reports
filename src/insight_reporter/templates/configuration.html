@@ -1,213 +1,146 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Configuration Saved | AI Insight Reporter</title>
-  </head>
-  <body>
-    <main>
-      {% set dataset_id = configuration.dataset_id %}
-      {% set current_section = "kpi" %}
-      {% include "_report_project_navigation.html" %}
-      <h1>Business configuration saved</h1>
-      <p>The selections were validated against dataset {{ configuration.dataset_id }}.</p>
-      {% if configuration_error %}
-        <p role="alert"><strong>Configuration change rejected:</strong> {{ configuration_error }}</p>
-      {% endif %}
-      <dl>
-        <dt>Primary KPI</dt>
-        <dd>{{ configuration.primary_kpi }}</dd>
-        <dt>Date column</dt>
-        <dd>{{ configuration.date_column or "None" }}</dd>
-        <dt>Categories</dt>
-        <dd>{{ configuration.category_columns|join(", ") or "None" }}</dd>
-        <dt>Business objective</dt>
-        <dd>{{ configuration.business_objective }}</dd>
-      </dl>
-      <p>
-        Values from selected category fields can appear as verified business
-        context in generated reports. Identifier and free-text fields remain
-        excluded.
-      </p>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import page_header, alert %}
 
-      <h2>Configured KPIs ({{ configuration.metrics|length }} of 5)</h2>
-      <p>Each KPI is analyzed independently. One KPI is enough; additional KPIs are optional.</p>
+{% block title %}Configuration Saved | AI Insight Reporter{% endblock %}
+
+{% block content %}
+  {% set dataset_id = configuration.dataset_id %}
+  {{ page_header(
+    "Business configuration saved",
+    "Your selections were validated against dataset " ~ configuration.dataset_id ~ ". Review KPI settings or continue to deterministic analysis.",
+    "KPI configuration"
+  ) }}
+
+  {% if configuration_error %}{{ alert(configuration_error, "Configuration change rejected") }}{% endif %}
+
+  <section class="app-card mb-4" aria-labelledby="configuration-summary-heading">
+    <div class="app-panel-header mb-3">
+      <div><h2 class="h4 mb-1" id="configuration-summary-heading">Analysis context</h2><p class="app-muted mb-0">Shared by every configured KPI.</p></div>
+      <span class="app-status-badge">{{ configuration.metrics|length }} of 5 KPIs</span>
+    </div>
+    <dl class="app-definition-list">
+      <dt>Primary KPI</dt><dd><strong>{{ configuration.primary_kpi }}</strong></dd>
+      <dt>Date column</dt><dd>{{ configuration.date_column or "None" }}</dd>
+      <dt>Categories</dt><dd>{{ configuration.category_columns|join(", ") or "None" }}</dd>
+      <dt>Business objective</dt><dd>{{ configuration.business_objective }}</dd>
+    </dl>
+    <p class="form-text mt-3 mb-0">Selected category values may appear as verified report context. Identifier and free-text fields remain excluded.</p>
+  </section>
+
+  <section class="mb-4" aria-labelledby="configured-kpis-heading">
+    <div class="app-panel-header mb-3">
+      <div><h2 class="h3 mb-1" id="configured-kpis-heading">Configured KPIs ({{ configuration.metrics|length }} of 5)</h2><p class="app-muted mb-0">Each KPI is analyzed independently. Settings can be changed without rebuilding the configuration.</p></div>
+      {% if configuration.metrics|length < 5 %}
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-primary" href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">Add source or derived KPIs</a>
+          <a class="btn btn-outline-primary" href="{{ url_for('core.conditional_kpi_editor', dataset_id=configuration.dataset_id) }}">Add conditional KPI</a>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="row g-3">
       {% for metric in configuration.metrics %}
-        <section>
-          <h3>
-            {{ metric.name }}
-            {% if metric.metric_id == configuration.primary_metric_id %}(primary){% endif %}
-          </h3>
-          <dl>
-            <dt>Type</dt>
-            <dd>{{ metric.metric_type }}</dd>
-            <dt>Aggregation</dt>
-            <dd>{{ metric.aggregation }}</dd>
-            <dt>Display format</dt>
-            <dd>{{ metric.display_format }}</dd>
-            <dt>Target scope</dt>
-            <dd>
-              {% if metric.target_scope == "row" %}Per row
-              {% elif metric.target_scope == "period" %}Per period
-              {% elif metric.target_scope == "segment" %}Per segment
-              {% else %}Complete dataset
+        <div class="col-12">
+          <article class="metric-card {% if metric.metric_id == configuration.primary_metric_id %}is-primary{% endif %}">
+            <div class="app-panel-header mb-3">
+              <div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                  <h3 class="h5 mb-0">{{ metric.name }}</h3>
+                  {% if metric.metric_id == configuration.primary_metric_id %}<span class="badge text-bg-primary">Primary</span>{% endif %}
+                  <span class="badge text-bg-light">{{ metric.metric_type }}</span>
+                </div>
+                <div class="suggestion-meta">
+                  <span class="badge">{{ metric.aggregation }}</span><span class="badge">{{ metric.display_format }}</span>
+                  <span class="badge">{% if metric.target_scope == "row" %}Per row{% elif metric.target_scope == "period" %}Per period{% elif metric.target_scope == "segment" %}Per segment{% else %}Complete dataset{% endif %}</span>
+                </div>
+              </div>
+              {% if metric.metric_id != configuration.primary_metric_id %}
+                <div class="d-flex flex-wrap gap-2">
+                  <form method="post" action="{{ url_for('core.choose_primary_metric', dataset_id=configuration.dataset_id) }}" data-loading-form>
+                    <input type="hidden" name="metric_id" value="{{ metric.metric_id }}"><button class="btn btn-sm btn-outline-primary" type="submit" data-loading-text="Updating…">Make primary</button>
+                  </form>
+                  <form method="post" action="{{ url_for('core.remove_configured_metric', dataset_id=configuration.dataset_id) }}" data-confirm="Remove this KPI from the configuration?">
+                    <input type="hidden" name="metric_id" value="{{ metric.metric_id }}"><button class="btn btn-sm btn-outline-danger" type="submit">Remove KPI</button>
+                  </form>
+                </div>
               {% endif %}
-            </dd>
-            {% if metric.derived_metric %}
-              <dt>Formula</dt>
-              <dd>{{ metric.derived_metric.formula_label }}</dd>
-              <dt>Calculation level</dt>
-              <dd>{{ metric.derived_metric.calculation_level }}</dd>
-              <dt>Source columns</dt>
-              <dd>{{ metric.derived_metric.source_columns|join(", ") }}</dd>
-            {% endif %}
-            {% if metric.conditional_metric %}
-              <dt>Conditional calculation</dt>
-              <dd>{{ metric.conditional_metric.formula_label }}</dd>
-              <dt>Calculation base</dt>
-              <dd>{{ metric.conditional_metric.calculation_base }}</dd>
-              <dt>Included values</dt>
-              <dd>{{ metric.conditional_metric.included_values|join(", ") }}</dd>
-            {% endif %}
-          </dl>
+            </div>
 
-          <form method="post"
-            action="{{ url_for('core.edit_metric_settings', dataset_id=configuration.dataset_id) }}">
-            <input type="hidden" name="metric_id" value="{{ metric.metric_id }}">
-            <label>
-              Direction
-              <select name="kpi_direction">
-                <option value="higher" {% if metric.kpi_direction == "higher" %}selected{% endif %}>
-                  Higher is better
-                </option>
-                <option value="lower" {% if metric.kpi_direction == "lower" %}selected{% endif %}>
-                  Lower is better
-                </option>
-              </select>
-            </label>
-            {% if metric.metric_type == "source" %}
-              <label>
-                Aggregation
-                <select name="aggregation">
-                  {% for aggregation in source_aggregation_options %}
-                    <option value="{{ aggregation }}"
-                      {% if metric.aggregation == aggregation %}selected{% endif %}>
-                      {{ aggregation }}
-                    </option>
-                  {% endfor %}
-                </select>
-              </label>
-              <label>
-                Display format
-                <select name="display_format">
-                  {% for display_format in display_format_options %}
-                    <option value="{{ display_format }}"
-                      {% if metric.display_format == display_format %}selected{% endif %}>
-                      {{ display_format }}
-                    </option>
-                  {% endfor %}
-                </select>
-              </label>
-            {% else %}
-              <input type="hidden" name="aggregation" value="{{ metric.aggregation }}">
-              <input type="hidden" name="display_format" value="{{ metric.display_format }}">
+            {% if metric.derived_metric or metric.conditional_metric %}
+              <dl class="app-definition-list p-3 bg-light rounded mb-3">
+                {% if metric.derived_metric %}
+                  <dt>Formula</dt><dd><code>{{ metric.derived_metric.formula_label }}</code></dd>
+                  <dt>Calculation level</dt><dd>{{ metric.derived_metric.calculation_level }}</dd>
+                  <dt>Source columns</dt><dd>{{ metric.derived_metric.source_columns|join(", ") }}</dd>
+                {% endif %}
+                {% if metric.conditional_metric %}
+                  <dt>Conditional calculation</dt><dd>{{ metric.conditional_metric.formula_label }}</dd>
+                  <dt>Calculation base</dt><dd>{{ metric.conditional_metric.calculation_base }}</dd>
+                  <dt>Included values</dt><dd>{{ metric.conditional_metric.included_values|join(", ") }}</dd>
+                {% endif %}
+              </dl>
             {% endif %}
-            <label>
-              Optional target or benchmark
-              <input name="target_or_benchmark" type="number" step="any"
-                {% if metric.metric_type == "conditional_rate" %}min="0" max="100"{% endif %}
-                value="{{ metric.target_or_benchmark if metric.target_or_benchmark is not none else '' }}">
-            </label>
-            <label>
-              Target applies to
-              <select name="target_scope">
-                {% for scope in target_scope_options %}
-                  {% if scope != "row" or metric.metric_type == "source"
-                    or (metric.derived_metric and metric.derived_metric.calculation_level == "row") %}
-                    <option value="{{ scope }}"
-                      {% if metric.target_scope == scope %}selected{% endif %}>
-                      {% if scope == "row" %}Each row
-                      {% elif scope == "period" %}Each period
-                      {% elif scope == "segment" %}Each segment
-                      {% else %}Complete dataset aggregate
-                      {% endif %}
-                    </option>
-                  {% endif %}
-                {% endfor %}
-              </select>
-            </label>
-            <button type="submit">Save KPI settings</button>
-          </form>
 
-          {% if metric.metric_id != configuration.primary_metric_id %}
-            <form method="post"
-              action="{{ url_for('core.choose_primary_metric', dataset_id=configuration.dataset_id) }}">
+            <form method="post" action="{{ url_for('core.edit_metric_settings', dataset_id=configuration.dataset_id) }}" data-loading-form>
               <input type="hidden" name="metric_id" value="{{ metric.metric_id }}">
-              <button type="submit">Make primary</button>
+              <div class="row g-3 align-items-end">
+                <div class="col-sm-6 col-lg-2"><label class="form-label">Direction<select class="form-select mt-1" name="kpi_direction"><option value="higher" {% if metric.kpi_direction == "higher" %}selected{% endif %}>Higher is better</option><option value="lower" {% if metric.kpi_direction == "lower" %}selected{% endif %}>Lower is better</option></select></label></div>
+                {% if metric.metric_type == "source" %}
+                  <div class="col-sm-6 col-lg-2"><label class="form-label">Aggregation<select class="form-select mt-1" name="aggregation">{% for aggregation in source_aggregation_options %}<option value="{{ aggregation }}" {% if metric.aggregation == aggregation %}selected{% endif %}>{{ aggregation }}</option>{% endfor %}</select></label></div>
+                  <div class="col-sm-6 col-lg-2"><label class="form-label">Display format<select class="form-select mt-1" name="display_format">{% for display_format in display_format_options %}<option value="{{ display_format }}" {% if metric.display_format == display_format %}selected{% endif %}>{{ display_format }}</option>{% endfor %}</select></label></div>
+                {% else %}
+                  <input type="hidden" name="aggregation" value="{{ metric.aggregation }}"><input type="hidden" name="display_format" value="{{ metric.display_format }}">
+                {% endif %}
+                <div class="col-sm-6 col-lg-2"><label class="form-label">Optional target or benchmark<input class="form-control mt-1" name="target_or_benchmark" type="number" step="any" {% if metric.metric_type == "conditional_rate" %}min="0" max="100"{% endif %} value="{{ metric.target_or_benchmark if metric.target_or_benchmark is not none else '' }}"></label></div>
+                <div class="col-sm-6 col-lg-3"><label class="form-label">Target applies to<select class="form-select mt-1" name="target_scope">{% for scope in target_scope_options %}{% if scope != "row" or metric.metric_type == "source" or (metric.derived_metric and metric.derived_metric.calculation_level == "row") %}<option value="{{ scope }}" {% if metric.target_scope == scope %}selected{% endif %}>{% if scope == "row" %}Each row{% elif scope == "period" %}Each period{% elif scope == "segment" %}Each segment{% else %}Complete dataset aggregate{% endif %}</option>{% endif %}{% endfor %}</select></label></div>
+                <div class="col-sm-6 col-lg-auto"><button class="btn btn-primary" type="submit" data-loading-text="Saving…">Save KPI settings</button></div>
+              </div>
             </form>
-            <form method="post"
-              action="{{ url_for('core.remove_configured_metric', dataset_id=configuration.dataset_id) }}">
-              <input type="hidden" name="metric_id" value="{{ metric.metric_id }}">
-              <button type="submit">Remove KPI</button>
-            </form>
-          {% endif %}
-        </section>
+          </article>
+        </div>
       {% endfor %}
+    </div>
+  </section>
 
-      <p>
-        <a href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">
-          Add source or derived KPIs
-        </a>
-      </p>
-      <p>
-        <a href="{{ url_for('core.conditional_kpi_editor', dataset_id=configuration.dataset_id) }}">
-          Add a conditional rate or value-share KPI
-        </a>
-      </p>
+  <div class="row g-4 mb-4">
+    <div class="col-lg-7">
+      <section class="app-card h-100" aria-labelledby="analysis-heading">
+        <p class="app-eyebrow mb-1">Next step</p>
+        <h2 class="h4" id="analysis-heading">Deterministic analysis</h2>
+        <p class="app-muted">Generate factual observations with Python only. Ollama is not used.</p>
+        <form method="post" action="{{ url_for('core.deterministic_insights', dataset_id=configuration.dataset_id) }}" data-loading-form>
+          <button class="btn btn-primary btn-lg" type="submit" data-loading-text="Analyzing dataset…">Generate deterministic insights</button>
+        </form>
+      </section>
+    </div>
+    <div class="col-lg-5">
+      <section class="app-card h-100" aria-labelledby="dashboard-heading">
+        <h2 class="h4" id="dashboard-heading">Dashboard</h2>
+        <p class="app-muted">Build source-column visualizations or use configured KPIs as chart measures.</p>
+        <a class="btn btn-outline-primary" href="{{ url_for('core.saved_visualizations', dataset_id=configuration.dataset_id) }}">Open dashboard</a>
+      </section>
+    </div>
+  </div>
 
-      <h2>Configuration object</h2>
-      <pre>{{ configuration_json }}</pre>
-      <h2>Deterministic analysis</h2>
-      <p>Generate factual observations with Python only. Ollama is not used.</p>
-      <form method="post"
-        action="{{ url_for('core.deterministic_insights', dataset_id=configuration.dataset_id) }}">
-        <button type="submit">Generate deterministic insights</button>
-      </form>
-      <h2>Dashboard</h2>
-      <p>
-        Continue to the dashboard to build source-column visualizations or
-        use these configured KPIs as chart measures. Visualizations already
-        saved before KPI configuration remain available.
-      </p>
-      <p>
-        <a href="{{ url_for('core.saved_visualizations', dataset_id=configuration.dataset_id) }}">
-          Open dashboard
-        </a>
-      </p>
-      <h2>Report configuration</h2>
-      <p>
-        Select the KPIs, deterministic evidence, and saved manual visualizations
-        that should be available to the final report.
-      </p>
-      {% if evidence_ready %}
-        <p>
-          <a href="{{ url_for('core.report_configuration_form', dataset_id=configuration.dataset_id) }}">
-            {{ "Review report configuration" if report_configuration_ready else "Configure and generate report" }}
-          </a>
-        </p>
-      {% else %}
-        <p>
-          Generate deterministic evidence above before configuring the
-          combined report.
-        </p>
-      {% endif %}
-      <p>
-        <a href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">
-          Return to dataset profile
-        </a>
-      </p>
-      <p><a href="{{ url_for('core.workspace_history') }}">Return to workspaces</a></p>
-    </main>
-  </body>
-</html>
+  <section class="app-card mb-4" aria-labelledby="report-config-heading">
+    <h2 class="h4" id="report-config-heading">Report configuration</h2>
+    <p class="app-muted">Select the KPIs, deterministic evidence, and saved manual visualizations available to the final report.</p>
+    {% if evidence_ready %}
+      <a class="btn btn-outline-primary" href="{{ url_for('core.report_configuration_form', dataset_id=configuration.dataset_id) }}">{{ "Review report configuration" if report_configuration_ready else "Configure and generate report" }}</a>
+    {% else %}
+      <div class="alert alert-secondary mb-0">Generate deterministic evidence above before configuring the combined report.</div>
+    {% endif %}
+  </section>
+
+  <details class="app-card app-details mb-4">
+    <summary>Configuration object</summary>
+    <pre class="code-panel mt-3">{{ configuration_json }}</pre>
+  </details>
+
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('core.dataset_profile', dataset_id=configuration.dataset_id) }}">Return to dataset profile</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('core.workspace_history') }}">Return to workspaces</a>
+  </div>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='kpi_configuration.js') }}"></script>{% endblock %}

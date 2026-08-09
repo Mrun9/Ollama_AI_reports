@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_code }} · {{ error_title }} | AI Insight Reporter{% endblock %}
+
+{% block content %}
+  <section class="app-error-state" aria-labelledby="error-heading">
+    <p class="app-error-code">{{ error_code }}</p>
+    <h1 id="error-heading">{{ error_title }}</h1>
+    <p class="app-page-lead">{{ error_description }}</p>
+    <div class="dashboard-actions justify-content-center mt-4">
+      {% if dataset_id %}
+        <a class="btn btn-primary" href="{{ url_for('core.workspace_detail', dataset_id=dataset_id) }}">Return to this workspace</a>
+      {% endif %}
+      <a class="btn {% if dataset_id %}btn-outline-primary{% else %}btn-primary{% endif %}"
+        href="{{ url_for('core.workspace_history') }}">{{ "All workspaces" if dataset_id else "Return to workspaces" }}</a>
+      <a class="btn btn-outline-primary" href="{{ url_for('core.upload_form') }}">Open quick upload</a>
+    </div>
+    <p class="app-muted small mt-4 mb-0">No workspace data was changed by this rejected request.</p>
+  </section>
+{% endblock %}

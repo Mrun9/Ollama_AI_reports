@@ -1,661 +1,383 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dataset Profile | AI Insight Reporter</title>
-  </head>
-  <body>
-    <main>
-      {% set current_section = "kpi" %}
-      {% include "_report_project_navigation.html" %}
-      <h1>Dataset accepted</h1>
-      <dl>
-        <dt>Dataset ID</dt>
-        <dd>{{ profile.source_internal_filename or dataset_id ~ "." ~ profile.source_format }}</dd>
-        <dt>Source format</dt>
-        <dd>{{ profile.source_format|upper }}</dd>
-        {% if profile.source_table_name %}
-          <dt>Worksheet</dt>
-          <dd>{{ profile.source_table_name }}</dd>
-        {% endif %}
-        <dt>SHA-256</dt>
-        <dd>{{ profile.source_sha256 }}</dd>
-        <dt>Size</dt>
-        <dd>{{ profile.size_bytes }} bytes</dd>
-        <dt>Data rows</dt>
-        <dd>{{ profile.row_count }}</dd>
-        <dt>Columns</dt>
-        <dd>{{ profile.column_count }}</dd>
-      </dl>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import page_header, alert %}
 
-      <h2>Preview</h2>
-      <table>
-        <thead>
-          <tr>
-            {% for column in profile.columns %}
-              <th scope="col">{{ column.name }}</th>
-            {% endfor %}
-          </tr>
-        </thead>
+{% block title %}Dataset Profile | AI Insight Reporter{% endblock %}
+
+{% macro scope_label(scope) -%}
+  {% if scope == "row" %}Each row
+  {% elif scope == "period" %}Each period
+  {% elif scope == "segment" %}Each segment
+  {% else %}Complete dataset aggregate
+  {% endif %}
+{%- endmacro %}
+
+{% block content %}
+  {{ page_header(
+    "Dataset accepted",
+    "Review the detected structure, then choose the KPIs and business context Python should analyze.",
+    "Dataset profile"
+  ) }}
+
+  <section class="profile-stat-grid mb-4" aria-label="Dataset summary">
+    <div class="profile-stat-card">
+      <span class="profile-stat-label">Rows</span>
+      <span class="profile-stat-value">{{ profile.row_count }}</span>
+    </div>
+    <div class="profile-stat-card">
+      <span class="profile-stat-label">Columns</span>
+      <span class="profile-stat-value">{{ profile.column_count }}</span>
+    </div>
+    <div class="profile-stat-card">
+      <span class="profile-stat-label">Format</span>
+      <span class="profile-stat-value">{{ profile.source_format|upper }}</span>
+    </div>
+    <div class="profile-stat-card">
+      <span class="profile-stat-label">Size</span>
+      <span class="profile-stat-value">{{ profile.size_bytes }} bytes</span>
+    </div>
+    {% if profile.source_table_name %}
+      <div class="profile-stat-card">
+        <span class="profile-stat-label">Worksheet</span>
+        <span class="profile-stat-value">{{ profile.source_table_name }}</span>
+      </div>
+    {% endif %}
+  </section>
+
+  <details class="app-card app-details mb-4">
+    <summary>Source details</summary>
+    <dl class="app-definition-list mt-3">
+      <dt>Dataset ID</dt>
+      <dd>{{ profile.source_internal_filename or dataset_id ~ "." ~ profile.source_format }}</dd>
+      <dt>Source format</dt>
+      <dd>{{ profile.source_format|upper }}</dd>
+      {% if profile.source_table_name %}
+        <dt>Worksheet</dt>
+        <dd>{{ profile.source_table_name }}</dd>
+      {% endif %}
+      <dt>SHA-256</dt>
+      <dd class="font-monospace small">{{ profile.source_sha256 }}</dd>
+      <dt>Size</dt>
+      <dd>{{ profile.size_bytes }} bytes</dd>
+      <dt>Data rows</dt>
+      <dd>{{ profile.row_count }}</dd>
+      <dt>Columns</dt>
+      <dd>{{ profile.column_count }}</dd>
+    </dl>
+  </details>
+
+  <section class="app-card mb-4" aria-labelledby="preview-heading">
+    <div class="app-panel-header mb-3">
+      <div>
+        <h2 class="h4 mb-1" id="preview-heading">Data preview</h2>
+        <p class="app-muted mb-0">A small read-only sample of the uploaded data.</p>
+      </div>
+    </div>
+    <div class="table-responsive profile-table-wrap">
+      <table class="table table-hover align-middle profile-preview-table">
+        <thead><tr>
+          {% for column in profile.columns %}<th scope="col">{{ column.name }}</th>{% endfor %}
+        </tr></thead>
         <tbody>
           {% for row in profile.preview_rows %}
-            <tr>
-              {% for cell in row %}
-                <td>{{ cell }}</td>
-              {% endfor %}
-            </tr>
+            <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  </section>
 
-      <h2>Dataset profile</h2>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Column</th>
-            <th scope="col">Inferred type</th>
-            <th scope="col">Missing</th>
-            <th scope="col">Unique</th>
-            <th scope="col">Flags</th>
-            <th scope="col">Statistics or range</th>
-          </tr>
-        </thead>
+  <section class="app-card mb-5" aria-labelledby="profile-heading">
+    <div class="app-panel-header mb-3">
+      <div>
+        <h2 class="h4 mb-1" id="profile-heading">Column profile</h2>
+        <p class="app-muted mb-0">Search types, names, quality flags, and calculated statistics.</p>
+      </div>
+      <div class="profile-table-search w-100">
+        <label class="visually-hidden" for="profile-search">Search columns</label>
+        <input class="form-control" id="profile-search" type="search"
+          placeholder="Search columns…" data-table-search="column-profile-table">
+      </div>
+    </div>
+    <div class="table-responsive profile-table-wrap">
+      <table class="table table-hover align-middle" id="column-profile-table">
+        <thead><tr>
+          <th scope="col">Column</th><th scope="col">Inferred type</th>
+          <th scope="col">Missing</th><th scope="col">Unique</th>
+          <th scope="col">Flags</th><th scope="col">Statistics or range</th>
+        </tr></thead>
         <tbody>
           {% for column in profile.columns %}
-            <tr>
+            <tr data-search-text="{{ column.name }} {{ column.inferred_type.value }} {% if column.is_empty %}empty{% elif column.is_constant %}constant{% endif %}">
               <th scope="row">{{ column.name }}</th>
-              <td>{{ column.inferred_type.value }}</td>
+              <td><span class="badge text-bg-light">{{ column.inferred_type.value }}</span></td>
               <td>{{ column.missing_count }} ({{ "%.2f"|format(column.missing_percentage) }}%)</td>
               <td>{{ column.unique_count }}</td>
               <td>
-                {% if column.is_empty %}empty{% elif column.is_constant %}constant{% else %}—{% endif %}
+                {% if column.is_empty %}<span class="badge text-bg-danger">empty</span>
+                {% elif column.is_constant %}<span class="badge text-bg-warning">constant</span>
+                {% else %}<span class="app-muted">—</span>{% endif %}
               </td>
-              <td>
+              <td class="small">
                 {% if column.numeric_statistics %}
-                  min={{ column.numeric_statistics.minimum }},
-                  max={{ column.numeric_statistics.maximum }},
-                  mean={{ "%.6g"|format(column.numeric_statistics.mean) }},
-                  median={{ column.numeric_statistics.median }},
-                  total={{ column.numeric_statistics.total }},
-                  stddev={{ "%.6g"|format(column.numeric_statistics.standard_deviation) }}
+                  min {{ column.numeric_statistics.minimum }} · max {{ column.numeric_statistics.maximum }} ·
+                  mean {{ "%.6g"|format(column.numeric_statistics.mean) }} · median {{ column.numeric_statistics.median }} ·
+                  total {{ column.numeric_statistics.total }} · stddev {{ "%.6g"|format(column.numeric_statistics.standard_deviation) }}
                 {% elif column.date_range %}
                   {{ column.date_range.earliest }} to {{ column.date_range.latest }}
-                {% else %}
-                  —
-                {% endif %}
+                {% else %}—{% endif %}
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <p class="app-empty-state mt-3 mb-0" data-table-empty="column-profile-table" hidden>No columns match that search.</p>
+  </section>
 
-      {% if configuration %}
-        <h2>Existing business configuration</h2>
-        <p>
-          The current primary KPI is <strong>{{ configuration.primary_kpi }}</strong>.
-          Adding another KPI below keeps this primary KPI and every existing KPI.
+  {% if configuration %}
+    <section class="alert alert-primary d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3" aria-labelledby="existing-config-heading">
+      <div>
+        <h2 class="h5 mb-1" id="existing-config-heading">Existing business configuration</h2>
+        <p class="mb-0">The current primary KPI is <strong>{{ configuration.primary_kpi }}</strong>. New KPIs are added without replacing it.</p>
+      </div>
+      <a class="btn btn-primary flex-shrink-0" href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
+        View all {{ configuration.metrics|length }} configured KPI(s)
+      </a>
+    </section>
+  {% endif %}
+
+  <section class="app-card mb-4" aria-labelledby="ai-heading">
+    <div class="app-panel-header mb-3">
+      <div>
+        <p class="app-eyebrow mb-1">Optional local AI</p>
+        <h2 class="h4 mb-1" id="ai-heading">{{ "AI-assisted additional KPI suggestions" if configuration else "AI-assisted configuration suggestions" }}</h2>
+        <p class="app-muted mb-0">
+          {{ suggestion_model }} receives profile metadata only—not raw or preview rows. Every suggestion is checked by Python and requires review.
         </p>
-        <p>
-          <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
-            View all {{ configuration.metrics|length }} configured KPI(s)
-          </a>
-        </p>
-        <h2>AI-assisted additional KPI suggestions</h2>
-        <p>
-          Ask {{ suggestion_model }} for another set of suggestions using only unconfigured
-          source KPI candidates. Each option includes aggregation, display
-          format, direction, target scope, date/category context, business
-          objective, confidence, and rationale. Nothing is added automatically.
-        </p>
-        {% if configuration.metrics|length >= 5 %}
-          <p>The KPI registry already contains the maximum of five KPIs.</p>
-        {% elif unconfigured_source_columns %}
-          <form method="post"
-            action="{{ url_for('core.suggest_configurations', dataset_id=dataset_id) }}">
-            <button type="submit">Suggest additional source KPIs</button>
-          </form>
-        {% else %}
-          <p>
-            All measurable source KPI candidates are already configured. You can still build a
-            derived KPI below if the registry has room.
-          </p>
-        {% endif %}
+      </div>
+      {% if configuration and configuration.metrics|length >= 5 %}
+        <span class="app-status-badge">5 KPI limit reached</span>
+      {% elif (configuration and unconfigured_source_columns) or (not configuration and profile.kpi_candidates) %}
+        <form method="post" action="{{ url_for('core.suggest_configurations', dataset_id=dataset_id) }}" data-loading-form>
+          <button class="btn btn-outline-primary text-nowrap" type="submit" data-loading-text="Generating…">
+            {{ "Suggest additional source KPIs" if configuration else "Generate AI suggestions" }}
+          </button>
+        </form>
+      {% elif configuration %}
+        <span class="app-muted small">All source candidates are already configured.</span>
       {% else %}
-        <h2>AI-assisted configuration suggestions</h2>
-        <p>
-          Optional: ask the local {{ suggestion_model }} model to suggest configurations from the
-          profile metadata above. Raw and preview rows are not sent. Manual configuration remains
-          available below.
-        </p>
-
-        {% if profile.kpi_candidates %}
-          <form method="post"
-            action="{{ url_for('core.suggest_configurations', dataset_id=dataset_id) }}">
-            <button type="submit">Generate AI suggestions</button>
-          </form>
-        {% else %}
-          <p>No measurable KPI candidates are available for AI suggestions.</p>
-        {% endif %}
+        <span class="app-muted small">No measurable KPI candidates are available.</span>
       {% endif %}
+    </div>
 
-      {% if suggestion_error %}
-        <p role="alert"><strong>AI suggestions unavailable:</strong> {{ suggestion_error }}</p>
-      {% endif %}
+    {% if suggestion_error %}{{ alert(suggestion_error, "AI suggestions unavailable") }}{% endif %}
+    {% if rejected_suggestion_count %}
+      {{ alert(rejected_suggestion_count ~ " invalid AI suggestion(s) were discarded by Python validation.", variant="warning") }}
+    {% endif %}
 
-      {% if rejected_suggestion_count %}
-        <p role="status">
-          {{ rejected_suggestion_count }} invalid AI suggestion(s) were discarded by Python validation.
-        </p>
-      {% endif %}
-
-      {% if suggestions %}
-        <h3>
-          {{ "Suggested additional KPI configurations" if configuration
-            else "Suggested configurations" }}
-        </h3>
+    {% if suggestions %}
+      <h3 class="h5 mt-4">{{ "Suggested additional KPI configurations" if configuration else "Suggested configurations" }}</h3>
+      <div class="suggestion-grid mt-3">
         {% for suggestion in suggestions %}
-          <section>
-            <h4>{{ suggestion.title }}</h4>
-            <dl>
-              <dt>{{ "Additional KPI" if configuration else "Primary KPI" }}</dt>
-              <dd>{{ suggestion.primary_kpi }}</dd>
-              <dt>Direction</dt>
-              <dd>{{ suggestion.kpi_direction }}</dd>
-              <dt>Aggregation</dt>
-              <dd>{{ suggestion.aggregation }}</dd>
-              <dt>Display format</dt>
-              <dd>{{ suggestion.display_format }}</dd>
-              <dt>Date column</dt>
-              <dd>{{ suggestion.date_column or "None" }}</dd>
-              <dt>Categories</dt>
-              <dd>{{ suggestion.category_columns|join(", ") or "None" }}</dd>
-              <dt>Target</dt>
-              <dd>Not invented; enter one during review if appropriate.</dd>
-              <dt>Target scope</dt>
-              <dd>
-                {% if suggestion.target_scope == "row" %}Each row
-                {% elif suggestion.target_scope == "period" %}Each period
-                {% elif suggestion.target_scope == "segment" %}Each segment
-                {% else %}Complete dataset aggregate
-                {% endif %}
-              </dd>
-              <dt>Business objective</dt>
-              <dd>{{ suggestion.business_objective }}</dd>
-              <dt>Model confidence</dt>
-              <dd>{{ (suggestion.confidence * 100)|round|int }}%</dd>
+          <article class="suggestion-card">
+            <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+              <h4 class="h5 mb-0">{{ suggestion.title }}</h4>
+              <span class="badge text-bg-primary">{{ (suggestion.confidence * 100)|round|int }}% confidence</span>
+            </div>
+            <p class="fw-semibold mb-2">{{ "Additional KPI" if configuration else "Primary KPI" }}: {{ suggestion.primary_kpi }}</p>
+            <div class="suggestion-meta mb-3">
+              <span class="badge">{{ suggestion.kpi_direction }} is better</span>
+              <span class="badge">{{ suggestion.aggregation }}</span>
+              <span class="badge">{{ suggestion.display_format }}</span>
+              <span class="badge">{{ scope_label(suggestion.target_scope) }}</span>
+            </div>
+            <dl class="app-definition-list mb-3">
+              <dt>Direction</dt><dd>{{ suggestion.kpi_direction }}</dd>
+              <dt>Aggregation</dt><dd>{{ suggestion.aggregation }}</dd>
+              <dt>Display format</dt><dd>{{ suggestion.display_format }}</dd>
+              <dt>Date column</dt><dd>{{ suggestion.date_column or "None" }}</dd>
+              <dt>Categories</dt><dd>{{ suggestion.category_columns|join(", ") or "None" }}</dd>
+              <dt>Target</dt><dd>Not invented; enter one during review if appropriate.</dd>
+              <dt>Business objective</dt><dd>{{ suggestion.business_objective }}</dd>
             </dl>
-            <p>Why it was suggested:</p>
-            <ul>
-              {% for reason in suggestion.rationale %}
-                <li>{{ reason }}</li>
-              {% endfor %}
+            <p class="small fw-semibold mb-1">Why it was suggested</p>
+            <ul class="small app-muted">
+              {% for reason in suggestion.rationale %}<li>{{ reason }}</li>{% endfor %}
             </ul>
-
-            <form method="post"
-              action="{{ url_for('core.review_suggestion', dataset_id=dataset_id) }}">
+            <form method="post" action="{{ url_for('core.review_suggestion', dataset_id=dataset_id) }}" data-loading-form>
               <input type="hidden" name="primary_kpi" value="{{ suggestion.primary_kpi }}">
               <input type="hidden" name="kpi_direction" value="{{ suggestion.kpi_direction }}">
               <input type="hidden" name="aggregation" value="{{ suggestion.aggregation }}">
               <input type="hidden" name="display_format" value="{{ suggestion.display_format }}">
               <input type="hidden" name="date_column" value="{{ suggestion.date_column or '' }}">
-              {% for column in suggestion.category_columns %}
-                <input type="hidden" name="category_columns" value="{{ column }}">
-              {% endfor %}
+              {% for column in suggestion.category_columns %}<input type="hidden" name="category_columns" value="{{ column }}">{% endfor %}
               <input type="hidden" name="target_or_benchmark" value="">
               <input type="hidden" name="target_scope" value="{{ suggestion.target_scope }}">
-              <input type="hidden" name="business_objective"
-                value="{{ suggestion.business_objective }}">
-              <button type="submit">
+              <input type="hidden" name="business_objective" value="{{ suggestion.business_objective }}">
+              <button class="btn btn-primary w-100" type="submit" data-loading-text="Opening review…">
                 {{ "Review and add this KPI" if configuration else "Use this suggestion" }}
               </button>
             </form>
-          </section>
+          </article>
         {% endfor %}
-      {% endif %}
+      </div>
+    {% endif %}
+  </section>
 
-      <h2>Optional derived KPIs</h2>
-      <p>
-        If the existing KPI columns are not suitable, ask {{ suggestion_model }} for optional
-        formulas. Existing KPIs remain available and no formula is activated automatically.
-      </p>
-      {% if derived_numeric_columns|length >= 2 %}
-        <form method="post"
-          action="{{ url_for('core.suggest_derived_kpis', dataset_id=dataset_id) }}">
-          <button type="submit">Suggest two derived KPIs</button>
-        </form>
-      {% endif %}
-      {% if derived_numeric_columns %}
-        <form method="post"
-          action="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
-          <input type="hidden" name="name"
-            value="Derived {{ derived_numeric_columns[0] }}">
-          <input type="hidden" name="formula" value="[{{ derived_numeric_columns[0] }}]">
-          <input type="hidden" name="calculation_level" value="row">
-          <input type="hidden" name="aggregation" value="sum">
-          <input type="hidden" name="display_format" value="number">
-          <input type="hidden" name="kpi_direction" value="higher">
-          <input type="hidden" name="date_column" value="">
-          <input type="hidden" name="benchmark_strategy" value="none">
-          <input type="hidden" name="target_or_benchmark" value="">
-          <input type="hidden" name="target_scope" value="row">
-          <input type="hidden" name="business_objective" value="">
-          <button type="submit">Build a derived KPI manually</button>
-        </form>
-      {% else %}
-        <p>At least one numeric column is required to build a derived KPI.</p>
-      {% endif %}
+  <section class="app-card mb-4" aria-labelledby="derived-options-heading">
+    <div class="app-panel-header">
+      <div>
+        <h2 class="h4 mb-1" id="derived-options-heading">Optional derived KPIs</h2>
+        <p class="app-muted mb-0">Create a Python-validated formula when a source column alone is not enough.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        {% if derived_numeric_columns|length >= 2 %}
+          <form method="post" action="{{ url_for('core.suggest_derived_kpis', dataset_id=dataset_id) }}" data-loading-form>
+            <button class="btn btn-outline-primary" type="submit" data-loading-text="Generating…">Suggest two derived KPIs</button>
+          </form>
+        {% endif %}
+        {% if derived_numeric_columns %}
+          <form method="post" action="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
+            <input type="hidden" name="name" value="Derived {{ derived_numeric_columns[0] }}">
+            <input type="hidden" name="formula" value="[{{ derived_numeric_columns[0] }}]">
+            <input type="hidden" name="calculation_level" value="row"><input type="hidden" name="aggregation" value="sum">
+            <input type="hidden" name="display_format" value="number"><input type="hidden" name="kpi_direction" value="higher">
+            <input type="hidden" name="date_column" value=""><input type="hidden" name="benchmark_strategy" value="none">
+            <input type="hidden" name="target_or_benchmark" value=""><input type="hidden" name="target_scope" value="row">
+            <input type="hidden" name="business_objective" value="">
+            <button class="btn btn-primary" type="submit">Build a derived KPI manually</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+    {% if not derived_numeric_columns %}<p class="alert alert-secondary mt-3 mb-0">At least one numeric column is required to build a derived KPI.</p>{% endif %}
+    {% if derived_suggestion_error %}{{ alert(derived_suggestion_error, "Derived KPI suggestions unavailable") }}{% endif %}
+    {% if rejected_derived_suggestion_count %}{{ alert(rejected_derived_suggestion_count ~ " unsafe or invalid derived KPI suggestion(s) were discarded by Python validation.", variant="warning") }}{% endif %}
 
-      {% if derived_suggestion_error %}
-        <p role="alert">
-          <strong>Derived KPI suggestions unavailable:</strong> {{ derived_suggestion_error }}
-        </p>
-      {% endif %}
-
-      {% if rejected_derived_suggestion_count %}
-        <p role="status">
-          {{ rejected_derived_suggestion_count }} unsafe or invalid derived KPI suggestion(s)
-          were discarded by Python validation.
-        </p>
-      {% endif %}
-
-      {% if derived_suggestions %}
-        <h3>Derived KPI suggestions</h3>
+    {% if derived_suggestions %}
+      <h3 class="h5 mt-4">Derived KPI suggestions</h3>
+      <div class="suggestion-grid mt-3">
         {% for suggestion in derived_suggestions %}
-          <section>
-            <h4>{{ suggestion.metric.name }}</h4>
-            <dl>
-              <dt>Formula</dt>
-              <dd>{{ suggestion.metric.formula_label }}</dd>
-              <dt>Aggregation</dt>
-              <dd>{{ suggestion.metric.aggregation }}</dd>
-              <dt>Display format</dt>
-              <dd>{{ suggestion.metric.display_format }}</dd>
-              <dt>Direction</dt>
-              <dd>{{ suggestion.kpi_direction }}</dd>
-              <dt>Date column</dt>
-              <dd>{{ suggestion.date_column or "None" }}</dd>
-              <dt>Categories</dt>
-              <dd>
-                {{ suggestion.category_columns|join(", ") if suggestion.category_columns
-                  else "None" }}
-              </dd>
-              <dt>Suggested benchmark</dt>
-              <dd>
-                {{ "Dataset mean (calculated by Python)"
-                  if suggestion.benchmark_strategy == "dataset_mean" else "None" }}
-              </dd>
-              <dt>Business objective</dt>
-              <dd>{{ suggestion.business_objective }}</dd>
-              <dt>Model confidence</dt>
-              <dd>{{ (suggestion.confidence * 100)|round|int }}%</dd>
+          <article class="suggestion-card">
+            <div class="d-flex justify-content-between gap-2">
+              <h4 class="h5">{{ suggestion.metric.name }}</h4>
+              <span class="badge text-bg-primary align-self-start">{{ (suggestion.confidence * 100)|round|int }}%</span>
+            </div>
+            <p><code>{{ suggestion.metric.formula_label }}</code></p>
+            <div class="suggestion-meta mb-3">
+              <span class="badge">{{ suggestion.metric.aggregation }}</span>
+              <span class="badge">{{ suggestion.metric.display_format }}</span>
+              <span class="badge">{{ suggestion.kpi_direction }} is better</span>
+            </div>
+            <dl class="app-definition-list mb-3">
+              <dt>Date column</dt><dd>{{ suggestion.date_column or "None" }}</dd>
+              <dt>Categories</dt><dd>{{ suggestion.category_columns|join(", ") if suggestion.category_columns else "None" }}</dd>
+              <dt>Suggested benchmark</dt><dd>{{ "Dataset mean (calculated by Python)" if suggestion.benchmark_strategy == "dataset_mean" else "None" }}</dd>
+              <dt>Business objective</dt><dd>{{ suggestion.business_objective }}</dd>
             </dl>
-            <ul>
-              {% for reason in suggestion.rationale %}
-                <li>{{ reason }}</li>
-              {% endfor %}
-            </ul>
-            <form method="post"
-              action="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
-              <input type="hidden" name="name" value="{{ suggestion.metric.name }}">
-              <input type="hidden" name="operation" value="{{ suggestion.metric.operation }}">
-              <input type="hidden" name="left_column"
-                value="{{ suggestion.metric.left_column }}">
-              <input type="hidden" name="right_column"
-                value="{{ suggestion.metric.right_column }}">
-              <input type="hidden" name="aggregation"
-                value="{{ suggestion.metric.aggregation }}">
-              <input type="hidden" name="display_format"
-                value="{{ suggestion.metric.display_format }}">
-              <input type="hidden" name="kpi_direction" value="{{ suggestion.kpi_direction }}">
-              <input type="hidden" name="date_column"
-                value="{{ suggestion.date_column or '' }}">
-              {% for category in suggestion.category_columns %}
-                <input type="hidden" name="category_columns" value="{{ category }}">
-              {% endfor %}
-              <input type="hidden" name="benchmark_strategy"
-                value="{{ suggestion.benchmark_strategy }}">
-              <input type="hidden" name="target_or_benchmark" value="">
-              <input type="hidden" name="target_scope"
-                value="{{ 'row' if suggestion.metric.calculation_level == 'row' else 'dataset' }}">
-              <input type="hidden" name="business_objective"
-                value="{{ suggestion.business_objective }}">
-              <button type="submit">Review this derived KPI</button>
+            <ul class="small app-muted">{% for reason in suggestion.rationale %}<li>{{ reason }}</li>{% endfor %}</ul>
+            <form method="post" action="{{ url_for('core.review_derived_kpi', dataset_id=dataset_id) }}">
+              <input type="hidden" name="name" value="{{ suggestion.metric.name }}"><input type="hidden" name="operation" value="{{ suggestion.metric.operation }}">
+              <input type="hidden" name="left_column" value="{{ suggestion.metric.left_column }}"><input type="hidden" name="right_column" value="{{ suggestion.metric.right_column }}">
+              <input type="hidden" name="aggregation" value="{{ suggestion.metric.aggregation }}"><input type="hidden" name="display_format" value="{{ suggestion.metric.display_format }}">
+              <input type="hidden" name="kpi_direction" value="{{ suggestion.kpi_direction }}"><input type="hidden" name="date_column" value="{{ suggestion.date_column or '' }}">
+              {% for category in suggestion.category_columns %}<input type="hidden" name="category_columns" value="{{ category }}">{% endfor %}
+              <input type="hidden" name="benchmark_strategy" value="{{ suggestion.benchmark_strategy }}"><input type="hidden" name="target_or_benchmark" value="">
+              <input type="hidden" name="target_scope" value="{{ 'row' if suggestion.metric.calculation_level == 'row' else 'dataset' }}">
+              <input type="hidden" name="business_objective" value="{{ suggestion.business_objective }}">
+              <button class="btn btn-primary w-100" type="submit">Review this derived KPI</button>
             </form>
-          </section>
+          </article>
         {% endfor %}
-      {% endif %}
+      </div>
+    {% endif %}
+  </section>
 
-      <h2>Conditional rates and value shares</h2>
-      <p>
-        Build percentages such as returned or cancelled records divided by all
-        records, or new-customer revenue divided by total revenue.
-      </p>
-      <p>
-        <a href="{{ url_for('core.conditional_kpi_editor', dataset_id=dataset_id) }}">
-          Build a conditional percentage KPI
-        </a>
-      </p>
+  <section class="app-card mb-5 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div>
+      <h2 class="h4 mb-1">Conditional rates and value shares</h2>
+      <p class="app-muted mb-0">Build percentages such as returned records ÷ all records or new-customer revenue ÷ total revenue.</p>
+    </div>
+    <a class="btn btn-outline-primary flex-shrink-0" href="{{ url_for('core.conditional_kpi_editor', dataset_id=dataset_id) }}">Build a conditional percentage KPI</a>
+  </section>
 
-      <h2>
-        {{ "Add source KPIs" if configuration else "Confirm business configuration" }}
-      </h2>
-      {% if review_notice %}
-        <p role="status"><strong>{{ review_notice }}</strong></p>
-      {% endif %}
-      {% if configuration_error %}
-        <p role="alert"><strong>Configuration rejected:</strong> {{ configuration_error }}</p>
-      {% endif %}
+  <section aria-labelledby="configuration-heading">
+    <div class="app-page-header mb-3">
+      <p class="app-eyebrow">Manual configuration</p>
+      <h2 class="h3" id="configuration-heading">{{ "Add source KPIs" if configuration else "Confirm business configuration" }}</h2>
+      <p class="app-page-lead">Choose the measures and context that define the analysis. You can revise these settings later.</p>
+    </div>
+    {% if review_notice %}{{ alert(review_notice, variant="success") }}{% endif %}
+    {% if configuration_error %}{{ alert(configuration_error, "Configuration rejected") }}{% endif %}
 
-      {% if configuration %}
-        {% if configuration.metrics|length < 5 %}
-          <form method="post"
-            action="{{ url_for('core.configure_dataset', dataset_id=dataset_id) }}">
-            <input type="hidden" name="context_submitted" value="yes">
-            <fieldset>
-              <legend>New source KPIs</legend>
-              <p>
-                Select only the new columns to add. Existing KPIs are retained automatically.
-              </p>
+    {% if configuration and configuration.metrics|length < 5 %}
+      <form class="kpi-layout" method="post" action="{{ url_for('core.configure_dataset', dataset_id=dataset_id) }}" data-loading-form>
+        <input type="hidden" name="context_submitted" value="yes">
+        <div>
+          <fieldset class="form-section" data-selection-group>
+            <div class="d-flex justify-content-between align-items-center gap-2">
+              <legend class="mb-0">New source KPIs</legend>
+              <span class="selection-status" data-selection-count data-selection-maximum="{{ 5 - configuration.metrics|length }}"></span>
+            </div>
+            <p class="form-text">Existing KPIs are retained. Add KPIs separately when their settings differ.</p>
+            <div class="choice-grid">
               {% for column in profile.kpi_candidates %}
-                <label>
-                  <input type="checkbox" name="source_kpis" value="{{ column }}"
+                <label class="choice-card {% if column not in unconfigured_source_columns %}opacity-50{% endif %}">
+                  <input class="form-check-input" type="checkbox" name="source_kpis" value="{{ column }}"
                     {% if column not in unconfigured_source_columns %}disabled{% endif %}
                     {% if form_data and column in form_data.getlist('source_kpis') %}checked{% endif %}>
-                  {{ column }}
-                  {% if column not in unconfigured_source_columns %}(already configured){% endif %}
+                  <span>{{ column }}{% if column not in unconfigured_source_columns %}<small class="d-block app-muted">Already configured</small>{% endif %}</span>
                 </label>
               {% endfor %}
-            </fieldset>
-
-            <fieldset>
-              <legend>Direction for the new KPI(s)</legend>
-              <label>
-                <input type="radio" name="kpi_direction" value="higher" required
-                  {% if not form_data or form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>
-                Higher is better
-              </label>
-              <label>
-                <input type="radio" name="kpi_direction" value="lower"
-                  {% if form_data and form_data.get('kpi_direction') == 'lower' %}checked{% endif %}>
-                Lower is better
-              </label>
-            </fieldset>
-
-            <p>
-              These settings apply to every KPI selected in this submission. Add
-              KPIs one at a time when they require different semantics.
-            </p>
-
-            <p>
-              <label for="additional-aggregation">Aggregation</label>
-              <select id="additional-aggregation" name="aggregation" required>
-                {% for aggregation in source_aggregation_options %}
-                  <option value="{{ aggregation }}"
-                    {% if (
-                      form_data.get('aggregation', 'sum')
-                      if form_data else 'sum'
-                    ) == aggregation %}selected{% endif %}>
-                    {{ aggregation }}
-                  </option>
-                {% endfor %}
-              </select>
-            </p>
-
-            <p>
-              <label for="additional-display-format">Display format</label>
-              <select id="additional-display-format" name="display_format" required>
-                {% for display_format in display_format_options %}
-                  <option value="{{ display_format }}"
-                    {% if (
-                      form_data.get('display_format', 'number')
-                      if form_data else 'number'
-                    ) == display_format %}selected{% endif %}>
-                    {{ display_format }}
-                  </option>
-                {% endfor %}
-              </select>
-            </p>
-
-            <p>
-              <label for="additional-target">Optional target or benchmark</label>
-              <input id="additional-target" name="target_or_benchmark"
-                type="number" step="any"
-                value="{{ form_data.get('target_or_benchmark', '') if form_data else '' }}">
-            </p>
-            <p>
-              <label for="additional-target-scope">Target applies to</label>
-              <select id="additional-target-scope" name="target_scope" required>
-                {% for scope in target_scope_options %}
-                  <option value="{{ scope }}"
-                    {% if (form_data.get('target_scope', 'row') if form_data else 'row') == scope %}selected{% endif %}>
-                    {% if scope == "row" %}Each row
-                    {% elif scope == "period" %}Each period
-                    {% elif scope == "segment" %}Each segment
-                    {% else %}Complete dataset aggregate
-                    {% endif %}
-                  </option>
-                {% endfor %}
-              </select>
-            </p>
-
-            <h3>Shared analysis context</h3>
-            <p>
-              These settings apply to every configured KPI. AI suggestions may prefill them,
-              but you must review them before saving.
-            </p>
-            <p>
-              <label for="additional-date-column">Date column</label>
-              <select id="additional-date-column" name="date_column">
-                <option value="">No date column</option>
-                {% for column in profile.date_candidates %}
-                  <option value="{{ column }}"
-                    {% if (
-                      form_data.get('date_column', configuration.date_column or '')
-                      if form_data else configuration.date_column or ''
-                    ) == column %}selected{% endif %}>
-                    {{ column }}
-                  </option>
-                {% endfor %}
-              </select>
-            </p>
-
-            <fieldset>
-              <legend>Category or segment columns</legend>
-              <p>
-                Select fields such as product, region, or channel when their
-                verified values should be named in insights and reports.
-              </p>
-              {% if profile.category_candidates %}
-                {% for column in profile.category_candidates %}
-                  <label>
-                    <input type="checkbox" name="category_columns" value="{{ column }}"
-                      {% if column in (
-                        form_data.getlist('category_columns')
-                        if form_data else configuration.category_columns
-                      ) %}checked{% endif %}>
-                    {{ column }}
-                  </label>
-                {% endfor %}
-              {% else %}
-                <p>No category candidates were detected.</p>
-              {% endif %}
-            </fieldset>
-
-            <p>
-              <label for="additional-business-objective">Business objective</label>
-              <textarea id="additional-business-objective" name="business_objective"
-                maxlength="2000" required>{{ (
-                  form_data.get('business_objective', configuration.business_objective)
-                  if form_data else configuration.business_objective
-                ) }}</textarea>
-            </p>
-
-            {% with
-              context_target="additional-business-objective",
-              context_target_label="objective",
-              context_insert_mode="prompt"
-            %}
-              {% include "_dataset_context.html" %}
-            {% endwith %}
-
-            <button type="submit">Add selected KPI(s)</button>
-          </form>
-        {% else %}
-          <p>The KPI registry already contains the maximum of five KPIs.</p>
-        {% endif %}
-      {% elif profile.kpi_candidates %}
-        <form method="post" action="{{ url_for('core.configure_dataset', dataset_id=dataset_id) }}">
-          <p>
-            <label for="primary_kpi">Primary KPI</label>
-            <select id="primary_kpi" name="primary_kpi" required>
-              <option value="">Select a KPI</option>
-              {% for column in profile.kpi_candidates %}
-                <option value="{{ column }}"
-                  {% if form_data and form_data.get('primary_kpi') == column %}selected{% endif %}>
-                  {{ column }}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
-
-          <fieldset>
-            <legend>Optional additional KPIs (up to five KPIs total)</legend>
-            <p>
-              These are analyzed independently alongside the primary KPI. Do not select the
-              primary KPI again.
-            </p>
-            {% for column in profile.kpi_candidates %}
-              <label>
-                <input type="checkbox" name="secondary_kpis" value="{{ column }}"
-                  {% if form_data and column in form_data.getlist('secondary_kpis') %}checked{% endif %}>
-                {{ column }}
-              </label>
-            {% endfor %}
+            </div>
           </fieldset>
-
-          <fieldset>
-            <legend>KPI direction</legend>
-            <label>
-              <input type="radio" name="kpi_direction" value="higher" required
-                {% if not form_data or form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>
-              Higher is better
-            </label>
-            <label>
-              <input type="radio" name="kpi_direction" value="lower"
-                {% if form_data and form_data.get('kpi_direction') == 'lower' %}checked{% endif %}>
-              Lower is better
-            </label>
+          <fieldset class="form-section">
+            <legend>Metric settings</legend>
+            <div class="choice-grid mb-3">
+              <label class="choice-card"><input class="form-check-input" type="radio" name="kpi_direction" value="higher" required {% if not form_data or form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>Higher is better</label>
+              <label class="choice-card"><input class="form-check-input" type="radio" name="kpi_direction" value="lower" {% if form_data and form_data.get('kpi_direction') == 'lower' %}checked{% endif %}>Lower is better</label>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6"><label class="form-label" for="additional-aggregation">Aggregation</label><select class="form-select" id="additional-aggregation" name="aggregation" required>{% for aggregation in source_aggregation_options %}<option value="{{ aggregation }}" {% if (form_data.get('aggregation', 'sum') if form_data else 'sum') == aggregation %}selected{% endif %}>{{ aggregation }}</option>{% endfor %}</select></div>
+              <div class="col-md-6"><label class="form-label" for="additional-display-format">Display format</label><select class="form-select" id="additional-display-format" name="display_format" required>{% for display_format in display_format_options %}<option value="{{ display_format }}" {% if (form_data.get('display_format', 'number') if form_data else 'number') == display_format %}selected{% endif %}>{{ display_format }}</option>{% endfor %}</select></div>
+              <div class="col-md-6"><label class="form-label" for="additional-target">Optional target or benchmark</label><input class="form-control" id="additional-target" name="target_or_benchmark" type="number" step="any" value="{{ form_data.get('target_or_benchmark', '') if form_data else '' }}"></div>
+              <div class="col-md-6"><label class="form-label" for="additional-target-scope">Target applies to</label><select class="form-select" id="additional-target-scope" name="target_scope" required>{% for scope in target_scope_options %}<option value="{{ scope }}" {% if (form_data.get('target_scope', 'row') if form_data else 'row') == scope %}selected{% endif %}>{{ scope_label(scope) }}</option>{% endfor %}</select></div>
+            </div>
           </fieldset>
+          <section class="form-section">
+            <h3 class="form-section-heading">Shared analysis context</h3>
+            <div class="mb-3"><label class="form-label" for="additional-date-column">Date column</label><select class="form-select" id="additional-date-column" name="date_column"><option value="">No date column</option>{% for column in profile.date_candidates %}<option value="{{ column }}" {% if (form_data.get('date_column', configuration.date_column or '') if form_data else configuration.date_column or '') == column %}selected{% endif %}>{{ column }}</option>{% endfor %}</select></div>
+            <fieldset class="mb-3" data-selection-group><legend class="form-label">Category or segment columns <span class="selection-status ms-2" data-selection-count></span></legend><div class="choice-grid">{% for column in profile.category_candidates %}<label class="choice-card"><input class="form-check-input" type="checkbox" name="category_columns" value="{{ column }}" {% if column in (form_data.getlist('category_columns') if form_data else configuration.category_columns) %}checked{% endif %}>{{ column }}</label>{% else %}<p class="app-muted">No category candidates were detected.</p>{% endfor %}</div></fieldset>
+            <label class="form-label" for="additional-business-objective">Business objective</label><textarea class="form-control" id="additional-business-objective" name="business_objective" rows="4" maxlength="2000" required>{{ form_data.get('business_objective', configuration.business_objective) if form_data else configuration.business_objective }}</textarea>
+          </section>
+          <button class="btn btn-primary btn-lg mt-3" type="submit" data-loading-text="Saving KPIs…">Add selected KPI(s)</button>
+        </div>
+        <div class="kpi-sidebar">{% with context_target="additional-business-objective", context_target_label="objective", context_insert_mode="prompt" %}{% include "_dataset_context.html" %}{% endwith %}</div>
+      </form>
+    {% elif configuration %}
+      <div class="alert alert-secondary">The KPI registry already contains the maximum of five KPIs.</div>
+    {% elif profile.kpi_candidates %}
+      <form class="kpi-layout" method="post" action="{{ url_for('core.configure_dataset', dataset_id=dataset_id) }}" data-loading-form>
+        <div>
+          <section class="form-section">
+            <h3 class="form-section-heading">KPIs</h3>
+            <div class="mb-3"><label class="form-label" for="primary_kpi">Primary KPI</label><select class="form-select" id="primary_kpi" name="primary_kpi" required><option value="">Select a KPI</option>{% for column in profile.kpi_candidates %}<option value="{{ column }}" {% if form_data and form_data.get('primary_kpi') == column %}selected{% endif %}>{{ column }}</option>{% endfor %}</select></div>
+            <fieldset data-selection-group><legend class="form-label">Optional additional KPIs (up to five KPIs total) <span class="selection-status ms-2" data-selection-count data-selection-maximum="4"></span></legend><p class="form-text">These are analyzed independently. Do not select the primary KPI again.</p><div class="choice-grid">{% for column in profile.kpi_candidates %}<label class="choice-card"><input class="form-check-input" type="checkbox" name="secondary_kpis" value="{{ column }}" {% if form_data and column in form_data.getlist('secondary_kpis') %}checked{% endif %}>{{ column }}</label>{% endfor %}</div></fieldset>
+          </section>
+          <fieldset class="form-section"><legend>Primary KPI settings</legend><div class="choice-grid mb-3"><label class="choice-card"><input class="form-check-input" type="radio" name="kpi_direction" value="higher" required {% if not form_data or form_data.get('kpi_direction') == 'higher' %}checked{% endif %}>Higher is better</label><label class="choice-card"><input class="form-check-input" type="radio" name="kpi_direction" value="lower" {% if form_data and form_data.get('kpi_direction') == 'lower' %}checked{% endif %}>Lower is better</label></div><div class="row g-3"><div class="col-md-6"><label class="form-label" for="source-aggregation">Primary KPI aggregation</label><select class="form-select" id="source-aggregation" name="aggregation" required>{% for aggregation in source_aggregation_options %}<option value="{{ aggregation }}" {% if (form_data.get('aggregation', 'sum') if form_data else 'sum') == aggregation %}selected{% endif %}>{{ aggregation }}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label" for="source-display-format">Primary KPI display format</label><select class="form-select" id="source-display-format" name="display_format" required>{% for display_format in display_format_options %}<option value="{{ display_format }}" {% if (form_data.get('display_format', 'number') if form_data else 'number') == display_format %}selected{% endif %}>{{ display_format }}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label" for="target_or_benchmark">Optional target or benchmark</label><input class="form-control" id="target_or_benchmark" name="target_or_benchmark" type="number" step="any" value="{{ form_data.get('target_or_benchmark', '') if form_data else '' }}"></div><div class="col-md-6"><label class="form-label" for="target-scope">Target applies to</label><select class="form-select" id="target-scope" name="target_scope" required>{% for scope in target_scope_options %}<option value="{{ scope }}" {% if (form_data.get('target_scope', 'row') if form_data else 'row') == scope %}selected{% endif %}>{{ scope_label(scope) }}</option>{% endfor %}</select><div class="form-text">Period targets need a date; segment targets need a category.</div></div></div></fieldset>
+          <section class="form-section"><h3 class="form-section-heading">Analysis context</h3><div class="mb-3"><label class="form-label" for="date_column">Date column</label><select class="form-select" id="date_column" name="date_column"><option value="">No date column</option>{% for column in profile.date_candidates %}<option value="{{ column }}" {% if form_data and form_data.get('date_column') == column %}selected{% endif %}>{{ column }}</option>{% endfor %}</select></div><fieldset class="mb-3" data-selection-group><legend class="form-label">Category or segment columns <span class="selection-status ms-2" data-selection-count></span></legend><div class="choice-grid">{% for column in profile.category_candidates %}<label class="choice-card"><input class="form-check-input" type="checkbox" name="category_columns" value="{{ column }}" {% if form_data and column in form_data.getlist('category_columns') %}checked{% endif %}>{{ column }}</label>{% else %}<p class="app-muted">No category candidates were detected.</p>{% endfor %}</div></fieldset><label class="form-label" for="business_objective">Business objective</label><textarea class="form-control" id="business_objective" name="business_objective" rows="4" maxlength="2000" required>{{ form_data.get('business_objective', '') if form_data else '' }}</textarea></section>
+          <button class="btn btn-primary btn-lg mt-3" type="submit" data-loading-text="Saving configuration…">Confirm configuration</button>
+        </div>
+        <div class="kpi-sidebar">{% with context_target="business_objective", context_target_label="objective", context_insert_mode="prompt" %}{% include "_dataset_context.html" %}{% endwith %}</div>
+      </form>
+    {% else %}
+      <div class="alert alert-warning">No measurable KPI candidates were detected. Upload a dataset with a nonconstant numeric measure.</div>
+    {% endif %}
+  </section>
 
-          <p>
-            <label for="source-aggregation">Primary KPI aggregation</label>
-            <select id="source-aggregation" name="aggregation" required>
-              {% for aggregation in source_aggregation_options %}
-                <option value="{{ aggregation }}"
-                  {% if (
-                    form_data.get('aggregation', 'sum')
-                    if form_data else 'sum'
-                  ) == aggregation %}selected{% endif %}>
-                  {{ aggregation }}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
+  <div class="mt-5"><a class="btn btn-outline-secondary" href="{{ url_for('core.workspace_history') }}">Return to workspaces</a></div>
+{% endblock %}
 
-          <p>
-            <label for="source-display-format">Primary KPI display format</label>
-            <select id="source-display-format" name="display_format" required>
-              {% for display_format in display_format_options %}
-                <option value="{{ display_format }}"
-                  {% if (
-                    form_data.get('display_format', 'number')
-                    if form_data else 'number'
-                  ) == display_format %}selected{% endif %}>
-                  {{ display_format }}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
-
-          <p>
-            <label for="date_column">Date column</label>
-            <select id="date_column" name="date_column">
-              <option value="">No date column</option>
-              {% for column in profile.date_candidates %}
-                <option value="{{ column }}"
-                  {% if form_data and form_data.get('date_column') == column %}selected{% endif %}>
-                  {{ column }}
-                </option>
-              {% endfor %}
-            </select>
-          </p>
-
-        <fieldset>
-          <legend>Category or segment columns</legend>
-          <p>
-            Select fields such as product, region, or channel when their
-            verified values should be named in insights and reports.
-          </p>
-            {% if profile.category_candidates %}
-              {% for column in profile.category_candidates %}
-                <label>
-                  <input type="checkbox" name="category_columns" value="{{ column }}"
-                    {% if form_data and column in form_data.getlist('category_columns') %}checked{% endif %}>
-                  {{ column }}
-                </label>
-              {% endfor %}
-            {% else %}
-              <p>No category candidates were detected.</p>
-            {% endif %}
-          </fieldset>
-
-          <p>
-            <label for="target_or_benchmark">Optional target or benchmark</label>
-            <input id="target_or_benchmark" name="target_or_benchmark" type="number" step="any"
-              value="{{ form_data.get('target_or_benchmark', '') if form_data else '' }}">
-          </p>
-          <p>
-            <label for="target-scope">Target applies to</label>
-            <select id="target-scope" name="target_scope" required>
-              {% for scope in target_scope_options %}
-                <option value="{{ scope }}"
-                  {% if (form_data.get('target_scope', 'row') if form_data else 'row') == scope %}selected{% endif %}>
-                  {% if scope == "row" %}Each row
-                  {% elif scope == "period" %}Each period
-                  {% elif scope == "segment" %}Each segment
-                  {% else %}Complete dataset aggregate
-                  {% endif %}
-                </option>
-              {% endfor %}
-            </select>
-            <small>
-              Period targets need a date column; segment targets need at least
-              one category column.
-            </small>
-          </p>
-
-          <p>
-            <label for="business_objective">Business objective</label>
-            <textarea id="business_objective" name="business_objective" maxlength="2000"
-              required>{{ form_data.get('business_objective', '') if form_data else '' }}</textarea>
-          </p>
-
-          {% with
-            context_target="business_objective",
-            context_target_label="objective",
-            context_insert_mode="prompt"
-          %}
-            {% include "_dataset_context.html" %}
-          {% endwith %}
-
-          <button type="submit">Confirm configuration</button>
-        </form>
-      {% else %}
-        <p>No measurable KPI candidates were detected. Upload a dataset with a nonconstant numeric measure.</p>
-      {% endif %}
-
-      <p><a href="{{ url_for('core.workspace_history') }}">Return to workspaces</a></p>
-    </main>
-  </body>
-</html>
+{% block scripts %}
+  <script src="{{ url_for('static', filename='kpi_configuration.js') }}"></script>
+{% endblock %}

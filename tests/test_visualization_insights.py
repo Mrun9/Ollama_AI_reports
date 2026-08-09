@@ -17,6 +17,7 @@ from insight_reporter.visualization_builder import (
     save_visualization,
 )
 from insight_reporter.visualization_insights import (
+    build_verified_visualization_observations,
     generate_visualization_insight,
     load_visualization_insight,
     save_visualization_insight,
@@ -28,23 +29,58 @@ class _GroundedInsightClient:
     def chat(self, **kwargs: object) -> object:
         messages = kwargs["messages"]
         payload = json.loads(messages[1]["content"])
+        answer_texts = (
+            "The cited comparison directly answers the first chart question.",
+            "The cited total directly answers the second chart question.",
+            "The cited change directly answers the third chart question.",
+            "The cited distribution directly answers the fourth chart question.",
+            "The cited ranking directly answers the fifth chart question.",
+        )
         return {
             "message": {
                 "content": json.dumps(
                     {
-                        "insights": [
+                        "answers": [
                             {
-                                "fact_id": fact["fact_id"],
-                                "implication": (
-                                    "This result identifies where management "
-                                    "attention may have the greatest impact."
-                                ),
+                                "question_id": question["question_id"],
+                                "status": "answered",
+                                "answer": answer_texts[index],
+                                "supporting_fact_ids": [
+                                    payload["facts"][index % len(payload["facts"])]["fact_id"]
+                                ],
                                 "suggested_action": (
                                     "Review the underlying operating drivers "
                                     "and assign an owner for follow-up."
                                 ),
                             }
-                            for fact in payload["facts"]
+                            for index, question in enumerate(payload["questions"])
+                        ]
+                    }
+                )
+            }
+        }
+
+
+class _InsufficientEvidenceClient:
+    def chat(self, **kwargs: object) -> object:
+        messages = kwargs["messages"]
+        payload = json.loads(messages[1]["content"])
+        return {
+            "message": {
+                "content": json.dumps(
+                    {
+                        "answers": [
+                            {
+                                "question_id": question["question_id"],
+                                "status": "insufficient_evidence",
+                                "answer": (
+                                    "The saved chart does not contain the data needed "
+                                    "to answer this question."
+                                ),
+                                "supporting_fact_ids": [],
+                                "suggested_action": "",
+                            }
+                            for question in payload["questions"]
                         ]
                     }
                 )
@@ -131,13 +167,82 @@ def test_saved_chart_insight_uses_values_and_grounded_model_text(
         client=_GroundedInsightClient(),
     )
 
-    assert 1 <= len(insight.points) <= 5
+    assert 1 <= len(insight.facts) <= 5
+    assert len(insight.answers) == 1
     assert insight.model_status == "generated"
     assert insight.include_in_reports is True
     assert any("South" in point.finding and "North" in point.finding for point in insight.points)
     assert any("550" in point.finding for point in insight.points)
-    assert all(point.implication for point in insight.points)
-    assert all(point.suggested_action for point in insight.points)
+    assert insight.answers[0].supporting_fact_ids
+    assert insight.answers[0].answer
+    assert insight.answers[0].suggested_action
+
+
+def test_visualization_insight_answers_each_question_without_annotating_every_fact(
+    tmp_path: Path,
+) -> None:
+    chart, _profile, _configuration = _saved_chart(tmp_path)
+
+    insight = generate_visualization_insight(
+        chart,
+        question=(
+            "Which region has the higher displayed revenue?\n"
+            "What total is represented in the chart?"
+        ),
+        include_in_reports=False,
+        use_model=True,
+        model="test-model",
+        host="http://unused",
+        timeout_seconds=1,
+        client=_GroundedInsightClient(),
+    )
+
+    assert insight.questions == (
+        "Which region has the higher displayed revenue?",
+        "What total is represented in the chart?",
+    )
+    assert len(insight.answers) == 2
+    assert {answer.question_id for answer in insight.answers} == {"Q1", "Q2"}
+    assert all(len(answer.supporting_fact_ids) == 1 for answer in insight.answers)
+
+
+def test_visualization_insight_marks_question_outside_chart_as_unsupported(
+    tmp_path: Path,
+) -> None:
+    chart, _profile, _configuration = _saved_chart(tmp_path)
+
+    insight = generate_visualization_insight(
+        chart,
+        question="Which customer submitted the most support tickets?",
+        include_in_reports=False,
+        use_model=True,
+        model="test-model",
+        host="http://unused",
+        timeout_seconds=1,
+        client=_InsufficientEvidenceClient(),
+    )
+
+    assert insight.model_status == "generated"
+    assert insight.answers[0].status == "insufficient_evidence"
+    assert insight.answers[0].supporting_fact_ids == ()
+    assert insight.answers[0].suggested_action == ""
+
+
+def test_verified_visualization_observations_do_not_use_ollama(
+    tmp_path: Path,
+) -> None:
+    chart, _profile, _configuration = _saved_chart(tmp_path)
+
+    observations = build_verified_visualization_observations(
+        chart,
+        include_in_reports=True,
+    )
+
+    assert observations.include_in_reports is True
+    assert observations.model_status == "not_requested"
+    assert observations.model is None
+    assert observations.answers == ()
+    assert observations.facts
 
 
 def test_manual_board_insight_uses_saved_points_and_round_trips(
@@ -224,6 +329,56 @@ def test_visualization_insight_persists_and_stale_hash_is_not_loaded(
     assert load_visualization_insight(chart, insight_dir=insight_dir) is None
 
 
+def test_legacy_visualization_insight_still_loads_as_question_oriented_artifact(
+    tmp_path: Path,
+) -> None:
+    chart, _profile, _configuration = _saved_chart(tmp_path)
+    current = generate_visualization_insight(
+        chart,
+        question="What does this chart show?",
+        include_in_reports=False,
+        use_model=False,
+        model="unused",
+        host="http://unused",
+        timeout_seconds=1,
+    )
+    legacy_payload = {
+        "schema_version": 1,
+        "insight_id": current.insight_id,
+        "dataset_id": current.dataset_id,
+        "visualization_id": current.visualization_id,
+        "visualization_sha256": current.visualization_sha256,
+        "generated_at": current.generated_at,
+        "question": "What does this chart show?",
+        "include_in_reports": False,
+        "model": None,
+        "model_status": "not_requested",
+        "prompt_version": None,
+        "points": [
+            {
+                "fact_id": fact.fact_id,
+                "finding": fact.finding,
+                "implication": "",
+                "suggested_action": "",
+                "interpretation_source": "python_only",
+            }
+            for fact in current.facts
+        ],
+        "limitations": list(current.limitations),
+    }
+    insight_dir = tmp_path / "visualization_insights"
+    path = insight_dir / current.dataset_id / f"{current.visualization_id}.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+    loaded = load_visualization_insight(chart, insight_dir=insight_dir)
+
+    assert loaded is not None
+    assert loaded.schema_version == 2
+    assert loaded.questions == ("What does this chart show?",)
+    assert loaded.facts == current.facts
+
+
 def test_opted_in_chart_insight_is_carried_into_report_evidence(
     tmp_path: Path,
 ) -> None:
@@ -264,10 +419,11 @@ def test_opted_in_chart_insight_is_carried_into_report_evidence(
     )
     observations = included.manual_visualization_evidence[0].observations
     requested = [
-        item for item in observations if item["type"] == "user_requested_visualization_insight"
+        item for item in observations if item["type"] == "verified_visualization_observation"
     ]
     assert len(requested) == len(insight.points)
-    assert requested[0]["observation"]["question"] == ("Where should management focus?")
+    assert requested[0]["observation"]["finding"]
+    assert "question" not in requested[0]["observation"]
     assert included.omissions["included_visualization_insight_count"] == 1
 
     excluded_insight = set_visualization_insight_report_inclusion(
@@ -282,7 +438,7 @@ def test_opted_in_chart_insight_is_carried_into_report_evidence(
         visualization_insights=(excluded_insight,),
     )
     assert all(
-        item["type"] != "user_requested_visualization_insight"
+        item["type"] != "verified_visualization_observation"
         for item in excluded.manual_visualization_evidence[0].observations
     )
     assert excluded.omissions["included_visualization_insight_count"] == 0

@@ -560,34 +560,30 @@ language and receive a reviewable chart, while invalid or hallucinated model
 mappings cannot reach preview or dashboard persistence. See
 [Chart-to-column mapping](docs/CHART_MAPPING.md).
 
-### Milestone 6D.2 — On-demand visualization insights
+### Milestone 6D.2 — Verified visualization observations
 
 **Problem:** A saved chart could enter a report as deterministic evidence, but
-the dashboard did not explain the chart in decision-oriented language and the
-user could not explicitly carry that explanation into later reports.
+its chart-specific facts were not immediately visible and the user could not
+explicitly carry those observations into later reports.
 
 **Implemented:**
 
-- An on-demand question on every saved visualization that derives up to five
-  precise findings from its retained supporting data.
+- Automatic verified observations on every saved visualization, derived from
+  its retained supporting data without a question or model call.
 - Python-authored findings that use actual displayed category, region,
   product, series, and period values plus chart-specific changes, shares,
   gaps, distributions, funnel retention, or waterfall contributions.
-- Optional Ollama implications and suggested actions. The model sees only the
-  user question and Python-written facts, cannot replace those findings, and
-  is rejected if it adds numeric claims.
 - A separate, atomic `visualization_insights/` artifact bound to the exact
   saved-chart SHA-256 fingerprint. Editing or regenerating the chart makes an
   older insight unavailable until it is regenerated.
 - Explicit report inclusion. An opted-in insight follows the chart only when
   that visualization is selected in report configuration; it remains saved
   for dashboard use when excluded.
-- Graceful local-model failure: safe Python findings are still retained when
-  Ollama is offline or its output fails validation.
+- Deterministic availability: observations do not depend on Ollama being
+  installed, running, or returning valid output.
 
-**Result:** Users can ask what a chart means, review its factual and advisory
-layers separately, and choose whether those reviewed points contribute to
-HTML, JSON, and PDF report generation.
+**Result:** Users immediately see verified chart observations and can choose
+whether those points contribute to HTML, JSON, and PDF report generation.
 
 ### Cross-cutting instrumentation — Model-run benchmark log
 
@@ -626,9 +622,10 @@ CSV contract and comparison method.
   well.
 - **PDF export remains a core feature.** Future formats may be additive but
   must not replace it.
-- **The final visual redesign is intentionally deferred.** Functional screens
-  will continue evolving while features are added; cohesive product styling
-  should happen once the workflow is stable.
+- **The local Bootstrap interface is complete.** Shared navigation, responsive
+  workflow pages, accessible form feedback, safe error states, dashboard and
+  evidence views, and print-oriented report presentation now cover the full
+  workspace lifecycle without introducing a frontend framework.
 - **Milestone 6A — Persistent workspace and report history:** implemented.
 - **Milestone 6A.1 — Workspace-first lifecycle controls:** implemented.
 - **Milestone 6B — More precise insight prioritization and AI diagnostics:**
@@ -644,12 +641,12 @@ CSV contract and comparison method.
   implemented.
 - **Milestone 6D.1 — Expanded charts and Ollama-assisted visualization:**
   implemented.
-- **Milestone 6D.2 — On-demand visualization insights:** implemented.
-- **Milestone 6D — Report presentation improvements:** planned after the
-  remaining functionality, while retaining HTML, JSON, and PDF exports.
+- **Milestone 6D.2 — Verified visualization observations:** implemented.
+- **Milestone 6D — Report presentation improvements:** implemented while
+  retaining HTML, JSON, and PDF exports.
 
-The project currently implements **Milestone 6D.2: on-demand visualization
-insights**, building on expanded charts, Ollama-assisted visualization,
+The project currently implements **Milestone 6D: report presentation and local
+UI completion**, building on verified visualization observations, expanded charts, Ollama-assisted visualization,
 report-project navigation,
 explicit target scope, insight
 applicability, configurable source and conditional KPIs,
@@ -681,12 +678,17 @@ print-ready HTML, and verified PDF downloads.
 - Deleting a workspace or report archives its ID in workspace metadata.
   Deleting a source moves only the source and optional XLSX selection sidecar
   to recoverable trash. It deliberately keeps derived artifacts and reports.
-- Restoring reverses those lifecycle markers or file moves. There is currently
-  no permanent-delete UI, which avoids accidental destruction of local
-  project history.
+- Restoring reverses those lifecycle markers or file moves. An archived
+  workspace may also be deleted permanently after a separate explicit
+  confirmation; that purge removes its retained source, configuration,
+  evidence, charts, visualizations, reports, and report-history assets.
 
 ## Current capabilities
 
+- Self-hosted Bootstrap and page-specific CSS compatible with the strict
+  self-only content-security policy, shared responsive navigation, keyboard focus states,
+  screen-reader status announcements, client-side validation feedback, safe
+  styled HTTP errors, and print-aware report pages
 - Flask application factory and `/health` endpoint
 - Workspace-first home page at `/workspaces` (with `/` redirecting there)
 - Empty workspace creation before source selection
@@ -930,11 +932,10 @@ and open **Advanced options** only when needed. The optional visualization quest
 what the user wants the chart to answer. Previewed charts are not retained
 until explicitly saved. A saved supplementary chart may be included in the
 final report, but remains labelled as supplementary rather than KPI evidence.
-Open a saved chart and use **Insights from this visualization** to ask a
-management question. Python calculates up to five chart-specific findings;
-Ollama may add plain-language implications and actions. Select the report
-carry-forward option when those reviewed findings should accompany the chart
-into reports.
+Open a saved chart to review **Verified observations** calculated automatically
+by Python from the retained chart data. No model call or question submission is
+required. Select the report carry-forward option when those observations should
+accompany the chart into reports.
 From the KPI page, select **Generate deterministic insights** to run the
 Python-only engine and review ranked evidence cards, supporting tables, charts,
 and JSON artifacts.
@@ -1051,6 +1052,7 @@ POST  /workspaces
 POST  /workspaces/<dataset_id>/name
 POST  /workspaces/<dataset_id>/archive
 POST  /workspaces/<dataset_id>/restore
+POST  /workspaces/<dataset_id>/purge
 POST  /workspaces/<dataset_id>/source
 POST  /workspaces/<dataset_id>/source/name
 POST  /workspaces/<dataset_id>/source/archive
@@ -1247,16 +1249,16 @@ Milestone 5A.1 creates the reproducible selection and model-input contract consu
 - Saved drag-and-drop manual-board charts are independently selectable. Python derives bounded
   extremes, trends, associations, distributions, target gaps, and Pareto contribution from their
   retained preview data; raw source rows are not sent for report narration.
-- A saved manual board exposes its supporting-point table and the same grounded management-insight
-  workflow as an automated chart, including optional Ollama interpretation and an **Include these
-  saved insights in reports** preference.
+- A saved manual board exposes its supporting-point table and the same automatic
+  Python-verified observations as an automated chart, including an **Include
+  these verified insights in reports** preference.
 - Newly saved or updated manual-board charts retain a sanitized SVG for the dashboard and an
   800-by-460 PNG for immutable report snapshots and PDF export. Older boards must be reopened and
   saved once before report selection so the export image exists.
-- A requested visualization insight enters that evidence only when its
+- Verified visualization observations enter that evidence only when their
   report-inclusion preference is enabled and the chart itself is selected.
-  Insight artifacts are fingerprinted to the exact chart, so stale
-  interpretations cannot silently carry forward.
+  Observation artifacts are fingerprinted to the exact chart, so stale facts
+  cannot silently carry forward.
 - The package is bounded to 50 evidence records, 12 supporting rows per deterministic evidence
   record, and 20 manual visualizations. Any omitted selected IDs are listed explicitly.
 - Raw dataset rows, internal row numbers, identifier columns, and free-text

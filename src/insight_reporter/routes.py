@@ -184,10 +184,9 @@ from insight_reporter.visualization_builder import (
 from insight_reporter.visualization_insights import (
     VisualizationInsightArtifact,
     VisualizationInsightError,
-    generate_visualization_insight,
+    build_verified_visualization_observations,
     load_visualization_insight,
     save_visualization_insight,
-    set_visualization_insight_report_inclusion,
 )
 from insight_reporter.visualization_suggestions import (
     VisualizationSuggestionError,
@@ -196,6 +195,7 @@ from insight_reporter.visualization_suggestions import (
 from insight_reporter.workspace_history import (
     WorkspaceDirectories,
     WorkspaceHistoryError,
+    WorkspacePurgeDirectories,
     WorkspaceSummary,
     archive_workspace,
     archive_workspace_report,
@@ -206,6 +206,7 @@ from insight_reporter.workspace_history import (
     get_workspace_summary,
     list_workspace_summaries,
     load_workspace_record,
+    permanently_delete_workspace,
     rename_workspace_report,
     rename_workspace_source,
     restore_workspace,
@@ -348,6 +349,14 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
         evidence_ready=evidence_ready,
         visualization_count=visualization_count,
         report_configuration_ready=_report_configuration_path(dataset_id).is_file(),
+        workspace_steps=_workspace_progress_steps(
+            workspace,
+            source_ready=workspace.record.has_source,
+            configuration_ready=configuration_ready,
+            evidence_ready=evidence_ready,
+            visualization_ready=visualization_count > 0,
+            report_configuration_ready=_report_configuration_path(dataset_id).is_file(),
+        ),
     )
 
 
@@ -409,6 +418,22 @@ def undelete_workspace(dataset_id: str):  # type: ignore[no-untyped-def]
     )
 
 
+@core.post("/workspaces/<dataset_id>/purge")
+def purge_workspace(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Permanently remove one explicitly confirmed archived workspace."""
+
+    if request.form.get("confirmation") != "delete-permanently":
+        abort(400, description="Permanent workspace deletion was not confirmed.")
+    try:
+        permanently_delete_workspace(
+            dataset_id,
+            directories=_workspace_purge_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(400, description=str(error))
+    return redirect(url_for("core.workspace_history"), code=303)
+
+
 @core.get("/workspaces/<dataset_id>/source")
 def workspace_source_form(dataset_id: str):  # type: ignore[no-untyped-def]
     """Show the source-selection form for an empty workspace."""
@@ -426,6 +451,14 @@ def workspace_source_form(dataset_id: str):  # type: ignore[no-untyped-def]
     return render_template(
         "workspace_source.html",
         workspace=workspace,
+        workspace_steps=_workspace_progress_steps(
+            workspace,
+            source_ready=False,
+            configuration_ready=False,
+            evidence_ready=False,
+            visualization_ready=False,
+            report_configuration_ready=False,
+        ),
         **_upload_limits(),
     )
 
@@ -786,10 +819,20 @@ def excel_sheet_selection(dataset_id: str):  # type: ignore[no-untyped-def]
     except DatasetViewError as error:
         abort(422, description=str(error))
     state = _load_view_state("sheet", dataset_id=dataset_id)
+    workspace = _required_workspace_summary(dataset_id)
     return (
         render_template(
             "sheet_selection.html",
             dataset_id=dataset_id,
+            workspace=workspace,
+            workspace_steps=_workspace_progress_steps(
+                workspace,
+                source_ready=False,
+                configuration_ready=False,
+                evidence_ready=False,
+                visualization_ready=False,
+                report_configuration_ready=False,
+            ),
             table_names=table_names,
             error=_state_text(state, "error"),
         ),
@@ -1678,17 +1721,6 @@ def generate_report(dataset_id: str):  # type: ignore[no-untyped-def]
             temperature=float(current_app.config["OLLAMA_REPORT_TEMPERATURE"]),
             metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
         )
-        if (
-            draft.stories
-            and not draft.ai_narrated_evidence_ids
-            and draft.generation_diagnostics.get("rejected_story_ids")
-        ):
-            raise ReportNarrationError(
-                "Ollama returned responses, but none passed evidence "
-                "validation after four attempts per story. No report was "
-                "saved. Try Generate report again; if this persists, use a "
-                "more capable local model."
-            )
         generated, _path = _save_generated_report_with_charts(
             draft,
             visualizations=visualizations,
@@ -2438,6 +2470,11 @@ def saved_manual_visualization(dataset_id: str, visualization_id: str):  # type:
         artifact,
         insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
     )
+    if insight is None:
+        insight = build_verified_visualization_observations(
+            artifact,
+            include_in_reports=False,
+        )
     state = _load_view_state(
         "saved_manual_visualization",
         dataset_id=dataset_id,
@@ -2453,69 +2490,6 @@ def saved_manual_visualization(dataset_id: str, visualization_id: str):  # type:
     )
 
 
-@core.post("/visualizations/<dataset_id>/manual/<visualization_id>/insights")
-def request_manual_visualization_insight(
-    dataset_id: str,
-    visualization_id: str,
-):  # type: ignore[no-untyped-def]
-    """Generate grounded findings for one saved manual-board visualization."""
-
-    profile = _load_profile(dataset_id)
-    try:
-        artifact = load_manual_visualization(
-            visualization_id,
-            dataset_id=dataset_id,
-            source_sha256=profile.source_sha256,
-            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
-        )
-        insight = generate_visualization_insight(
-            artifact,
-            question=request.form.get("question", ""),
-            include_in_reports=(request.form.get("include_in_reports") == "yes"),
-            use_model=request.form.get("use_model") == "yes",
-            model=str(current_app.config["OLLAMA_MODEL"]),
-            host=str(current_app.config["OLLAMA_HOST"]),
-            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
-            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
-        )
-        save_visualization_insight(
-            insight,
-            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
-        )
-    except (ManualVisualizationStoreError, VisualizationInsightError) as error:
-        return _redirect_with_state(
-            "core.saved_manual_visualization",
-            {
-                "view": "saved_manual_visualization",
-                "dataset_id": dataset_id,
-                "insight_error": str(error),
-                "status_code": 400,
-            },
-            dataset_id=dataset_id,
-            visualization_id=visualization_id,
-        )
-    notice = (
-        "Five grounded chart findings were saved."
-        if len(insight.points) == 5
-        else f"{len(insight.points)} grounded chart findings were saved."
-    )
-    if insight.model_status == "unavailable":
-        notice += (
-            " Ollama was unavailable or returned unsafe text, so the "
-            "Python-derived findings were retained without AI interpretation."
-        )
-    return _redirect_with_state(
-        "core.saved_manual_visualization",
-        {
-            "view": "saved_manual_visualization",
-            "dataset_id": dataset_id,
-            "insight_notice": notice,
-        },
-        dataset_id=dataset_id,
-        visualization_id=visualization_id,
-    )
-
-
 @core.post(
     "/visualizations/<dataset_id>/manual/<visualization_id>/insights/report-inclusion"
 )
@@ -2523,7 +2497,7 @@ def update_manual_visualization_insight_report_inclusion(
     dataset_id: str,
     visualization_id: str,
 ):  # type: ignore[no-untyped-def]
-    """Change whether a manual-board insight follows its chart into reports."""
+    """Change whether manual-board observations follow the chart into reports."""
 
     profile = _load_profile(dataset_id)
     try:
@@ -2533,16 +2507,8 @@ def update_manual_visualization_insight_report_inclusion(
             source_sha256=profile.source_sha256,
             visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
         )
-        insight = load_visualization_insight(
+        updated = build_verified_visualization_observations(
             artifact,
-            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
-        )
-        if insight is None:
-            raise VisualizationInsightError(
-                "Generate chart insights before changing report inclusion."
-            )
-        updated = set_visualization_insight_report_inclusion(
-            insight,
             include_in_reports=(request.form.get("include_in_reports") == "yes"),
         )
         save_visualization_insight(
@@ -2562,9 +2528,9 @@ def update_manual_visualization_insight_report_inclusion(
             visualization_id=visualization_id,
         )
     notice = (
-        "Chart insights will be included when this visualization is selected for a report."
+        "Verified observations will be included when this visualization is selected for a report."
         if updated.include_in_reports
-        else "Chart insights will remain saved but will not be included in reports."
+        else "Verified observations will remain saved but will not be included in reports."
     )
     return _redirect_with_state(
         "core.saved_manual_visualization",
@@ -2852,6 +2818,11 @@ def saved_visualization(dataset_id: str, visualization_id: str):  # type: ignore
         artifact,
         insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
     )
+    if insight is None:
+        insight = build_verified_visualization_observations(
+            artifact,
+            include_in_reports=False,
+        )
     state = _load_view_state(
         "saved_visualization",
         dataset_id=dataset_id,
@@ -2866,76 +2837,9 @@ def saved_visualization(dataset_id: str, visualization_id: str):  # type: ignore
     )
 
 
-@core.post("/visualizations/<dataset_id>/<visualization_id>/insights")
-def request_visualization_insight(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
-    """Derive chart facts and optionally add a grounded Ollama interpretation."""
-
-    profile = _load_profile(dataset_id)
-    question = request.form.get("question", "")
-    try:
-        configuration = _load_existing_configuration(dataset_id, profile)
-        artifact = load_visualization(
-            visualization_id,
-            dataset_id=dataset_id,
-            visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
-            profile=profile,
-            configuration=configuration,
-        )
-        insight = generate_visualization_insight(
-            artifact,
-            question=question,
-            include_in_reports=(request.form.get("include_in_reports") == "yes"),
-            use_model=request.form.get("use_model") == "yes",
-            model=str(current_app.config["OLLAMA_MODEL"]),
-            host=str(current_app.config["OLLAMA_HOST"]),
-            timeout_seconds=int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
-            metrics_dir=Path(current_app.config["MODEL_RUN_METRICS_DIR"]),
-        )
-        save_visualization_insight(
-            insight,
-            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
-        )
-    except (
-        BusinessConfigurationError,
-        VisualizationError,
-        VisualizationInsightError,
-    ) as error:
-        return _redirect_with_state(
-            "core.saved_visualization",
-            {
-                "view": "saved_visualization",
-                "dataset_id": dataset_id,
-                "insight_error": str(error),
-                "status_code": 400,
-            },
-            dataset_id=dataset_id,
-            visualization_id=visualization_id,
-        )
-    notice = (
-        "Five grounded chart findings were saved."
-        if len(insight.points) == 5
-        else f"{len(insight.points)} grounded chart findings were saved."
-    )
-    if insight.model_status == "unavailable":
-        notice += (
-            " Ollama was unavailable or returned unsafe text, so the "
-            "Python-derived findings were retained without AI interpretation."
-        )
-    return _redirect_with_state(
-        "core.saved_visualization",
-        {
-            "view": "saved_visualization",
-            "dataset_id": dataset_id,
-            "insight_notice": notice,
-        },
-        dataset_id=dataset_id,
-        visualization_id=visualization_id,
-    )
-
-
 @core.post("/visualizations/<dataset_id>/<visualization_id>/insights/report-inclusion")
 def update_visualization_insight_report_inclusion(dataset_id: str, visualization_id: str):  # type: ignore[no-untyped-def]
-    """Change whether a saved chart insight follows the chart into reports."""
+    """Change whether saved-chart observations follow the chart into reports."""
 
     profile = _load_profile(dataset_id)
     try:
@@ -2947,16 +2851,8 @@ def update_visualization_insight_report_inclusion(dataset_id: str, visualization
             profile=profile,
             configuration=configuration,
         )
-        insight = load_visualization_insight(
+        updated = build_verified_visualization_observations(
             artifact,
-            insight_dir=Path(current_app.config["VISUALIZATION_INSIGHT_DIR"]),
-        )
-        if insight is None:
-            raise VisualizationInsightError(
-                "Generate chart insights before changing report inclusion."
-            )
-        updated = set_visualization_insight_report_inclusion(
-            insight,
             include_in_reports=(request.form.get("include_in_reports") == "yes"),
         )
         save_visualization_insight(
@@ -2980,9 +2876,9 @@ def update_visualization_insight_report_inclusion(dataset_id: str, visualization
             visualization_id=visualization_id,
         )
     notice = (
-        "Chart insights will be included when this visualization is selected for a report."
+        "Verified observations will be included when this visualization is selected for a report."
         if updated.include_in_reports
-        else "Chart insights will remain saved but will not be included in reports."
+        else "Verified observations will remain saved but will not be included in reports."
     )
     return _redirect_with_state(
         "core.saved_visualization",
@@ -3251,6 +3147,34 @@ def _workspace_directories() -> WorkspaceDirectories:
     )
 
 
+def _workspace_purge_directories() -> WorkspacePurgeDirectories:
+    return WorkspacePurgeDirectories(
+        upload_dir=Path(current_app.config["UPLOAD_DIR"]),
+        workspace_dir=Path(current_app.config["WORKSPACE_DIR"]),
+        configuration_dir=Path(current_app.config["CONFIGURATION_DIR"]),
+        insight_dir=Path(current_app.config["INSIGHT_DIR"]),
+        evidence_dir=Path(current_app.config["EVIDENCE_DIR"]),
+        chart_dir=Path(current_app.config["CHART_DIR"]),
+        visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
+        visualization_insight_dir=Path(
+            current_app.config["VISUALIZATION_INSIGHT_DIR"]
+        ),
+        report_configuration_dir=Path(
+            current_app.config["REPORT_CONFIGURATION_DIR"]
+        ),
+        report_package_dir=Path(current_app.config["REPORT_PACKAGE_DIR"]),
+        generated_report_dir=Path(current_app.config["GENERATED_REPORT_DIR"]),
+        generated_report_asset_dir=Path(
+            current_app.config["GENERATED_REPORT_ASSET_DIR"]
+        ),
+        visualization_preview_dir=Path(
+            current_app.config["VISUALIZATION_PREVIEW_DIR"]
+        ),
+        navigation_state_dir=Path(current_app.config["NAVIGATION_STATE_DIR"]),
+        trash_dir=Path(current_app.config["TRASH_DIR"]),
+    )
+
+
 def _workspace_resume_url(workspace: WorkspaceSummary) -> str:
     dataset_id = workspace.record.dataset_id
     if workspace.stage in {"source_required", "source_archived"}:
@@ -3274,6 +3198,97 @@ def _workspace_resume_url(workspace: WorkspaceSummary) -> str:
         endpoint_by_stage[workspace.stage],
         dataset_id=dataset_id,
     )
+
+
+def _workspace_progress_steps(
+    workspace: WorkspaceSummary,
+    *,
+    source_ready: bool,
+    configuration_ready: bool,
+    evidence_ready: bool,
+    visualization_ready: bool,
+    report_configuration_ready: bool,
+) -> tuple[dict[str, object], ...]:
+    """Build the presentation-only five-step workspace progress model."""
+
+    dataset_id = workspace.record.dataset_id
+    report_ready = workspace.report_run_count > 0
+    completed = (
+        source_ready,
+        configuration_ready,
+        evidence_ready,
+        visualization_ready,
+        report_ready,
+    )
+    current_index = next(
+        (index for index, is_complete in enumerate(completed) if not is_complete),
+        len(completed) - 1,
+    )
+    available = (
+        True,
+        source_ready,
+        configuration_ready,
+        source_ready,
+        evidence_ready or report_configuration_ready or report_ready,
+    )
+    urls: tuple[str | None, ...] = (
+        url_for("core.workspace_detail", dataset_id=dataset_id) + "#data-source",
+        (
+            url_for("core.saved_configuration", dataset_id=dataset_id)
+            if configuration_ready
+            else url_for("core.dataset_profile", dataset_id=dataset_id)
+            if source_ready
+            else None
+        ),
+        (
+            url_for("core.saved_insights", dataset_id=dataset_id)
+            if evidence_ready
+            else url_for("core.saved_configuration", dataset_id=dataset_id)
+            if configuration_ready
+            else None
+        ),
+        (
+            url_for("core.saved_visualizations", dataset_id=dataset_id)
+            if source_ready
+            else None
+        ),
+        (
+            url_for("core.generated_report_history", dataset_id=dataset_id)
+            if report_ready
+            else url_for("core.report_configuration_form", dataset_id=dataset_id)
+            if evidence_ready
+            else None
+        ),
+    )
+    labels = ("Source", "KPI setup", "Evidence", "Dashboard", "Report")
+    steps: list[dict[str, object]] = []
+    for index, label in enumerate(labels):
+        if completed[index]:
+            state = "complete"
+            status_label = "Complete"
+        elif index == current_index:
+            state = "current"
+            status_label = "Current"
+        elif available[index]:
+            state = "available"
+            status_label = "Available"
+        else:
+            state = "locked"
+            status_label = "Locked"
+        steps.append(
+            {
+                "number": index + 1,
+                "label": label,
+                "state": state,
+                "status_label": status_label,
+                "url": (
+                    urls[index]
+                    if available[index] and not workspace.record.is_archived
+                    else None
+                ),
+            }
+        )
+    return tuple(steps)
 
 
 def _workspace_create_report_url(

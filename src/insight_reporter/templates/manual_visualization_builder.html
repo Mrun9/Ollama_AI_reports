@@ -1,393 +1,16 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Build Manual Visualization | AI Insight Reporter</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --accent: #2563eb;
-        --accent-dark: #1d4ed8;
-        --background: #eef2f7;
-        --border: #d6deea;
-        --muted: #64748b;
-        --panel: #ffffff;
-        --text: #172033;
-      }
-      * { box-sizing: border-box; }
-      body {
-        background: var(--background);
-        color: var(--text);
-        font-family: system-ui, sans-serif;
-        line-height: 1.45;
-        margin: 0;
-      }
-      a { color: var(--accent-dark); }
-      button, input { font: inherit; }
-      .page-shell {
-        margin: 0 auto;
-        max-width: 1600px;
-        padding: 1rem clamp(0.75rem, 2vw, 2rem) 2rem;
-      }
-      .builder-header {
-        align-items: center;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        justify-content: space-between;
-        margin: 0.75rem 0 1rem;
-      }
-      .builder-header h1 { font-size: 1.45rem; margin: 0; }
-      .builder-header p { color: var(--muted); margin: 0.2rem 0 0; }
-      .header-actions { display: flex; gap: 0.5rem; }
-      .header-actions button {
-        border: 1px solid var(--border);
-        border-radius: 0.45rem;
-        padding: 0.55rem 0.8rem;
-      }
-      .header-actions button:disabled { cursor: not-allowed; opacity: 0.55; }
-      .board {
-        display: grid;
-        gap: 0;
-        grid-template-columns: 15rem minmax(24rem, 1fr) 20rem;
-        min-height: 44rem;
-      }
-      .panel {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        min-width: 0;
-        padding: 1rem;
-      }
-      .fields-panel { border-radius: 0.75rem 0 0 0.75rem; }
-      .controls-panel { border-radius: 0 0.75rem 0.75rem 0; }
-      .panel h2 { font-size: 1rem; margin: 0 0 0.75rem; }
-      .panel-help { color: var(--muted); font-size: 0.82rem; margin: -0.4rem 0 0.8rem; }
-      .field-search {
-        border: 1px solid #aeb9c8;
-        border-radius: 0.45rem;
-        padding: 0.55rem 0.65rem;
-        width: 100%;
-      }
-      .field-list {
-        display: grid;
-        gap: 1rem;
-        margin-top: 0.75rem;
-        max-height: 37rem;
-        overflow-y: auto;
-        padding-right: 0.2rem;
-      }
-      .field-group { display: grid; gap: 0.35rem; }
-      .field-group h3 {
-        align-items: center;
-        background: var(--panel);
-        color: #334155;
-        display: flex;
-        font-size: 0.8rem;
-        gap: 0.4rem;
-        margin: 0;
-        padding: 0.15rem 0;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-      }
-      .role-badge {
-        align-items: center;
-        background: #dbeafe;
-        border-radius: 0.3rem;
-        color: #1e40af;
-        display: inline-flex;
-        font-size: 0.68rem;
-        font-weight: 800;
-        height: 1.45rem;
-        justify-content: center;
-        min-width: 1.8rem;
-        padding: 0 0.35rem;
-      }
-      .field-group-help, .empty-field-group {
-        color: var(--muted);
-        font-size: 0.72rem;
-        margin: 0 0 0.15rem;
-      }
-      .field-card {
-        align-items: center;
-        background: #fff;
-        border: 1px solid transparent;
-        border-radius: 0.45rem;
-        color: var(--text);
-        cursor: grab;
-        display: grid;
-        gap: 0.55rem;
-        grid-template-columns: 2rem minmax(0, 1fr);
-        padding: 0.55rem;
-        text-align: left;
-        touch-action: none;
-        width: 100%;
-      }
-      .field-card:hover, .field-card:focus-visible {
-        background: #eff6ff;
-        border-color: #93c5fd;
-        outline: 0;
-      }
-      .field-card.is-assigned { background: #eff6ff; }
-      .field-symbol {
-        align-items: center;
-        background: #e8eef7;
-        border-radius: 0.35rem;
-        color: #334155;
-        display: inline-flex;
-        font-size: 0.68rem;
-        font-weight: 800;
-        height: 1.8rem;
-        justify-content: center;
-        width: 1.8rem;
-      }
-      .field-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .drag-ghost {
-        background: #fff;
-        border: 1px solid var(--accent);
-        border-radius: 0.45rem;
-        box-shadow: 0 0.6rem 1.5rem rgb(15 23 42 / 20%);
-        left: 0;
-        max-width: 15rem;
-        padding: 0.55rem 0.75rem;
-        pointer-events: none;
-        position: fixed;
-        top: 0;
-        transform: translate(0.8rem, 0.8rem);
-        z-index: 20;
-      }
-      .canvas-panel {
-        background-color: #f8fafc;
-        background-image: radial-gradient(#cbd5e1 0.8px, transparent 0.8px);
-        background-size: 18px 18px;
-        border-block: 1px solid var(--border);
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-        padding: 1.25rem;
-      }
-      .canvas-toolbar {
-        align-items: center;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.7rem;
-        justify-content: space-between;
-        margin-bottom: 0.75rem;
-      }
-      .canvas-toolbar input {
-        background: rgb(255 255 255 / 92%);
-        border: 1px solid var(--border);
-        border-radius: 0.45rem;
-        font-weight: 700;
-        max-width: 28rem;
-        padding: 0.5rem 0.65rem;
-        width: 100%;
-      }
-      .chart-status {
-        background: #e0e7ff;
-        border-radius: 999px;
-        color: #3730a3;
-        font-size: 0.75rem;
-        font-weight: 750;
-        padding: 0.25rem 0.6rem;
-        white-space: nowrap;
-      }
-      .visual-tile {
-        background: #fff;
-        border: 2px solid #93c5fd;
-        border-radius: 0.7rem;
-        box-shadow: 0 0.5rem 1.2rem rgb(31 47 74 / 9%);
-        display: grid;
-        flex: 1;
-        min-height: 32rem;
-        overflow: hidden;
-        place-items: center;
-        position: relative;
-      }
-      .empty-state {
-        color: var(--muted);
-        max-width: 28rem;
-        padding: 2rem;
-        text-align: center;
-      }
-      .empty-icon {
-        color: #94a3b8;
-        display: block;
-        margin: 0 auto 0.8rem;
-        width: 4rem;
-      }
-      #chart-preview { display: block; height: 100%; min-height: 30rem; width: 100%; }
-      .chart-message {
-        background: #fff7ed;
-        border: 1px solid #fed7aa;
-        border-radius: 0.5rem;
-        color: #9a3412;
-        margin: 1rem;
-        padding: 0.8rem;
-      }
-      .chart-meta {
-        bottom: 0.5rem;
-        color: var(--muted);
-        font-size: 0.72rem;
-        left: 0.75rem;
-        position: absolute;
-      }
-      .chart-gallery {
-        display: grid;
-        gap: 0.55rem;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        margin-bottom: 1.25rem;
-      }
-      .chart-choice {
-        align-items: center;
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: 0.45rem;
-        color: #334155;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-        justify-content: center;
-        min-height: 5.2rem;
-        padding: 0.55rem 0.35rem;
-        position: relative;
-        text-align: center;
-      }
-      .chart-choice:hover, .chart-choice:focus-visible { border-color: #60a5fa; }
-      .chart-choice.is-selected {
-        background: #dbeafe;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 2px var(--accent);
-        color: var(--accent-dark);
-      }
-      .chart-choice.is-selected::before {
-        align-items: center;
-        background: var(--accent);
-        border-radius: 50%;
-        color: #fff;
-        content: "✓";
-        display: flex;
-        font-size: 0.65rem;
-        font-weight: 900;
-        height: 1.15rem;
-        justify-content: center;
-        position: absolute;
-        right: 0.3rem;
-        top: 0.3rem;
-        width: 1.15rem;
-      }
-      .chart-choice svg {
-        color: currentColor;
-        display: block;
-        flex: 0 0 auto;
-        height: 2rem;
-        width: 2rem;
-      }
-      .chart-choice-label {
-        display: block;
-        font-size: 0.68rem;
-        font-weight: 650;
-        line-height: 1.15;
-      }
-      .chart-choice.is-selected .chart-choice-label { font-weight: 800; }
-      .axis-wells { display: grid; gap: 0.8rem; }
-      .axis-well label { display: block; font-size: 0.8rem; font-weight: 750; margin-bottom: 0.3rem; }
-      .drop-zone {
-        align-items: center;
-        background: #f8fafc;
-        border: 1px dashed #94a3b8;
-        border-radius: 0.5rem;
-        color: var(--muted);
-        display: flex;
-        min-height: 3.2rem;
-        padding: 0.5rem;
-      }
-      .drop-zone.is-target {
-        background: #dbeafe;
-        border-color: var(--accent);
-        color: var(--accent-dark);
-      }
-      .axis-placeholder { font-size: 0.8rem; }
-      .field-pill {
-        align-items: center;
-        background: #dbeafe;
-        border: 1px solid #93c5fd;
-        border-radius: 999px;
-        color: #1e3a8a;
-        display: flex;
-        font-size: 0.8rem;
-        font-weight: 700;
-        gap: 0.35rem;
-        max-width: 100%;
-        padding: 0.32rem 0.45rem 0.32rem 0.65rem;
-      }
-      .field-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .field-pill button {
-        background: transparent;
-        border: 0;
-        border-radius: 50%;
-        color: inherit;
-        cursor: pointer;
-        line-height: 1;
-        padding: 0.1rem 0.2rem;
-      }
-      .tip {
-        background: #f8fafc;
-        border-top: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 0.78rem;
-        margin: 1.25rem -1rem -1rem;
-        padding: 0.8rem 1rem;
-      }
-      .chart-settings {
-        border-top: 1px solid var(--border);
-        display: grid;
-        gap: 0.75rem;
-        margin-top: 1rem;
-        padding-top: 1rem;
-      }
-      .chart-settings h2 { margin-bottom: 0; }
-      .setting-field label {
-        display: block;
-        font-size: 0.78rem;
-        font-weight: 750;
-        margin-bottom: 0.3rem;
-      }
-      .setting-field input, .setting-field select {
-        border: 1px solid #aeb9c8;
-        border-radius: 0.4rem;
-        padding: 0.48rem 0.55rem;
-        width: 100%;
-      }
-      [hidden] { display: none !important; }
-      @media (max-width: 64rem) {
-        .board { grid-template-columns: 13rem minmax(20rem, 1fr); }
-        .controls-panel {
-          border-radius: 0 0 0.75rem 0.75rem;
-          grid-column: 1 / -1;
-        }
-        .chart-gallery { grid-template-columns: repeat(6, minmax(5rem, 1fr)); }
-      }
-      @media (max-width: 44rem) {
-        .board { display: flex; flex-direction: column; }
-        .fields-panel, .controls-panel { border-radius: 0; }
-        .canvas-panel { border: 1px solid var(--border); min-height: 34rem; order: 3; }
-        .controls-panel { order: 2; }
-        .field-list { max-height: 15rem; }
-        .chart-gallery { grid-template-columns: repeat(3, 1fr); }
-      }
-    </style>
-    <script src="{{ url_for('static', filename='manual_visualization_builder.js') }}" defer></script>
-  </head>
-  <body>
-    <main class="page-shell" id="manual-visualization-board"
+{% extends "base.html" %}
+
+{% block title %}Build Manual Visualization | AI Insight Reporter{% endblock %}
+
+{% block styles %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='manual_visualization_builder.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="page-shell" id="manual-visualization-board"
       data-preview-url="{{ url_for('core.manual_visualization_preview_data', dataset_id=dataset_id) }}"
       data-save-url="{{ url_for('core.save_manual_visualization_board', dataset_id=dataset_id) }}">
       <script type="application/json" id="manual-initial-state">{{ (manual_initial_state or {})|tojson }}</script>
-      {% set current_section = "dashboard" %}
-      {% include "_report_project_navigation.html" %}
 
       <header class="builder-header">
         <div>
@@ -399,103 +22,63 @@
         </div>
       </header>
 
+      {% macro field_button(column, preferred_axis) -%}
+        <button type="button" class="field-card"
+          data-field-name="{{ column.name }}"
+          data-field-kind="{{ column.inferred_type.value }}"
+          data-preferred-axis="{{ preferred_axis }}"
+          title="{{ column.inferred_type.value }} · {{ column.unique_count }} unique value(s)">
+          <span class="field-symbol" aria-hidden="true">
+            {% if column.inferred_type.value == "numeric" %}#
+            {% elif column.inferred_type.value == "date/time" %}CAL
+            {% elif column.inferred_type.value == "boolean" %}T/F
+            {% elif column.inferred_type.value == "identifier" %}ID
+            {% else %}ABC{% endif %}
+          </span>
+          <span class="field-name">{{ column.name }}</span>
+        </button>
+      {%- endmacro %}
+
       <div class="board">
-        <aside class="panel fields-panel" aria-labelledby="data-fields-heading">
-          <h2 id="data-fields-heading">Data fields</h2>
-          <p class="panel-help">Fields are grouped by where they can be used.</p>
-          <label for="field-search" class="panel-help">Search available fields</label>
-          <input class="field-search" id="field-search" type="search" placeholder="Search fields…">
-
-          {% macro field_button(column, preferred_axis) -%}
-            <button type="button" class="field-card"
-              data-field-name="{{ column.name }}"
-              data-field-kind="{{ column.inferred_type.value }}"
-              data-preferred-axis="{{ preferred_axis }}"
-              title="{{ column.inferred_type.value }} · {{ column.unique_count }} unique value(s)">
-              <span class="field-symbol" aria-hidden="true">
-                {% if column.inferred_type.value == "numeric" %}#
-                {% elif column.inferred_type.value == "date/time" %}CAL
-                {% elif column.inferred_type.value == "boolean" %}T/F
-                {% elif column.inferred_type.value == "identifier" %}ID
-                {% else %}ABC{% endif %}
-              </span>
-              <span class="field-name">{{ column.name }}</span>
-            </button>
-          {%- endmacro %}
-
-          <div class="field-list" id="field-list">
-            <section class="field-group" data-field-group="x" aria-labelledby="x-fields-heading">
-              <h3 id="x-fields-heading"><span class="role-badge">X</span> X-axis fields</h3>
-              <p class="field-group-help">Categories, dates, and numbers for grouping or comparison.</p>
-              {% if profile.category_candidates or profile.date_candidates or profile.kpi_candidates %}
-                {% for column in profile.columns %}
-                  {% if column.name in profile.category_candidates or column.name in profile.date_candidates or column.name in profile.kpi_candidates %}
-                    {{ field_button(column, "x") }}
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                <p class="empty-field-group">No compatible X-axis fields.</p>
-              {% endif %}
-            </section>
-
-            <section class="field-group" data-field-group="y" aria-labelledby="y-fields-heading">
-              <h3 id="y-fields-heading"><span class="role-badge">Y</span> Y-axis fields</h3>
-              <p class="field-group-help">Numeric measures that can be aggregated.</p>
-              {% if profile.kpi_candidates %}
-                {% for column in profile.columns %}
-                  {% if column.name in profile.kpi_candidates %}
-                    {{ field_button(column, "y") }}
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                <p class="empty-field-group">No numeric Y-axis fields.</p>
-              {% endif %}
-            </section>
-
-            <section class="field-group" data-field-group="series" aria-labelledby="legend-fields-heading">
-              <h3 id="legend-fields-heading"><span class="role-badge">L</span> Legend fields</h3>
-              <p class="field-group-help">Categories with a manageable number of values.</p>
-              {% if profile.category_candidates %}
-                {% for column in profile.columns %}
-                  {% if column.name in profile.category_candidates %}
-                    {{ field_button(column, "series") }}
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                <p class="empty-field-group">No compatible Legend fields.</p>
-              {% endif %}
-            </section>
-
-            <section class="field-group" data-field-group="size" aria-labelledby="size-fields-heading">
-              <h3 id="size-fields-heading"><span class="role-badge">S</span> Size fields</h3>
-              <p class="field-group-help">Positive numeric values used to size bubbles.</p>
-              {% if profile.kpi_candidates %}
-                {% for column in profile.columns %}
-                  {% if column.name in profile.kpi_candidates %}
-                    {{ field_button(column, "size") }}
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                <p class="empty-field-group">No numeric Size fields.</p>
-              {% endif %}
-            </section>
-
-            <section class="field-group" id="secondary-y-field-group"
-              data-field-group="secondary_y" aria-labelledby="secondary-y-fields-heading" hidden>
-              <h3 id="secondary-y-fields-heading"><span class="role-badge">Y2</span> Line value fields</h3>
-              <p class="field-group-help">A second numeric measure for combo charts.</p>
-              {% if profile.kpi_candidates %}
-                {% for column in profile.columns %}
-                  {% if column.name in profile.kpi_candidates %}
-                    {{ field_button(column, "secondary_y") }}
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                <p class="empty-field-group">No numeric Secondary Y fields.</p>
-              {% endif %}
-            </section>
+        <section class="axis-library y-axis-library" data-drop-zone="y"
+          data-field-group="y" aria-labelledby="y-fields-heading">
+          <div class="axis-library-header">
+            <div>
+              <h2 id="y-fields-heading"><span class="role-badge">Y</span> Measures</h2>
+              <p>Numeric fields for the value axis</p>
+            </div>
+            <label class="visually-hidden" for="field-search">Search fields</label>
+            <input class="field-search" id="field-search" type="search" placeholder="Search…">
           </div>
-        </aside>
+          <div class="y-field-list">
+            {% if profile.kpi_candidates %}
+              {% for column in profile.columns %}
+                {% if column.name in profile.kpi_candidates %}
+                  {{ field_button(column, "y") }}
+                {% endif %}
+              {% endfor %}
+            {% else %}
+              <p class="empty-field-group">No numeric measures detected.</p>
+            {% endif %}
+          </div>
+        </section>
+
+        <section class="axis-library x-axis-library" data-drop-zone="x"
+          data-field-group="x" aria-labelledby="x-fields-heading">
+          <div class="axis-library-header">
+            <div>
+              <h2 id="x-fields-heading"><span class="role-badge">X</span> X-axis fields</h2>
+              <p>Categories, dates, or numbers</p>
+            </div>
+          </div>
+          <div class="x-field-list">
+            {% for column in profile.columns %}
+              {{ field_button(column, "x") }}
+            {% else %}
+              <p class="empty-field-group">No fields detected.</p>
+            {% endfor %}
+          </div>
+        </section>
 
         <section class="canvas-panel" aria-labelledby="canvas-title">
           <div class="canvas-toolbar">
@@ -521,9 +104,11 @@
           </div>
         </section>
 
-        <aside class="panel controls-panel" aria-labelledby="visualizations-heading">
-          <h2 id="visualizations-heading">Visualizations</h2>
-          <p class="panel-help">Automatic chooses a chart from the assigned field types.</p>
+        <section class="chart-toolbar" aria-labelledby="visualizations-heading">
+          <div class="chart-toolbar-copy">
+            <h2 id="visualizations-heading">Chart type</h2>
+            <p>Automatic recommends a compatible visual.</p>
+          </div>
           <div class="chart-gallery" role="group" aria-label="Visualization type">
             <button type="button" class="chart-choice is-selected" data-chart-type="auto"
               aria-pressed="true" title="Automatic">
@@ -638,39 +223,46 @@
               <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 5h24v22H4zM6 7v4h20V7zm0 6v5h8v-5zm10 0v5h10v-5zM6 20v5h8v-5zm10 0v5h10v-5z" fill="currentColor"/></svg>
             </button>
           </div>
+        </section>
 
-          <h2>Build visual</h2>
-          <div class="axis-wells">
-            <div class="axis-well">
-              <label for="x-axis-zone">X-axis</label>
-              <div class="drop-zone" id="x-axis-zone" data-drop-zone="x">
-                <span class="axis-placeholder">Drop a category, date, or number</span>
-              </div>
-            </div>
-            <div class="axis-well">
-              <label for="y-axis-zone">Y-axis</label>
-              <div class="drop-zone" id="y-axis-zone" data-drop-zone="y">
-                <span class="axis-placeholder">Drop a numeric field</span>
-              </div>
-            </div>
-            <div class="axis-well">
-              <label for="legend-zone">Legend</label>
-              <div class="drop-zone" id="legend-zone" data-drop-zone="series">
-                <span class="axis-placeholder">Drop a category to split the values</span>
-              </div>
-            </div>
-            <div class="axis-well">
-              <label for="size-zone">Size</label>
-              <div class="drop-zone" id="size-zone" data-drop-zone="size">
-                <span class="axis-placeholder">Drop a positive numeric field for bubbles</span>
-              </div>
-            </div>
-            <div class="axis-well" id="secondary-y-axis-well" hidden>
-              <label for="secondary-y-zone">Secondary Y</label>
-              <div class="drop-zone" id="secondary-y-zone" data-drop-zone="secondary_y">
-                <span class="axis-placeholder">Drop the numeric line value</span>
-              </div>
-            </div>
+        <aside class="panel controls-panel" aria-labelledby="visual-options-heading">
+          <div class="controls-heading">
+            <h2 id="visual-options-heading">Visual options</h2>
+            <p>Optional fields for the selected chart</p>
+          </div>
+          <div class="setting-field option-drop-target" data-drop-zone="series">
+            <label for="legend-field-select">Legend</label>
+            <select id="legend-field-select">
+              <option value="">None</option>
+              {% for column in profile.columns %}
+                {% if column.name in profile.category_candidates %}
+                  <option value="{{ column.name }}">{{ column.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="setting-field option-drop-target" data-drop-zone="size">
+            <label for="size-field-select">Size</label>
+            <select id="size-field-select">
+              <option value="">None</option>
+              {% for column in profile.columns %}
+                {% if column.name in profile.kpi_candidates %}
+                  <option value="{{ column.name }}">{{ column.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="setting-field option-drop-target" id="secondary-y-setting"
+            data-drop-zone="secondary_y" hidden>
+            <label for="secondary-y-field-select">Secondary Y</label>
+            <select id="secondary-y-field-select">
+              <option value="">None</option>
+              {% for column in profile.columns %}
+                {% if column.name in profile.kpi_candidates %}
+                  <option value="{{ column.name }}">{{ column.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
           </div>
           <section class="chart-settings" aria-labelledby="chart-settings-heading">
             <h2 id="chart-settings-heading">Chart settings</h2>
@@ -690,9 +282,12 @@
             </div>
             <p class="panel-help" id="no-chart-settings">Select a chart with configurable settings.</p>
           </section>
-          <p class="tip">Tip: clicking a field assigns it to the section where it appears. Drag it when you want a different role.</p>
+          <p class="tip">Click a field to assign it, or drag it onto the canvas or another field area.</p>
         </aside>
       </div>
-    </main>
-  </body>
-</html>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='manual_visualization_builder.js') }}"></script>
+{% endblock %}

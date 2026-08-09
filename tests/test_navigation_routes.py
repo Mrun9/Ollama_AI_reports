@@ -76,6 +76,46 @@ def test_profile_configuration_and_insight_pages_use_reloadable_get_urls(
     )
 
 
+def test_project_navigation_is_available_across_workspace_workflow_pages(
+    client: FlaskClient,
+) -> None:
+    dataset_id, profile_location = _upload_redirect(client)
+    configured = client.post(
+        f"/configure/{dataset_id}",
+        data={
+            "primary_kpi": "revenue",
+            "kpi_direction": "higher",
+            "date_column": "date",
+            "category_columns": ["region"],
+            "target_or_benchmark": "100",
+            "business_objective": "Evaluate revenue by region.",
+        },
+    )
+    assert configured.status_code == 303
+
+    expected_links = (
+        f'href="/workspaces/{dataset_id}"'.encode(),
+        f'href="/dataset/{dataset_id}"'.encode(),
+        f'href="/visualizations/{dataset_id}"'.encode(),
+        f'href="/reports/{dataset_id}/history"'.encode(),
+    )
+    pages = (
+        client.get(f"/workspaces/{dataset_id}"),
+        client.get(profile_location),
+        client.get(configured.headers["Location"]),
+        client.get(f"/workspaces/{dataset_id}/dashboard"),
+        client.get(f"/reports/{dataset_id}/history"),
+    )
+
+    for page in pages:
+        assert page.status_code == 200
+        for link in expected_links:
+            assert link in page.data
+
+    assert b"app-navbar" in pages[0].data
+    assert b"app-navbar" in pages[3].data
+
+
 def test_suggestion_and_derived_preview_state_survives_get_reload(
     client: FlaskClient, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]

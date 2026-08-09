@@ -1,0 +1,21 @@
+{% macro page_header(title, description=none, eyebrow=none) -%}
+  <header class="app-page-header">
+    {% if eyebrow %}<p class="app-eyebrow">{{ eyebrow }}</p>{% endif %}
+    <h1>{{ title }}</h1>
+    {% if description %}<p class="app-page-lead">{{ description }}</p>{% endif %}
+  </header>
+{%- endmacro %}
+
+{% macro alert(message, heading=none, variant="danger") -%}
+  <div class="alert alert-{{ variant }} d-flex flex-column gap-1" role="alert">
+    {% if heading %}<strong>{{ heading }}</strong>{% endif %}
+    <span>{{ message }}</span>
+  </div>
+{%- endmacro %}
+
+{% macro empty_state(title, description) -%}
+  <section class="app-empty-state">
+    <h3>{{ title }}</h3>
+    <p class="mb-0">{{ description }}</p>
+  </section>
+{%- endmacro %}

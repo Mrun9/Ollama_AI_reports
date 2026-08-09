@@ -1,346 +1,117 @@
+{% extends "base.html" %}
+{% from "_ui_macros.html" import page_header, alert %}
+
 {% macro evidence_option(record) -%}
-  <article>
+  <article class="report-selection-card">
     <label>
-      <input type="checkbox" name="selected_evidence_ids"
+      <input type="checkbox" name="selected_evidence_ids" class="form-check-input"
         value="{{ record.id }}"
         data-report-evidence-metric="{{ record.metric_id }}"
         data-report-evidence-recommended="{{ 'true' if record.id in recommended_evidence_ids else 'false' }}"
         {% if record.id in form_data.getlist('selected_evidence_ids') %}checked{% endif %}>
-      #{{ record.ranking.rank }} · {{ record.insight_type }}
-      ·
-      {% if record.metric_id == "DATASET" %}
-        dataset-wide
-      {% else %}
-        {{ record.metric }}
-      {% endif %}
-      · {{ record.id }}
+      <span>#{{ record.ranking.rank }} · {{ record.insight_type }} · {% if record.metric_id == "DATASET" %}dataset-wide{% else %}{{ record.metric }}{% endif %} · {{ record.id }}</span>
     </label>
-    <p>{{ record.calculation_description }}</p>
-    <p>
-      {{ record.record_count }} records
-      {% if record.chart %} · automatic chart available{% endif %}
-    </p>
+    <p>{{ record.calculation_description }}<br>{{ record.record_count }} records{% if record.chart %} · automatic chart available{% endif %}</p>
   </article>
 {%- endmacro %}
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Configure Report | AI Insight Reporter</title>
-    <script src="{{ url_for('static', filename='report_configuration.js') }}" defer></script>
-  </head>
-  <body>
-    <main>
-      {% set current_section = "next" %}
-      {% include "_report_project_navigation.html" %}
-      <h1>Configure the report</h1>
-      <p>
-        Milestone 5A selects trusted report content only. It does not call Ollama
-        or generate narrative text.
-      </p>
 
-      {% if report_error %}
-        <p role="alert">
-          <strong>Report configuration rejected:</strong> {{ report_error }}
-        </p>
-      {% endif %}
-      {% if stale_notice %}
-        <p role="alert">
-          <strong>Previous report selection was not reused:</strong>
-          {{ stale_notice }}
-        </p>
-        <p>
-          Recovery: return to the business configuration, regenerate deterministic
-          insights and evidence, reopen or regenerate any changed manual visualizations,
-          then review and save this report selection again.
-        </p>
-      {% endif %}
+{% block title %}Configure Report | AI Insight Reporter{% endblock %}
 
-      <form method="post"
-        action="{{ url_for('core.configure_report', dataset_id=dataset_id) }}">
-        <h2>Report details</h2>
-        <p>
-          <label for="report-title">Report title</label>
-          <input id="report-title" name="title" maxlength="200" required
-            value="{{ form_data.get('title', '') }}">
-        </p>
-        <p>
-          <label for="company-name">Optional company name</label>
-          <input id="company-name" name="company_name" maxlength="200"
-            value="{{ form_data.get('company_name', '') }}">
-        </p>
-        <p>
-          <label for="report-author">Optional report author</label>
-          <input id="report-author" name="report_author" maxlength="200"
-            value="{{ form_data.get('report_author', '') }}">
-        </p>
-        <p>
-          <label for="report-objective">Business objective</label>
-          <textarea id="report-objective" name="business_objective"
-            maxlength="2000" required>{{ form_data.get('business_objective', '') }}</textarea>
-        </p>
-        <p>
-          <label for="report-audience">Audience</label>
-          <select id="report-audience" name="audience" required>
-            {% for value in audiences %}
-              <option value="{{ value }}"
-                {% if form_data.get('audience') == value %}selected{% endif %}>
-                {{ value }}
-              </option>
-            {% endfor %}
-          </select>
-        </p>
-        <p>
-          <label for="report-tone">Tone</label>
-          <select id="report-tone" name="tone" required>
-            {% for value in tones %}
-              <option value="{{ value }}"
-                {% if form_data.get('tone') == value %}selected{% endif %}>
-                {{ value }}
-              </option>
-            {% endfor %}
-          </select>
-        </p>
-        <p>
-          <label for="report-detail">Detail level</label>
-          <select id="report-detail" name="detail_level" required>
-            {% for value in detail_levels %}
-              <option value="{{ value }}"
-                {% if form_data.get('detail_level') == value %}selected{% endif %}>
-                {{ value }}
-              </option>
-            {% endfor %}
-          </select>
-        </p>
+{% block content %}
+  {{ page_header("Configure the report", "Milestone 5A selects trusted report content only. It does not call Ollama or generate narrative text.", "Report builder") }}
 
-        <fieldset>
-          <legend>KPIs to include</legend>
-          <p>
-            Select at least one. Selecting a KPI selects only its recommended
-            evidence; deselecting it clears all of that KPI's records. You may
-            add any optional association or diagnostic manually. Dataset-wide
-            evidence is independent of the KPI selection.
-          </p>
+  {% if report_error %}{{ alert(report_error, "Report configuration rejected") }}{% endif %}
+  {% if stale_notice %}
+    {{ alert(stale_notice, "Previous report selection was not reused", "warning") }}
+    <p class="alert alert-secondary">Recovery: return to the business configuration, regenerate deterministic insights and evidence, reopen or regenerate changed manual visualizations, then review and save this selection again.</p>
+  {% endif %}
+
+  <form class="report-builder-layout" method="post" action="{{ url_for('core.configure_report', dataset_id=dataset_id) }}" data-loading-form>
+    <div>
+      <section class="form-section">
+        <h2 class="h4 mb-3">Report details</h2>
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label" for="report-title">Report title</label><input class="form-control" id="report-title" name="title" maxlength="200" required value="{{ form_data.get('title', '') }}"></div>
+          <div class="col-md-6"><label class="form-label" for="company-name">Optional company name</label><input class="form-control" id="company-name" name="company_name" maxlength="200" value="{{ form_data.get('company_name', '') }}"></div>
+          <div class="col-md-6"><label class="form-label" for="report-author">Optional report author</label><input class="form-control" id="report-author" name="report_author" maxlength="200" value="{{ form_data.get('report_author', '') }}"></div>
+          <div class="col-12"><label class="form-label" for="report-objective">Business objective</label><textarea class="form-control" id="report-objective" name="business_objective" rows="4" maxlength="2000" required>{{ form_data.get('business_objective', '') }}</textarea></div>
+          <div class="col-md-4"><label class="form-label" for="report-audience">Audience</label><select class="form-select" id="report-audience" name="audience" required>{% for value in audiences %}<option value="{{ value }}" {% if form_data.get('audience') == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+          <div class="col-md-4"><label class="form-label" for="report-tone">Tone</label><select class="form-select" id="report-tone" name="tone" required>{% for value in tones %}<option value="{{ value }}" {% if form_data.get('tone') == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+          <div class="col-md-4"><label class="form-label" for="report-detail">Detail level</label><select class="form-select" id="report-detail" name="detail_level" required>{% for value in detail_levels %}<option value="{{ value }}" {% if form_data.get('detail_level') == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+        </div>
+      </section>
+
+      <fieldset class="form-section">
+        <legend>KPIs to include</legend>
+        <p class="form-text">Select at least one. A selected KPI enables its recommended evidence; you can then add optional associations or diagnostics.</p>
+        <div class="choice-grid">
           {% for metric in configuration.metrics %}
-            <label>
-              <input type="checkbox" name="selected_metric_ids"
-                value="{{ metric.metric_id }}"
-                data-report-kpi="{{ metric.metric_id }}"
-                {% if metric.metric_id in form_data.getlist('selected_metric_ids') %}checked{% endif %}>
-              {{ metric.name }}
-              {% if metric.metric_id == configuration.primary_metric_id %}(primary){% endif %}
-              · {{ metric.metric_type }}
-              · {{ metric.kpi_direction }} is better
-            </label>
-            {% if metric.derived_metric %}
-              <p>
-                Formula: <code>{{ metric.derived_metric.formula_label }}</code>
-              </p>
-            {% endif %}
+            <label class="choice-card"><input class="form-check-input" type="checkbox" name="selected_metric_ids" value="{{ metric.metric_id }}" data-report-kpi="{{ metric.metric_id }}" {% if metric.metric_id in form_data.getlist('selected_metric_ids') %}checked{% endif %}><span><strong class="d-block">{{ metric.name }}{% if metric.metric_id == configuration.primary_metric_id %} <span class="badge text-bg-primary">Primary</span>{% endif %}</strong><small class="app-muted">{{ metric.metric_type }} · {{ metric.kpi_direction }} is better{% if metric.derived_metric %}<br>Formula: <code>{{ metric.derived_metric.formula_label }}</code>{% endif %}</small></span></label>
           {% endfor %}
-        </fieldset>
+        </div>
+      </fieldset>
 
-        <fieldset>
-          <legend>Decision-relevant deterministic findings</legend>
-          <p>
-            The initial selection is limited to the strongest management
-            findings. You can still add any unselected record.
-          </p>
-          {% if finding_evidence_records %}
-            {% for record in finding_evidence_records %}
-              {{ evidence_option(record) }}
-            {% endfor %}
-          {% elif not evidence_records %}
-            <p>
-              No deterministic evidence exists yet. A KPI-only report
-              selection can still be saved, or generate deterministic
-              insights first.
-            </p>
-          {% else %}
-            <p>
-              No decision-relevant deterministic findings exist yet. A
-              KPI-only report selection can still be saved.
-            </p>
-          {% endif %}
-        </fieldset>
+      <fieldset class="form-section">
+        <legend>Decision-relevant deterministic findings</legend>
+        <p class="form-text">The initial selection contains the strongest management findings. You can add any other record.</p>
+        {% if finding_evidence_records %}{% for record in finding_evidence_records %}{{ evidence_option(record) }}{% endfor %}
+        {% elif not evidence_records %}<p class="alert alert-secondary">No deterministic evidence exists yet. A KPI-only report selection can still be saved, or generate deterministic insights first.</p>
+        {% else %}<p class="alert alert-secondary">No decision-relevant deterministic findings exist yet. A KPI-only report selection can still be saved.</p>{% endif %}
+      </fieldset>
 
-        {% if association_evidence_records %}
-          <details>
-            <summary>
-              Optional numeric associations
-              ({{ association_evidence_records|length }})
-            </summary>
-            <p>
-              At most two strong associations are selected automatically.
-              Associations are descriptive and do not establish causation.
-            </p>
-            {% for record in association_evidence_records %}
-              {{ evidence_option(record) }}
-            {% endfor %}
-          </details>
-        {% endif %}
+      {% if association_evidence_records %}<details class="form-section app-details"><summary>Optional numeric associations ({{ association_evidence_records|length }})</summary><p class="form-text mt-2">At most two strong associations are selected automatically. Associations are descriptive and do not establish causation.</p>{% for record in association_evidence_records %}{{ evidence_option(record) }}{% endfor %}</details>{% endif %}
+      {% if diagnostic_evidence_records %}<details class="form-section app-details"><summary>Data-quality and analysis diagnostics ({{ diagnostic_evidence_records|length }})</summary><p class="form-text mt-2">Diagnostics remain reviewable but are not selected for a management report by default.</p>{% for record in diagnostic_evidence_records %}{{ evidence_option(record) }}{% endfor %}</details>{% endif %}
+      {% if not evidence_records %}<div class="mt-2"><a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">Return to the business configuration</a></div>{% endif %}
 
-        {% if diagnostic_evidence_records %}
-          <details>
-            <summary>
-              Data-quality and analysis diagnostics
-              ({{ diagnostic_evidence_records|length }})
-            </summary>
-            <p>
-              Diagnostics remain reviewable but are not selected for a
-              management report by default.
-            </p>
-            {% for record in diagnostic_evidence_records %}
-              {{ evidence_option(record) }}
-            {% endfor %}
-          </details>
-        {% endif %}
+      <fieldset class="form-section">
+        <legend>Saved automated visualizations</legend>
+        {% if visualizations %}
+          {% for artifact in visualizations %}
+            {% set required_metric_ids = visualization_metric_requirements.get(artifact.visualization_id, ()) %}
+            <article class="report-selection-card">
+              <label><input class="form-check-input" type="checkbox" name="selected_visualization_ids" value="{{ artifact.visualization_id }}" data-report-visualization-kpis="{{ required_metric_ids|join(',') }}" {% if not artifact.spec.include_in_report %}disabled{% endif %} {% if artifact.visualization_id in form_data.getlist('selected_visualization_ids') %}checked{% endif %}><span>{{ artifact.spec.title }} · {{ artifact.classification }}{% if not artifact.spec.include_in_report %} · not marked for report inclusion{% endif %}</span></label>
+              {% if required_metric_ids %}<p>Requires report KPI(s): {% for metric_id in required_metric_ids %}{{ metric_names.get(metric_id, metric_id) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+              {% set saved_insight = visualization_insights.get(artifact.visualization_id) %}
+              {% if saved_insight %}<p>Verified chart observations: {% if saved_insight.include_in_reports %}{{ saved_insight.facts|length }} observation(s) will accompany this chart into the report.{% else %}available on the dashboard but excluded from reports.{% endif %} <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">Review observations</a></p>
+              {% else %}<p>No requested chart insight is saved. <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">Ask for insight</a></p>{% endif %}
+            </article>
+          {% endfor %}
+        {% else %}<p class="alert alert-secondary mb-0">No saved manual visualizations are available from the automated builder. This is optional.</p>{% endif %}
+      </fieldset>
 
-        {% if not evidence_records %}
-          <p>
-            <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
-              Return to the business configuration
-            </a>
-          </p>
-        {% endif %}
+      <fieldset class="form-section">
+        <legend>Saved manual-board visualizations</legend>
+        <p class="form-text">Selected board charts include their saved image and Python-calculated observations. Raw source rows are not sent to report narration.</p>
+        {% if manual_boards %}
+          {% for artifact in manual_boards %}
+            <article class="report-selection-card">
+              <label><input class="form-check-input" type="checkbox" name="selected_manual_board_ids" value="{{ artifact.visualization_id }}" {% if not artifact.png_filename %}disabled{% endif %} {% if artifact.visualization_id in form_data.getlist('selected_manual_board_ids') %}checked{% endif %}><span>{{ artifact.title }} · {{ artifact.chart_type|replace("_", " ") }}{% if not artifact.png_filename %} · re-save before report export{% endif %}</span></label>
+              <p>{{ artifact.preview.get("record_count", 0) }} source record(s) · fields: {{ artifact.fields.values()|select|join(", ") }} · deterministic chart evidence will be generated automatically{% if not artifact.png_filename %} · reopen this chart and save it once to prepare its PDF image{% endif %}</p>
+              {% set saved_insight = visualization_insights.get(artifact.visualization_id) %}
+              {% if saved_insight %}<p>Verified chart observations: {% if saved_insight.include_in_reports %}{{ saved_insight.facts|length }} observation(s) will accompany this board into the report.{% else %}available on the dashboard but excluded from reports.{% endif %} <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">Review observations</a></p>
+              {% else %}<p>No requested chart insight is saved. <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">Ask for insight</a></p>{% endif %}
+            </article>
+          {% endfor %}
+        {% else %}<p class="alert alert-secondary mb-0">No saved manual-board visualizations are available. This is optional.</p>{% endif %}
+      </fieldset>
 
-        <fieldset>
-          <legend>Saved automated visualizations</legend>
-          {% if visualizations %}
-            {% for artifact in visualizations %}
-              {% set required_metric_ids = visualization_metric_requirements.get(
-                artifact.visualization_id, ()
-              ) %}
-              <label>
-                <input type="checkbox" name="selected_visualization_ids"
-                  value="{{ artifact.visualization_id }}"
-                  data-report-visualization-kpis="{{ required_metric_ids|join(',') }}"
-                  {% if not artifact.spec.include_in_report %}disabled{% endif %}
-                  {% if artifact.visualization_id in form_data.getlist('selected_visualization_ids') %}checked{% endif %}>
-                {{ artifact.spec.title }} · {{ artifact.classification }}
-                {% if not artifact.spec.include_in_report %}
-                  · not marked for report inclusion
-                {% endif %}
-              </label>
-              {% if required_metric_ids %}
-                <p>
-                  Requires report KPI(s):
-                  {% for metric_id in required_metric_ids %}
-                    {{ metric_names.get(metric_id, metric_id) }}{% if not loop.last %}, {% endif %}
-                  {% endfor %}
-                </p>
-              {% endif %}
-              {% set saved_insight = visualization_insights.get(
-                artifact.visualization_id
-              ) %}
-              {% if saved_insight %}
-                <p>
-                  Saved chart insight:
-                  {% if saved_insight.include_in_reports %}
-                    {{ saved_insight.points|length }} grounded finding(s) will
-                    accompany this chart into the report.
-                  {% else %}
-                    available on the dashboard but excluded from reports.
-                  {% endif %}
-                  <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
-                    Review insight
-                  </a>
-                </p>
-              {% else %}
-                <p>
-                  No requested chart insight is saved.
-                  <a href="{{ url_for('core.saved_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
-                    Ask for insight
-                  </a>
-                </p>
-              {% endif %}
-            {% endfor %}
-          {% else %}
-            <p>No saved manual visualizations are available from the automated builder. This is optional.</p>
-          {% endif %}
-        </fieldset>
+      <section class="form-section">
+        <h2 class="h5">Final options</h2>
+        <label class="form-label" for="report-notes">Optional user notes</label><textarea class="form-control" id="report-notes" name="user_notes" rows="4" maxlength="5000">{{ form_data.get('user_notes', '') }}</textarea><p class="form-text">User notes remain explicitly labelled as user-provided content.</p>
+        <label class="choice-card"><input class="form-check-input" type="checkbox" name="include_evidence_appendix" value="yes" {% if form_data.get('include_evidence_appendix') %}checked{% endif %}>Include the evidence appendix</label>
+      </section>
+    </div>
 
-        <fieldset>
-          <legend>Saved manual-board visualizations</legend>
-          <p>
-            Selected board charts are added with their saved image and
-            Python-calculated observations. Report insight generation receives
-            only the bounded chart data, not raw source rows.
-          </p>
-          {% if manual_boards %}
-            {% for artifact in manual_boards %}
-              <label>
-                <input type="checkbox" name="selected_manual_board_ids"
-                  value="{{ artifact.visualization_id }}"
-                  {% if not artifact.png_filename %}disabled{% endif %}
-                  {% if artifact.visualization_id in form_data.getlist('selected_manual_board_ids') %}checked{% endif %}>
-                {{ artifact.title }} · {{ artifact.chart_type|replace("_", " ") }}
-                {% if not artifact.png_filename %} · re-save before report export{% endif %}
-              </label>
-              <p>
-                {{ artifact.preview.get("record_count", 0) }} source record(s)
-                · fields: {{ artifact.fields.values()|select|join(", ") }}
-                · deterministic chart evidence will be generated automatically
-                {% if not artifact.png_filename %}
-                  · reopen this chart and save it once to prepare its PDF image
-                {% endif %}
-              </p>
-              {% set saved_insight = visualization_insights.get(
-                artifact.visualization_id
-              ) %}
-              {% if saved_insight %}
-                <p>
-                  Saved chart insight:
-                  {% if saved_insight.include_in_reports %}
-                    {{ saved_insight.points|length }} grounded finding(s) will
-                    accompany this board into the report.
-                  {% else %}
-                    available on the dashboard but excluded from reports.
-                  {% endif %}
-                  <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
-                    Review insight
-                  </a>
-                </p>
-              {% else %}
-                <p>
-                  No requested chart insight is saved.
-                  <a href="{{ url_for('core.saved_manual_visualization', dataset_id=dataset_id, visualization_id=artifact.visualization_id) }}">
-                    Ask for insight
-                  </a>
-                </p>
-              {% endif %}
-            {% endfor %}
-          {% else %}
-            <p>No saved manual-board visualizations are available. This is optional.</p>
-          {% endif %}
-        </fieldset>
+    <aside class="report-builder-sidebar">
+      <section class="app-card">
+        <p class="app-eyebrow mb-1">Selection summary</p><h2 class="h5">Report contents</h2>
+        <dl class="app-definition-list mb-3"><dt>KPIs</dt><dd data-report-count="selected_metric_ids">0</dd><dt>Evidence</dt><dd data-report-count="selected_evidence_ids">0</dd><dt>Automated charts</dt><dd data-report-count="selected_visualization_ids">0</dd><dt>Manual charts</dt><dd data-report-count="selected_manual_board_ids">0</dd></dl>
+        <p class="form-text">Your selections are revalidated against the current source before saving.</p>
+        <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Saving report setup…">Save report configuration</button>
+      </section>
+      <a class="btn btn-outline-secondary w-100 mt-3" href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">Return to KPI configuration</a>
+    </aside>
+  </form>
+{% endblock %}
 
-        <p>
-          <label for="report-notes">Optional user notes</label>
-          <textarea id="report-notes" name="user_notes"
-            maxlength="5000">{{ form_data.get('user_notes', '') }}</textarea>
-        </p>
-        <p>
-          User notes will remain explicitly labelled as user-provided content in
-          later report generation.
-        </p>
-        <p>
-          <label>
-            <input type="checkbox" name="include_evidence_appendix" value="yes"
-              {% if form_data.get('include_evidence_appendix') %}checked{% endif %}>
-            Include the evidence appendix
-          </label>
-        </p>
-
-        <button type="submit">Save report configuration</button>
-      </form>
-
-      <p>
-        <a href="{{ url_for('core.saved_configuration', dataset_id=dataset_id) }}">
-          Return to saved business configuration
-        </a>
-      </p>
-    </main>
-  </body>
-</html>
+{% block scripts %}<script src="{{ url_for('static', filename='report_configuration.js') }}"></script>{% endblock %}

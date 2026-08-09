@@ -494,10 +494,9 @@ automatically selected by the insight templates.
 9. The dashboard reloads the validated visualization artifacts and displays
    their actual saved PNGs in responsive cards through the protected chart
    route.
-10. On a saved chart, the user may ask a management question.
-    `visualization_insights.generate_visualization_insight()` calculates up to
-    five Python findings from the retained chart data. Ollama may add
-    non-numeric implications and actions keyed to those verified facts.
+10. On a saved chart, `visualization_insights` automatically calculates and
+    displays verified Python observations from the retained chart data. The
+    page does not ask for questions or invoke Ollama.
 11. The insight is saved separately with the exact chart fingerprint. The user
     can keep it dashboard-only or enable report carry-forward.
 12. `manual_visualization_evidence.generate_manual_visualization_evidence()`
@@ -516,8 +515,8 @@ selection can then combine KPIs, deterministic evidence, and dashboard charts.
 - A chart asset rendered directly on the dashboard, with its purpose,
   measures, classification, report status, and management actions.
 - A manual evidence item available during report selection.
-- An optional saved management-insight artifact whose factual and advisory
-  layers remain visibly separate.
+- Automatically calculated verified observations derived from the saved
+  visualization's retained supporting data.
 
 ### 9A. Drag-and-drop manual board
 
@@ -542,10 +541,9 @@ rendering. Boards saved before PNG export support must be reopened and saved
 once before selection.
 
 After saving a board, its detail page shows the bounded supporting points and
-accepts a management question. Python calculates up to five findings; Ollama
-may add non-numeric implications and actions under the same grounding rules as
-automated charts. **Include these saved insights in reports** controls whether
-the saved findings accompany the selected board into report evidence.
+automatically displays Python-verified observations from its retained points.
+**Include these verified insights in reports** controls whether the observations
+accompany the selected board into report evidence.
 
 ### 10. Report configuration
 
@@ -563,9 +561,9 @@ This is the editorial selection stage: the user decides what the report should c
 2. Selections are normalized and deduplicated.
 3. For every selected chart, the report package reloads only a current,
    fingerprint-matching visualization insight.
-4. If its report preference is enabled, its exact finding, implication, and
-   action are appended to that chart's manual evidence. An insight never enters
-   a report without the chart.
+4. If its report preference is enabled, its exact Python-verified observations
+   are appended to that chart's manual evidence. An observation never enters a
+   report without the chart.
 3. Required report fields and selection limits are validated.
 4. The configuration is saved.
 
@@ -698,8 +696,11 @@ response and leave durable state unchanged.
   version-specific charts. Exact saved report HTML/JSON/PDF can therefore be
   opened without the current source. Creating or regenerating a report remains
   unavailable until the source is restored.
-- The application deliberately has no permanent-delete route. This keeps
-  deletion reversible while the product is local-first and filesystem-backed.
+- The archived-workspace list also offers a separately confirmed permanent
+  purge. The route rejects active workspaces, stages exact dataset-owned paths
+  before deletion, and removes the source, configuration, evidence, shared
+  charts referenced by that workspace, visualizations, reports, report assets,
+  and matching transient UI state. Unrelated workspace files remain untouched.
 
 **Backward compatibility**
 

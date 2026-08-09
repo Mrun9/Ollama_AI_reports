@@ -1255,7 +1255,7 @@ def _manual_visualization_with_saved_insights() -> ManualVisualizationEvidence:
                 "suggested_action": long_insight,
             },
             "record_count": None,
-            "type": "user_requested_visualization_insight",
+            "type": "verified_visualization_observation",
         }
         for index in range(1, 6)
     )
@@ -1323,7 +1323,7 @@ def test_oversized_saved_insights_are_shortened_before_narration() -> None:
     saved = [
         fact
         for fact in facts
-        if fact.get("type") == "user_requested_visualization_insight"
+        if fact.get("type") == "verified_visualization_observation"
     ]
     assert len(saved) == 5
     assert sum("question" in fact["observation"] for fact in saved) == 1
@@ -1582,6 +1582,64 @@ def test_generated_reports_are_immutable_versioned_and_package_bound(
             report.report_id,
             generated_report_dir=tmp_path,
         )
+
+
+def test_invalid_narration_is_rejected_before_report_file_is_published(
+    tmp_path: Path,
+) -> None:
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+    invalid_story = replace(
+        report.stories[0],
+        finding="The model invented a result of 999.",
+    )
+    invalid_report = replace(
+        report,
+        stories=(invalid_story, *report.stories[1:]),
+    )
+
+    with pytest.raises(ReportNarrationError, match="unverified numerical"):
+        save_generated_report(
+            invalid_report,
+            generated_report_dir=tmp_path,
+        )
+
+    assert not tuple(tmp_path.rglob("V*.json"))
+
+
+def test_report_history_skips_an_invalid_version_and_keeps_valid_versions(
+    tmp_path: Path,
+) -> None:
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+    first, _first_path = save_generated_report(
+        report,
+        generated_report_dir=tmp_path,
+    )
+    _second, second_path = save_generated_report(
+        report,
+        generated_report_dir=tmp_path,
+    )
+    tampered = json.loads(second_path.read_text(encoding="utf-8"))
+    tampered["stories"][0]["finding"] = "The model invented a result of 999."
+    second_path.write_text(json.dumps(tampered), encoding="utf-8")
+
+    history = list_generated_report_versions(
+        report.dataset_id,
+        generated_report_dir=tmp_path,
+    )
+
+    assert [item.version for item in history] == [first.version]
 
 
 def test_older_report_without_executive_summary_remains_publishable(

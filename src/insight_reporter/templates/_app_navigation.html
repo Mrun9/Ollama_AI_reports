@@ -1,0 +1,90 @@
+{% set project_dataset_id = none %}
+{% set project_has_source = false %}
+{% if dataset_id is defined and dataset_id %}
+  {% set project_dataset_id = dataset_id %}
+  {% set project_has_source = true %}
+{% elif configuration is defined and configuration %}
+  {% set project_dataset_id = configuration.dataset_id %}
+  {% set project_has_source = true %}
+{% elif report is defined and report %}
+  {% set project_dataset_id = report.dataset_id %}
+  {% set project_has_source = true %}
+{% elif artifact is defined and artifact %}
+  {% set project_dataset_id = artifact.dataset_id %}
+  {% set project_has_source = true %}
+{% elif workspace is defined and workspace %}
+  {% set project_dataset_id = workspace.record.dataset_id %}
+  {% set project_has_source = workspace.record.has_source %}
+{% endif %}
+{% set endpoint = request.endpoint or "" %}
+
+<nav class="navbar navbar-expand-lg app-navbar" aria-label="Primary navigation">
+  <div class="container-xxl">
+    <a class="navbar-brand app-brand" href="{{ url_for('core.workspace_history') }}">
+      <span class="app-brand-mark" aria-hidden="true">IR</span>
+      <span>Insight Reporter</span>
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+      data-bs-target="#primary-navigation" aria-controls="primary-navigation"
+      aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="primary-navigation">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-1">
+        {% if project_dataset_id %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('core.workspace_history') }}">All workspaces</a>
+          </li>
+          <li class="nav-item app-project-nav-start">
+            <a class="nav-link {% if endpoint == 'core.workspace_detail' or endpoint == 'core.workspace_source_form' %}active{% endif %}"
+              {% if endpoint == 'core.workspace_detail' or endpoint == 'core.workspace_source_form' %}aria-current="page"{% endif %}
+              href="{{ url_for('core.workspace_detail', dataset_id=project_dataset_id) }}">Workspace</a>
+          </li>
+          <li class="nav-item">
+            {% if project_has_source %}
+              <a class="nav-link {% if endpoint in ('core.dataset_profile', 'core.saved_configuration', 'core.derived_kpi_editor', 'core.conditional_kpi_editor', 'core.saved_insights') %}active{% endif %}"
+                {% if endpoint in ('core.dataset_profile', 'core.saved_configuration', 'core.derived_kpi_editor', 'core.conditional_kpi_editor', 'core.saved_insights') %}aria-current="page"{% endif %}
+                href="{{ url_for('core.dataset_profile', dataset_id=project_dataset_id) }}">KPI setup</a>
+            {% else %}
+              <span class="nav-link disabled" aria-disabled="true" title="Add a data source first">KPI setup</span>
+            {% endif %}
+          </li>
+          <li class="nav-item">
+            {% if project_has_source %}
+              <a class="nav-link {% if 'visualization' in endpoint %}active{% endif %}"
+                {% if 'visualization' in endpoint %}aria-current="page"{% endif %}
+                href="{{ url_for('core.saved_visualizations', dataset_id=project_dataset_id) }}">Dashboard</a>
+            {% else %}
+              <span class="nav-link disabled" aria-disabled="true" title="Add a data source first">Dashboard</span>
+            {% endif %}
+          </li>
+          <li class="nav-item">
+            {% if project_has_source %}
+              <a class="nav-link {% if 'report' in endpoint %}active{% endif %}"
+                {% if 'report' in endpoint %}aria-current="page"{% endif %}
+                href="{{ url_for('core.generated_report_history', dataset_id=project_dataset_id) }}">Reports</a>
+            {% else %}
+              <span class="nav-link disabled" aria-disabled="true" title="Add a data source first">Reports</span>
+            {% endif %}
+          </li>
+        {% else %}
+          <li class="nav-item">
+            <a class="nav-link {% if endpoint == 'core.workspace_history' %}active{% endif %}"
+              {% if endpoint == 'core.workspace_history' %}aria-current="page"{% endif %}
+              href="{{ url_for('core.workspace_history') }}">Workspaces</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if endpoint == 'core.upload_form' %}active{% endif %}"
+              {% if endpoint == 'core.upload_form' %}aria-current="page"{% endif %}
+              href="{{ url_for('core.upload_form') }}">Quick upload</a>
+          </li>
+        {% endif %}
+        <li class="nav-item ms-lg-2">
+          <span class="app-local-badge">Local workspace</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>

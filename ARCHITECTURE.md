@@ -88,7 +88,7 @@ redirect.
 | `evidence_layer.py` | Prioritizes management findings, expands actionable diagnostics, and creates traceable records and deterministic charts |
 | `visualization_builder.py` | Validates, calculates, renders, and saves dashboard charts before or after KPI configuration |
 | `visualization_suggestions.py` | Constrains Ollama chart recommendations to detected columns and the deterministic visualization contract |
-| `visualization_insights.py` | Derives post-save chart facts, validates optional Ollama interpretation, persists chart-bound insight preferences, and prepares opted-in report observations |
+| `visualization_insights.py` | Derives post-save Python-verified chart observations, persists chart-bound report-inclusion preferences, loads legacy artifacts, and prepares opted-in report observations |
 | `manual_visualization_evidence.py` | Produces deterministic evidence for manual charts |
 | `dataset_context.py` | Builds safe field tokens shown beside configuration forms |
 
@@ -117,7 +117,7 @@ local backups when recovery matters.
 | `instance/evidence/` | Ranked, traceable evidence records |
 | `instance/charts/` | Automatic evidence chart images |
 | `instance/visualizations/` | Saved manual visualization definitions |
-| `instance/visualization_insights/` | User-requested management insights fingerprinted to saved visualizations |
+| `instance/visualization_insights/` | Verified chart observations and report preferences fingerprinted to saved visualizations |
 | `instance/visualization_previews/` | Short-lived chart previews |
 | `instance/report_configurations/` | User-selected report content |
 | `instance/report_packages/` | Bounded narration input packages |
@@ -144,8 +144,10 @@ Workspace metadata schema 2 stores mutable presentation and lifecycle state:
 name, description, optional source metadata, archive timestamps, report
 aliases, and archived report IDs. Workspace/report deletion changes this
 metadata only. Source deletion is the exception: the safe source file and XLSX
-selection sidecar are moved transactionally to recoverable trash. Reports and
-their chart snapshots are never moved or rewritten.
+selection sidecar are moved transactionally to recoverable trash. Recoverable
+operations never move or rewrite reports and their chart snapshots. A separate
+explicit permanent-workspace purge is available only after workspace archival;
+it removes the workspace identity and every dataset-owned persistent artifact.
 
 Generated-report filenames contain both a monotonically increasing dataset
 version and a report ID. The ordinary report route opens the latest revision

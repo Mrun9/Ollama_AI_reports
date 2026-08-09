@@ -1,251 +1,47 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ report.title }} | AI Insight Reporter</title>
-  </head>
-  <body>
-    <main>
-      {% set dataset_id = report.dataset_id %}
-      {% set configuration = true %}
-      {% set current_section = "next" %}
-      {% include "_report_project_navigation.html" %}
-      <h1>{{ report.title }}</h1>
-      <p>
-        Report content selection saved and revalidated against its current source,
-        KPI configuration, evidence, and manual visualizations.
-      </p>
+{% extends "base.html" %}
+{% from "_ui_macros.html" import alert %}
 
-      <dl>
-        <dt>Dataset</dt>
-        <dd>{{ report.dataset_id }}</dd>
-        {% if report.company_name %}
-          <dt>Company</dt>
-          <dd>{{ report.company_name }}</dd>
-        {% endif %}
-        {% if report.report_author %}
-          <dt>Report author</dt>
-          <dd>{{ report.report_author }}</dd>
-        {% endif %}
-        <dt>Business objective</dt>
-        <dd>{{ report.business_objective }}</dd>
-        <dt>Audience</dt>
-        <dd>{{ report.audience }}</dd>
-        <dt>Tone</dt>
-        <dd>{{ report.tone }}</dd>
-        <dt>Detail level</dt>
-        <dd>{{ report.detail_level }}</dd>
-        <dt>Evidence appendix</dt>
-        <dd>{{ "Included" if report.include_evidence_appendix else "Excluded" }}</dd>
-      </dl>
+{% block title %}{{ report.title }} | AI Insight Reporter{% endblock %}
 
-      <h2>Selected KPIs</h2>
-      <ul>
-        {% for metric in selected_metrics %}
-          <li>
-            {{ metric.name }} · {{ metric.metric_type }}
-            · {{ metric.kpi_direction }} is better
-            {% if metric.derived_metric %}
-              · formula <code>{{ metric.derived_metric.formula_label }}</code>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
+{% block content %}
+  <header class="dashboard-hero">
+    <div class="dashboard-hero-copy"><p class="app-eyebrow">Saved report configuration</p><h1>{{ report.title }}</h1><p class="app-page-lead">Report content selection saved and revalidated against its current source, KPI configuration, evidence, and manual visualizations.</p></div>
+    <a class="btn btn-outline-primary" href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">Edit report configuration</a>
+  </header>
 
-      <h2>Selected deterministic evidence</h2>
-      {% if selected_evidence %}
-        <ol>
-          {% for record in selected_evidence %}
-            <li>
-              <strong>{{ record.id }}</strong>
-              · {{ record.insight_type }}
-              · {{ record.metric }}
-              · rank {{ record.ranking.rank }}
-              <p>{{ record.calculation_description }}</p>
-            </li>
-          {% endfor %}
-        </ol>
-      {% else %}
-        <p>No deterministic evidence was selected.</p>
-      {% endif %}
+  <section class="app-card mb-4" aria-labelledby="report-settings-heading">
+    <div class="app-panel-header mb-3"><h2 class="h4 mb-0" id="report-settings-heading">Report settings</h2><span class="app-status-badge">Validated</span></div>
+    <dl class="app-definition-list"><dt>Dataset</dt><dd>{{ report.dataset_id }}</dd>{% if report.company_name %}<dt>Company</dt><dd>{{ report.company_name }}</dd>{% endif %}{% if report.report_author %}<dt>Report author</dt><dd>{{ report.report_author }}</dd>{% endif %}<dt>Business objective</dt><dd>{{ report.business_objective }}</dd><dt>Audience</dt><dd>{{ report.audience }}</dd><dt>Tone</dt><dd>{{ report.tone }}</dd><dt>Detail level</dt><dd>{{ report.detail_level }}</dd><dt>Evidence appendix</dt><dd>{{ "Included" if report.include_evidence_appendix else "Excluded" }}</dd></dl>
+  </section>
 
-      <h2>Selected automated visualizations</h2>
-      {% if selected_visualizations %}
-        <ul>
-          {% for artifact in selected_visualizations %}
-            <li>
-              <a href="{{ url_for('core.saved_visualization', dataset_id=report.dataset_id, visualization_id=artifact.visualization_id) }}">
-                {{ artifact.spec.title }}
-              </a>
-              · {{ artifact.classification }}
-              · {{ artifact.chart.chart_type }}
-              {% if artifact.spec.purpose %}
-                <p>
-                  <strong>User-provided question:</strong>
-                  {{ artifact.spec.purpose }}
-                </p>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p>No manual visualization was selected from the automated builder.</p>
-      {% endif %}
+  <section class="report-review-grid mb-4" aria-label="Selected report contents">
+    <article class="report-review-card"><div class="d-flex justify-content-between gap-2"><h2 class="h5">Selected KPIs</h2><span class="badge text-bg-primary">{{ selected_metrics|length }}</span></div><ul class="mb-0">{% for metric in selected_metrics %}<li>{{ metric.name }} · {{ metric.metric_type }} · {{ metric.kpi_direction }} is better{% if metric.derived_metric %} · formula <code>{{ metric.derived_metric.formula_label }}</code>{% endif %}</li>{% endfor %}</ul></article>
+    <article class="report-review-card"><div class="d-flex justify-content-between gap-2"><h2 class="h5">Selected deterministic evidence</h2><span class="badge text-bg-primary">{{ selected_evidence|length }}</span></div>{% if selected_evidence %}<ol class="mb-0">{% for record in selected_evidence %}<li><strong>{{ record.id }}</strong> · {{ record.insight_type }} · {{ record.metric }} · rank {{ record.ranking.rank }}<p class="app-muted small">{{ record.calculation_description }}</p></li>{% endfor %}</ol>{% else %}<p class="app-muted mb-0">No deterministic evidence was selected.</p>{% endif %}</article>
+    <article class="report-review-card"><div class="d-flex justify-content-between gap-2"><h2 class="h5">Selected automated visualizations</h2><span class="badge text-bg-primary">{{ selected_visualizations|length }}</span></div>{% if selected_visualizations %}<ul class="mb-0">{% for artifact in selected_visualizations %}<li><a href="{{ url_for('core.saved_visualization', dataset_id=report.dataset_id, visualization_id=artifact.visualization_id) }}">{{ artifact.spec.title }}</a> · {{ artifact.classification }} · {{ artifact.chart.chart_type }}{% if artifact.spec.purpose %}<p class="app-muted small"><strong>User-provided question:</strong> {{ artifact.spec.purpose }}</p>{% endif %}</li>{% endfor %}</ul>{% else %}<p class="app-muted mb-0">No manual visualization was selected from the automated builder.</p>{% endif %}</article>
+    <article class="report-review-card"><div class="d-flex justify-content-between gap-2"><h2 class="h5">Selected manual-board visualizations</h2><span class="badge text-bg-primary">{{ selected_manual_boards|length }}</span></div>{% if selected_manual_boards %}<ul class="mb-0">{% for artifact in selected_manual_boards %}<li><a href="{{ url_for('core.saved_manual_visualization', dataset_id=report.dataset_id, visualization_id=artifact.visualization_id) }}">{{ artifact.title }}</a> · {{ artifact.chart_type|replace("_", " ") }} · {{ artifact.preview.get("record_count", 0) }} source record(s)<p class="app-muted small">Fields: {{ artifact.fields.values()|select|join(", ") }}. Python-calculated chart evidence is included for report insight generation.</p></li>{% endfor %}</ul>{% else %}<p class="app-muted mb-0">No manual-board visualization was selected.</p>{% endif %}</article>
+  </section>
 
-      <h2>Selected manual-board visualizations</h2>
-      {% if selected_manual_boards %}
-        <ul>
-          {% for artifact in selected_manual_boards %}
-            <li>
-              <a href="{{ url_for('core.saved_manual_visualization', dataset_id=report.dataset_id, visualization_id=artifact.visualization_id) }}">
-                {{ artifact.title }}
-              </a>
-              · {{ artifact.chart_type|replace("_", " ") }}
-              · {{ artifact.preview.get("record_count", 0) }} source record(s)
-              <p>
-                Fields: {{ artifact.fields.values()|select|join(", ") }}.
-                Python-calculated chart evidence is included for report insight generation.
-              </p>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p>No manual-board visualization was selected.</p>
-      {% endif %}
+  <section class="app-card mb-4"><h2 class="h4">User notes</h2>{% if report.user_notes %}<p><strong>User-provided content:</strong> {{ report.user_notes }}</p>{% else %}<p class="app-muted mb-0">No user notes were added.</p>{% endif %}</section>
 
-      <h2>User notes</h2>
-      {% if report.user_notes %}
-        <p><strong>User-provided content:</strong> {{ report.user_notes }}</p>
-      {% else %}
-        <p>No user notes were added.</p>
-      {% endif %}
+  <section class="app-card report-readiness mb-4" aria-labelledby="readiness-heading">
+    <div class="app-panel-header"><div><p class="app-eyebrow mb-1">Ready for local generation</p><h2 class="h4" id="readiness-heading">Report-generation readiness</h2><p>The bounded Milestone 5B.1 synthesis package is ready. It contains {{ report_package.deterministic_evidence|length }} deterministic evidence record(s) and {{ report_package.manual_visualization_evidence|length }} manual visualization evidence record(s).</p></div><span class="badge text-bg-success">Ready</span></div>
+    <ul><li>Raw dataset rows included: No</li><li>All numerical observations calculated by: Python</li><li>User notes labelled as: user-provided</li><li>Causal claims allowed: No</li></ul>
+    {% if report_package.omissions.omitted_evidence_ids %}<div class="alert alert-warning">Some selected evidence exceeded the bounded package and was omitted: {{ report_package.omissions.omitted_evidence_ids|join(", ") }}.</div>{% endif %}
+    {% if report_package.omissions.omitted_visualization_ids %}<div class="alert alert-warning">Some selected manual visualizations exceeded the bounded package and were omitted: {{ report_package.omissions.omitted_visualization_ids|join(", ") }}.</div>{% endif %}
+    <a class="btn btn-outline-success" href="{{ url_for('core.report_generation_package', dataset_id=report.dataset_id) }}">View the bounded report-generation JSON package</a>
+  </section>
 
-      <h2>Source traceability</h2>
-      {% for source in report.sources %}
-        <dl>
-          <dt>Filename</dt>
-          <dd>{{ source.internal_filename }}</dd>
-          <dt>Format</dt>
-          <dd>{{ source.format|upper }}</dd>
-          {% if source.table_name %}
-            <dt>Worksheet</dt>
-            <dd>{{ source.table_name }}</dd>
-          {% endif %}
-          <dt>SHA-256</dt>
-          <dd>{{ source.sha256 }}</dd>
-        </dl>
-      {% endfor %}
+  {% if report_package.manual_visualization_evidence %}
+    <details class="app-card app-details mb-4"><summary>Deterministic manual-visualization evidence</summary><div class="mt-3">{% for evidence in report_package.manual_visualization_evidence %}<article class="report-card mb-3"><h3 class="h6">{{ evidence.title }} · {{ evidence.id }}</h3><p class="small">Classification: {{ evidence.classification }} · filtered records: {{ evidence.filtered_record_count }}</p>{% if evidence.purpose %}<p><strong>User-provided question:</strong> {{ evidence.purpose }}</p>{% endif %}{% if evidence.observations %}<ul>{% for observation in evidence.observations %}<li>{{ observation.type }} · {{ observation.measure }} · {{ observation.observation }}</li>{% endfor %}</ul>{% else %}<p>No numerical observation was available for this chart type.</p>{% endif %}</article>{% endfor %}</div></details>
+  {% endif %}
 
-      <h2>Report-generation readiness</h2>
-      <p>
-        The bounded Milestone 5B.1 synthesis package is ready. It contains
-        {{ report_package.deterministic_evidence|length }} deterministic evidence
-        record(s) and
-        {{ report_package.manual_visualization_evidence|length }} manual
-        visualization evidence record(s).
-      </p>
-      <ul>
-        <li>Raw dataset rows included: No</li>
-        <li>All numerical observations calculated by: Python</li>
-        <li>User notes labelled as: user-provided</li>
-        <li>Causal claims allowed: No</li>
-      </ul>
-      {% if report_package.omissions.omitted_evidence_ids %}
-        <p role="note">
-          Some selected evidence exceeded the bounded package and was omitted:
-          {{ report_package.omissions.omitted_evidence_ids|join(", ") }}.
-        </p>
-      {% endif %}
-      {% if report_package.omissions.omitted_visualization_ids %}
-        <p role="note">
-          Some selected manual visualizations exceeded the bounded package and
-          were omitted:
-          {{ report_package.omissions.omitted_visualization_ids|join(", ") }}.
-        </p>
-      {% endif %}
-      {% if report_package.manual_visualization_evidence %}
-        <h3>Deterministic manual-visualization evidence</h3>
-        {% for evidence in report_package.manual_visualization_evidence %}
-          <section>
-            <h4>{{ evidence.title }} · {{ evidence.id }}</h4>
-            <p>
-              Classification: {{ evidence.classification }} ·
-              filtered records: {{ evidence.filtered_record_count }}
-            </p>
-            {% if evidence.purpose %}
-              <p>
-                <strong>User-provided question:</strong> {{ evidence.purpose }}
-              </p>
-            {% endif %}
-            {% if evidence.observations %}
-              <ul>
-                {% for observation in evidence.observations %}
-                  <li>
-                    {{ observation.type }} · {{ observation.measure }} ·
-                    {{ observation.observation }}
-                  </li>
-                {% endfor %}
-              </ul>
-            {% else %}
-              <p>No numerical observation was available for this chart type.</p>
-            {% endif %}
-          </section>
-        {% endfor %}
-      {% endif %}
-      <p>
-        <a href="{{ url_for('core.report_generation_package', dataset_id=report.dataset_id) }}">
-          View the bounded report-generation JSON package
-        </a>
-      </p>
+  <section class="app-card workspace-next-card mb-4" aria-labelledby="generate-heading">
+    <div class="app-panel-header"><div><p class="app-eyebrow mb-1">Local Ollama narration</p><h2 class="h4" id="generate-heading">Generate evidence-grounded report</h2><p class="mb-0">Ollama synthesizes related evidence while Python independently verifies every numerical claim against its evidence ID.</p></div><form method="post" action="{{ url_for('core.generate_report', dataset_id=report.dataset_id) }}" data-loading-form><button class="btn btn-primary btn-lg" type="submit" data-loading-text="Generating report…">Generate report with {{ narration_model }}</button></form></div>
+    {% if narration_error %}<div class="mt-3">{{ alert(narration_error, "Report generation unavailable") }}</div>{% endif %}
+    {% if latest_generated_report %}<p class="mt-3 mb-0"><a href="{{ url_for('core.generated_report', dataset_id=report.dataset_id, report_id=latest_generated_report.report_id) }}">Open latest generated report</a> · version {{ latest_generated_report.version }}</p>{% endif %}
+  </section>
 
-      <h2>Generate evidence-grounded report</h2>
-      <p>
-        Ollama synthesizes related evidence into structured findings,
-        interpretations, follow-up questions, and caveats. Python keeps every
-        factual value unchanged and independently verifies each numerical claim
-        against its evidence ID.
-      </p>
-      {% if narration_error %}
-        <p role="alert">
-          <strong>Report generation unavailable:</strong>
-          {{ narration_error }}
-        </p>
-      {% endif %}
-      <form method="post"
-        action="{{ url_for('core.generate_report', dataset_id=report.dataset_id) }}">
-        <button type="submit">
-          Generate report with {{ narration_model }}
-        </button>
-      </form>
-      {% if latest_generated_report %}
-        <p>
-          <a href="{{ url_for(
-            'core.generated_report',
-            dataset_id=report.dataset_id,
-            report_id=latest_generated_report.report_id
-          ) }}">
-            Open latest generated report
-          </a>
-          · version {{ latest_generated_report.version }}
-        </p>
-      {% endif %}
-
-      <details>
-        <summary>Validated report configuration JSON</summary>
-        <pre>{{ report_json }}</pre>
-      </details>
-
-      <p>
-        <a href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">
-          Edit report configuration
-        </a>
-      </p>
-      <p>
-        <a href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">
-          Return to business configuration
-        </a>
-      </p>
-    </main>
-  </body>
-</html>
+  <details class="app-card app-details mb-4"><summary>Source traceability</summary>{% for source in report.sources %}<dl class="app-definition-list mt-3"><dt>Filename</dt><dd>{{ source.internal_filename }}</dd><dt>Format</dt><dd>{{ source.format|upper }}</dd>{% if source.table_name %}<dt>Worksheet</dt><dd>{{ source.table_name }}</dd>{% endif %}<dt>SHA-256</dt><dd class="font-monospace small">{{ source.sha256 }}</dd></dl>{% endfor %}</details>
+  <details class="app-card app-details mb-4"><summary>Validated report configuration JSON</summary><pre class="code-panel mt-3">{{ report_json }}</pre></details>
+  <div class="dashboard-actions"><a class="btn btn-outline-primary" href="{{ url_for('core.report_configuration_form', dataset_id=report.dataset_id) }}">Edit report configuration</a><a class="btn btn-outline-secondary" href="{{ url_for('core.saved_configuration', dataset_id=report.dataset_id) }}">Return to business configuration</a></div>
+{% endblock %}
