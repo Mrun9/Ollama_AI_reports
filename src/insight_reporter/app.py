@@ -18,6 +18,7 @@ _ARTIFACT_DIRECTORIES = (
     ("CHART_DIR", "charts"),
     ("VISUALIZATION_DIR", "visualizations"),
     ("VISUALIZATION_INSIGHT_DIR", "visualization_insights"),
+    ("DATASET_CHAT_DIR", "dataset_chats"),
     ("REPORT_CONFIGURATION_DIR", "report_configurations"),
     ("REPORT_PACKAGE_DIR", "report_packages"),
     ("GENERATED_REPORT_DIR", "generated_reports"),

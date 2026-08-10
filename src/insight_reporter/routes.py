@@ -56,6 +56,10 @@ from insight_reporter.dataset_context import (
     DatasetContext,
     build_dataset_context,
 )
+from insight_reporter.dataset_chat import (
+    DatasetChatError,
+    answer_dataset_question,
+)
 from insight_reporter.dataset_ingestion import (
     DatasetUploadResult,
     DatasetValidationError,
@@ -357,6 +361,72 @@ def workspace_detail(dataset_id: str):  # type: ignore[no-untyped-def]
             visualization_ready=visualization_count > 0,
             report_configuration_ready=_report_configuration_path(dataset_id).is_file(),
         ),
+    )
+
+
+@core.get("/workspaces/<dataset_id>/chat")
+def dataset_chat(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Render the query-time chat surface for one uploaded dataset."""
+
+    try:
+        workspace = get_workspace_summary(
+            dataset_id,
+            directories=_workspace_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    if workspace is None:
+        abort(404)
+    if not workspace.record.has_source:
+        abort(422, description="Add or restore a data source before using data chat.")
+    profile = _load_profile(dataset_id)
+    return render_template(
+        "dataset_chat.html",
+        workspace=workspace,
+        profile=profile,
+        question="",
+        chat_turn=None,
+        chat_error=None,
+    )
+
+
+@core.post("/workspaces/<dataset_id>/chat")
+def ask_dataset_chat(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Answer one natural-language question with deterministic query insights."""
+
+    try:
+        workspace = get_workspace_summary(
+            dataset_id,
+            directories=_workspace_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    if workspace is None:
+        abort(404)
+    if not workspace.record.has_source:
+        abort(422, description="Add or restore a data source before using data chat.")
+    profile = _load_profile(dataset_id)
+    question = request.form.get("question", "")
+    chat_turn = None
+    chat_error = None
+    try:
+        chat_turn = answer_dataset_question(
+            question,
+            view=_load_dataset_view_for_id(dataset_id),
+            profile=profile,
+        )
+    except DatasetChatError as error:
+        chat_error = str(error)
+    return (
+        render_template(
+            "dataset_chat.html",
+            workspace=workspace,
+            profile=profile,
+            question=question,
+            chat_turn=chat_turn,
+            chat_error=chat_error,
+        ),
+        400 if chat_error else 200,
     )
 
 

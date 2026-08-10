@@ -1,5 +1,7 @@
 -e .
 
+# Query-time structured analysis for chat-with-data.
+duckdb>=1.0,<2
 # Retained for the standalone local Ollama starter and later narrative milestone.
 ollama==0.6.2
 # Read-only validation and normalization of approved .xlsx inputs.

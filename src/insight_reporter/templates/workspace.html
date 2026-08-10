@@ -217,6 +217,33 @@
           {% endif %}
         </section>
 
+        <section class="app-card" id="data-chat">
+          <div class="app-panel-header">
+            <div>
+              <p class="app-eyebrow mb-1">Exploration</p>
+              <h2 class="h4 mb-1">Chat with my data</h2>
+              <p class="app-muted mb-0">
+                Ask natural-language questions and get query-specific deterministic facts.
+              </p>
+            </div>
+            <span class="badge {{ 'text-bg-success' if workspace.record.has_source else 'text-bg-light border' }}">
+              {{ "Ready" if workspace.record.has_source else "Needs source" }}
+            </span>
+          </div>
+
+          {% if workspace.record.has_source %}
+            <p class="mt-4">
+              The chat runs fresh calculations against the uploaded source instead of relying
+              only on pre-generated KPI evidence.
+            </p>
+            <a class="btn btn-primary btn-sm" href="{{ url_for(
+              'core.dataset_chat', dataset_id=dataset_id
+            ) }}">Open data chat</a>
+          {% else %}
+            <p class="app-muted mt-4 mb-0">Add or restore the data source to ask questions.</p>
+          {% endif %}
+        </section>
+
         {% if not workspace.record.is_archived %}
           <section class="app-card workspace-next-card" id="next-actions">
             <p class="app-eyebrow mb-1">Recommended</p>

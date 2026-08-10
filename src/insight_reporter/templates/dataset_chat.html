@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Chat with Data | AI Insight Reporter{% endblock %}
+
+{% block content %}
+  {% set dataset_id = workspace.record.dataset_id %}
+
+  <nav aria-label="Breadcrumb" class="mb-3">
+    <a class="small text-decoration-none" href="{{ url_for(
+      'core.workspace_detail', dataset_id=dataset_id
+    ) }}">← Workspace</a>
+  </nav>
+
+  <header class="app-page-header">
+    <p class="app-eyebrow">Chat with my data</p>
+    <h1>{{ workspace.record.name }}</h1>
+    <p class="app-page-lead">
+      Ask questions against the uploaded {{ workspace.record.source_format|upper }}
+      source. Answers are assembled from deterministic query-time calculations.
+    </p>
+  </header>
+
+  <div class="row g-4 align-items-start">
+    <div class="col-xl-8">
+      <section class="app-card">
+        <form method="post" action="{{ url_for(
+          'core.ask_dataset_chat', dataset_id=dataset_id
+        ) }}" data-loading-form>
+          <label class="form-label" for="data-chat-question">Question</label>
+          <textarea class="form-control" id="data-chat-question" name="question"
+            rows="4" maxlength="1000" required
+            placeholder="Example: Which groups have the highest average value?">{{ question }}</textarea>
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button class="btn btn-primary" type="submit"
+              data-loading-text="Analyzing…">Ask data</button>
+            <a class="btn btn-outline-secondary" href="{{ url_for(
+              'core.workspace_detail', dataset_id=dataset_id
+            ) }}">Back to workspace</a>
+          </div>
+        </form>
+      </section>
+
+      {% if chat_error %}
+        <div class="alert alert-warning mt-4" role="status">
+          <strong>Data chat could not answer that yet.</strong>
+          {{ chat_error }}
+        </div>
+      {% endif %}
+
+      {% if chat_turn %}
+        <section class="app-card mt-4">
+          <div class="app-panel-header">
+            <div>
+              <p class="app-eyebrow mb-1">Answer</p>
+              <h2 class="h4 mb-1">{{ chat_turn.question }}</h2>
+            </div>
+            <span class="badge text-bg-success">Python calculated</span>
+          </div>
+          <p class="lead mt-4 mb-0">{{ chat_turn.answer }}</p>
+        </section>
+
+        <section class="app-card mt-4">
+          <div class="app-panel-header">
+            <div>
+              <p class="app-eyebrow mb-1">Computed evidence</p>
+              <h2 class="h4 mb-1">Relevant deterministic insights</h2>
+            </div>
+            <span class="badge text-bg-light border">
+              {{ chat_turn.insights|length }} finding(s)
+            </span>
+          </div>
+
+          <div class="d-grid gap-3 mt-4">
+            {% for insight in chat_turn.insights %}
+              <article class="report-selection-card">
+                <h3 class="h6 mb-1">{{ insight.title }}</h3>
+                <p class="mb-2">{{ insight.finding }}</p>
+                <dl class="app-definition-list">
+                  <dt>Calculation</dt>
+                  <dd>{{ insight.calculation }}</dd>
+                  <dt>Columns used</dt>
+                  <dd>{{ insight.columns_used|join(", ") if insight.columns_used else "Dataset metadata" }}</dd>
+                </dl>
+                {% if insight.supporting_data %}
+                  <details class="app-details mt-2">
+                    <summary>Supporting data</summary>
+                    <div class="table-responsive mt-3">
+                      <table class="table table-sm align-middle">
+                        <thead>
+                          <tr>
+                            {% for key in insight.supporting_data[0].keys() %}
+                              <th scope="col">{{ key }}</th>
+                            {% endfor %}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for row in insight.supporting_data[:12] %}
+                            <tr>
+                              {% for value in row.values() %}
+                                <td>{{ value }}</td>
+                              {% endfor %}
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                {% endif %}
+                {% if insight.limitations %}
+                  <p class="form-text mb-0">{{ insight.limitations|join(" ") }}</p>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+      {% else %}
+        <section class="app-card mt-4">
+          <div class="app-empty-state">
+            <h2 class="h5">No question has been asked yet</h2>
+            <p>
+              Try questions about summaries, top or bottom groups, trends,
+              missing data, outliers, rates, or relationships.
+            </p>
+          </div>
+        </section>
+      {% endif %}
+    </div>
+
+    <aside class="col-xl-4">
+      <section class="app-card">
+        <h2 class="h5 mb-3">Dataset context</h2>
+        <dl class="app-definition-list">
+          <dt>Source</dt>
+          <dd>{{ workspace.record.original_filename }}</dd>
+          <dt>Rows</dt>
+          <dd>{{ profile.row_count }}</dd>
+          <dt>Columns</dt>
+          <dd>{{ profile.column_count }}</dd>
+          <dt>Numeric candidates</dt>
+          <dd>{{ profile.kpi_candidates[:6]|join(", ") or "None detected" }}</dd>
+          <dt>Dimensions</dt>
+          <dd>{{ profile.category_candidates[:6]|join(", ") or "None detected" }}</dd>
+          <dt>Date columns</dt>
+          <dd>{{ profile.date_candidates[:4]|join(", ") or "None detected" }}</dd>
+        </dl>
+      </section>
+    </aside>
+  </div>
+{% endblock %}
