@@ -24,9 +24,16 @@ class QueryResult:
 class QueryDataStore:
     """Small read-only DuckDB wrapper around one retained DatasetView."""
 
-    def __init__(self, connection: Any, *, table_name: str = "uploaded_data") -> None:
+    def __init__(
+        self,
+        connection: Any,
+        *,
+        table_name: str = "uploaded_data",
+        columns: tuple[str, ...] = (),
+    ) -> None:
         self._connection = connection
         self.table_name = table_name
+        self._columns = frozenset(columns)
 
     @classmethod
     def from_view(
@@ -34,7 +41,7 @@ class QueryDataStore:
         view: DatasetView,
         *,
         profile: DatasetProfile,
-    ) -> "QueryDataStore":
+    ) -> QueryDataStore:
         """Materialize the validated source rows into an in-memory DuckDB table."""
 
         try:
@@ -65,7 +72,48 @@ class QueryDataStore:
         ]
         if rows:
             connection.executemany(insert_sql, rows)
-        return cls(connection, table_name=table)
+        return cls(connection, table_name=table, columns=headers)
+
+    def distinct_values(self, column: str, *, limit: int = 5_000) -> tuple[object, ...]:
+        """Return bounded live values for one already-profiled column."""
+
+        if column not in self._columns:
+            raise QueryDataStoreError(f"Unknown column: {column}")
+        safe_limit = max(1, min(int(limit), 5_000))
+        column_sql = quote_identifier(column)
+        cursor = self._connection.execute(
+            f"SELECT DISTINCT {column_sql} AS value "
+            f"FROM {quote_identifier(self.table_name)} "
+            f"WHERE {column_sql} IS NOT NULL LIMIT ?",
+            (safe_limit,),
+        )
+        return tuple(_clean_value(row[0]) for row in cursor.fetchall())
+
+    def paired_values(
+        self,
+        factor: str,
+        target: str,
+        *,
+        limit: int = 5_000,
+    ) -> tuple[tuple[object, object], ...]:
+        """Return non-null paired values for deterministic statistical tests."""
+
+        for column in (factor, target):
+            if column not in self._columns:
+                raise QueryDataStoreError(f"Unknown column: {column}")
+        safe_limit = max(2, min(int(limit), 5_000))
+        factor_sql = quote_identifier(factor)
+        target_sql = quote_identifier(target)
+        cursor = self._connection.execute(
+            f"SELECT {factor_sql}, {target_sql} "
+            f"FROM {quote_identifier(self.table_name)} "
+            f"WHERE {factor_sql} IS NOT NULL AND {target_sql} IS NOT NULL LIMIT ?",
+            (safe_limit,),
+        )
+        return tuple(
+            (_clean_value(row[0]), _clean_value(row[1]))
+            for row in cursor.fetchall()
+        )
 
     def query(
         self,
@@ -76,7 +124,11 @@ class QueryDataStore:
     ) -> QueryResult:
         """Execute one internally generated read-only query and return dict rows."""
 
-        if not sql.lstrip().upper().startswith("SELECT "):
+        normalized = sql.lstrip().upper()
+        if not (
+            normalized.startswith("SELECT ")
+            or normalized.startswith("WITH ")
+        ):
             raise QueryDataStoreError("Only SELECT queries are allowed.")
         safe_limit = max(1, min(int(limit), 500))
         limited_sql = f"SELECT * FROM ({sql}) AS chat_query_result LIMIT {safe_limit}"

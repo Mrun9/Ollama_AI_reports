@@ -1584,6 +1584,43 @@ def test_generated_reports_are_immutable_versioned_and_package_bound(
         )
 
 
+def test_saved_report_with_duplicate_summary_points_is_repaired(
+    tmp_path: Path,
+) -> None:
+    report = generate_narrated_report(
+        _package(record_count=1),
+        model="llama3.2:latest",
+        host="http://127.0.0.1:11434",
+        timeout_seconds=120,
+        client=FakeClient(),
+    )
+    saved, path = save_generated_report(
+        report,
+        generated_report_dir=tmp_path,
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["executive_summary"][1]["text"] = payload["executive_summary"][0]["text"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_generated_report(
+        saved.dataset_id,
+        saved.report_id,
+        generated_report_dir=tmp_path,
+    )
+    published = publish_report_presentation(
+        loaded,
+        included_story_ids=(loaded.stories[0].story_id,),
+        story_order=tuple(story.story_id for story in loaded.stories),
+    )
+
+    assert len(published.executive_summary) == 5
+    assert len({point.text.casefold() for point in published.executive_summary}) == 5
+    assert any(
+        point.narration_source == "deterministic_only"
+        for point in published.executive_summary
+    )
+
+
 def test_invalid_narration_is_rejected_before_report_file_is_published(
     tmp_path: Path,
 ) -> None:

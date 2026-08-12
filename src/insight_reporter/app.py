@@ -70,6 +70,12 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     configure_logging(app)
     app.register_blueprint(core)
 
+    @app.context_processor
+    def inject_runtime_model():
+        """Expose the configured Ollama model consistently across the UI."""
+
+        return {"ollama_model": str(app.config["OLLAMA_MODEL"])}
+
     @app.errorhandler(HTTPException)
     def render_http_error(error: HTTPException):  # type: ignore[no-untyped-def]
         """Render safe browser errors in the shared local UI."""

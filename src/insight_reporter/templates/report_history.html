@@ -6,7 +6,18 @@
 {% block content %}
   <div class="dashboard-hero">
     <div class="dashboard-hero-copy">{{ page_header("Report history", reports|length ~ " immutable version(s) across " ~ report_run_count ~ " generation run(s). Older versions are read-only and are never replaced.", "Reports") }}</div>
-    <a class="btn btn-outline-secondary" href="{{ url_for('core.workspace_detail', dataset_id=dataset_id) }}">Return to workspace</a>
+    <div class="d-flex flex-wrap gap-2">
+      {% if workspace_is_archived %}
+        <button class="btn btn-primary" type="button" disabled title="Restore the workspace before creating a report">Create new report</button>
+      {% elif configuration %}
+        <a class="btn btn-primary" href="{{ url_for('core.report_configuration_form', dataset_id=dataset_id) }}">
+          {{ "Create new report" if report_run_count else "Create first report" }}
+        </a>
+      {% else %}
+        <a class="btn btn-primary" href="{{ url_for('core.dataset_profile', dataset_id=dataset_id) }}" title="Configure at least one KPI first">Set up KPIs to create report</a>
+      {% endif %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('core.workspace_detail', dataset_id=dataset_id) }}">Return to workspace</a>
+    </div>
   </div>
 
   {% if current_package_sha256 is none and reports %}<div class="alert alert-warning">The current report package cannot be rebuilt, so freshness cannot be compared. Saved report snapshots remain available.</div>{% endif %}

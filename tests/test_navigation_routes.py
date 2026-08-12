@@ -114,6 +114,8 @@ def test_project_navigation_is_available_across_workspace_workflow_pages(
 
     assert b"app-navbar" in pages[0].data
     assert b"app-navbar" in pages[3].data
+    assert b"Create first report" in pages[4].data
+    assert f'href="/reports/{dataset_id}/configure"'.encode() in pages[4].data
 
 
 def test_suggestion_and_derived_preview_state_survives_get_reload(

@@ -29,7 +29,7 @@
           <label for="assistant-request">What do you want to understand?</label>
           <textarea id="assistant-request" name="user_request" maxlength="2000"
             required>{{ assistant_request or "" }}</textarea>
-          <button type="submit" data-loading-text="Generating suggestion…">Suggest and preview a chart</button>
+          <button type="submit" data-loading-text="Generating suggestion…">Suggest and preview a chart with {{ suggestion_model }}</button>
         </form>
         <p class="help">
           The suggestion is never saved automatically. Review the chart before

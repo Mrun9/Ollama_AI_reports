@@ -20,6 +20,8 @@ class QueryAnalysisRequest:
     time_columns: tuple[str, ...]
     target_columns: tuple[str, ...]
     direction: str | None
+    analysis_target: str | None = None
+    analysis_factor: str | None = None
 
 
 def understand_question(question: str, profile: DatasetProfile) -> QueryAnalysisRequest:
@@ -94,14 +96,31 @@ def understand_question(question: str, profile: DatasetProfile) -> QueryAnalysis
 
 
 def _intent(question: str) -> str:
-    tokens = _tokens(question)
+    tokens = normalized_tokens(question)
     if tokens & {"missing", "null", "blank", "quality"}:
         return "missingness"
     if tokens & {"outlier", "anomaly", "anomalie", "unusual"} or "anomal" in question:
         return "outliers"
-    if tokens & {"trend", "recent", "change", "changed"} or "over time" in question or "by month" in question:
+    if (
+        tokens & {"trend", "recent", "change", "changed"}
+        or "over time" in question
+        or "by month" in question
+    ):
         return "trend"
-    if tokens & {"associated", "association", "factor", "relationship"}:
+    if tokens & {
+        "affect",
+        "affects",
+        "associated",
+        "association",
+        "correlate",
+        "correlates",
+        "differ",
+        "differs",
+        "factor",
+        "influence",
+        "influences",
+        "relationship",
+    }:
         return "relationship"
     if tokens & {"rate", "percentage", "proportion"}:
         return "boolean_rate"
@@ -115,7 +134,7 @@ def _intent(question: str) -> str:
 
 
 def _direction(question: str) -> str | None:
-    tokens = _tokens(question)
+    tokens = normalized_tokens(question)
     if tokens & {"bottom", "lowest", "worst", "least", "low"}:
         return "lowest"
     if tokens & {"top", "highest", "best", "most", "high"}:
@@ -124,10 +143,10 @@ def _direction(question: str) -> str | None:
 
 
 def _mentioned_columns(question: str, profile: DatasetProfile) -> tuple[str, ...]:
-    question_tokens = _tokens(question)
+    question_tokens = normalized_tokens(question)
     scored: list[tuple[int, str]] = []
     for column in profile.columns:
-        column_tokens = _tokens(column.name)
+        column_tokens = normalized_tokens(column.name)
         if not column_tokens:
             continue
         overlap = len(question_tokens & column_tokens)
@@ -144,11 +163,20 @@ def _mentioned_columns(question: str, profile: DatasetProfile) -> tuple[str, ...
     return tuple(name for _score, name in sorted(scored, key=lambda item: (-item[0], item[1])))
 
 
-def _tokens(value: str) -> set[str]:
+def normalized_tokens(value: str) -> set[str]:
+    """Tokenize user/schema text consistently across deterministic and model paths."""
+
     expanded = _CAMEL_BOUNDARY.sub(" ", value).casefold()
     tokens = set(_WORD.findall(expanded))
     tokens.update(token[:-1] for token in tuple(tokens) if token.endswith("s") and len(token) > 3)
     return tokens
+
+
+def normalized_identifier(value: str) -> str:
+    """Return an ordered snake-case-like identifier for glossary matching."""
+
+    expanded = _CAMEL_BOUNDARY.sub(" ", value).casefold()
+    return "_".join(_WORD.findall(expanded))
 
 
 def _default_dimensions(
@@ -158,3 +186,58 @@ def _default_dimensions(
 ) -> tuple[str, ...]:
     excluded = set(exclude)
     return tuple(column for column in dimensions if column not in excluded)
+
+
+def generate_suggested_questions(
+    profile: DatasetProfile,
+    *,
+    max_questions: int = 6,
+) -> tuple[str, ...]:
+    """Generate deterministic first-load questions from the live profile."""
+
+    numeric = [
+        column.name
+        for column in profile.columns
+        if column.inferred_type is ColumnType.NUMERIC and not column.is_constant
+    ]
+    categorical = [
+        column
+        for column in profile.category_candidates
+        if (profile.column(column) and profile.column(column).unique_count <= 15)
+    ]
+    dates = list(profile.date_candidates)
+    suggestions: list[str] = []
+    if numeric and categorical:
+        measure, dimension = numeric[0], categorical[0]
+        suggestions.extend(
+            (
+                f"What is the average {measure} by {dimension}?",
+                f"Does {dimension} affect {measure}?",
+            )
+        )
+    if numeric and dates:
+        suggestions.append(f"How has {numeric[0]} changed over time?")
+    if numeric:
+        suggestions.append(f"What are the outliers in {numeric[0]}?")
+    if categorical:
+        suggestions.append(f"How many records are there per {categorical[0]}?")
+    suggestions.append("What am I looking at?")
+    return tuple(dict.fromkeys(suggestions))[: max(1, max_questions)]
+
+
+def followup_questions(plan: dict[str, object]) -> tuple[str, ...]:
+    """Generate deterministic follow-ups scoped to the columns in one result."""
+
+    intent = str(plan.get("intent") or "query")
+    dimensions = plan.get("dimensions") or plan.get("group_by")
+    group_by = [str(item) for item in dimensions] if isinstance(dimensions, list) else []
+    out: list[str] = []
+    if intent == "analysis":
+        target = plan.get("target")
+        if isinstance(target, str):
+            out.append(f"What does the distribution of {target} look like overall?")
+    elif group_by:
+        out.append(f"Which {group_by[0]} had the biggest change over time?")
+    if plan.get("time") is None and plan.get("time_bucket") is None:
+        out.append("Has this changed over time?")
+    return tuple(dict.fromkeys(out))[:3]

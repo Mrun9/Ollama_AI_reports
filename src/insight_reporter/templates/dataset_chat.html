@@ -16,7 +16,8 @@
     <h1>{{ workspace.record.name }}</h1>
     <p class="app-page-lead">
       Ask questions against the uploaded {{ workspace.record.source_format|upper }}
-      source. Answers are assembled from deterministic query-time calculations.
+      source. {{ ollama_model }} proposes a constrained query plan, and answers
+      are assembled from deterministic query-time calculations.
     </p>
   </header>
 
@@ -32,18 +33,35 @@
             placeholder="Example: Which groups have the highest average value?">{{ question }}</textarea>
           <div class="d-flex flex-wrap gap-2 mt-3">
             <button class="btn btn-primary" type="submit"
-              data-loading-text="Analyzing…">Ask data</button>
+              data-loading-text="Analyzing…">Ask with {{ ollama_model }}</button>
             <a class="btn btn-outline-secondary" href="{{ url_for(
               'core.workspace_detail', dataset_id=dataset_id
             ) }}">Back to workspace</a>
           </div>
         </form>
+        {% if suggested_questions %}
+          <div class="d-flex flex-wrap gap-2 mt-3" aria-label="Suggested questions">
+            {% for suggestion in suggested_questions %}
+              <form method="post" action="{{ url_for('core.ask_dataset_chat', dataset_id=dataset_id) }}">
+                <input type="hidden" name="question" value="{{ suggestion }}">
+                <button class="btn btn-sm btn-outline-secondary" type="submit">{{ suggestion }}</button>
+              </form>
+            {% endfor %}
+          </div>
+        {% endif %}
       </section>
 
       {% if chat_error %}
         <div class="alert alert-warning mt-4" role="status">
           <strong>Data chat could not answer that yet.</strong>
           {{ chat_error }}
+        </div>
+      {% endif %}
+
+      {% if chat_save_error %}
+        <div class="alert alert-warning mt-4" role="status">
+          <strong>The answer is available, but could not be saved.</strong>
+          {{ chat_save_error }}
         </div>
       {% endif %}
 
@@ -54,9 +72,42 @@
               <p class="app-eyebrow mb-1">Answer</p>
               <h2 class="h4 mb-1">{{ chat_turn.question }}</h2>
             </div>
-            <span class="badge text-bg-success">Python calculated</span>
+            <span class="badge text-bg-success">
+              Python calculated{% if chat_turn.narration_status == "generated" %} · Ollama narrated{% endif %}
+            </span>
           </div>
           <p class="lead mt-4 mb-0">{{ chat_turn.answer }}</p>
+          {% if saved_evidence_id %}
+            <div class="alert alert-success mt-3 mb-0" role="status">
+              Saved with verified evidence as {{ saved_evidence_id }}.
+              <a href="{{ url_for('core.report_configuration_form', dataset_id=dataset_id) }}">Choose it for the final report</a> when needed.
+            </div>
+          {% endif %}
+          {% if chat_turn.suggested_questions %}
+            <div class="d-flex flex-wrap gap-2 mt-3" aria-label="Related questions">
+              {% for suggestion in chat_turn.suggested_questions %}
+                <form method="post" action="{{ url_for('core.ask_dataset_chat', dataset_id=dataset_id) }}">
+                  <input type="hidden" name="question" value="{{ suggestion }}">
+                  <button class="btn btn-sm btn-outline-secondary" type="submit">{{ suggestion }}</button>
+                </form>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if chat_turn.model_status == "fallback_after_planner_error" %}
+            <div class="alert alert-secondary mt-3 mb-0">
+              Ollama query planning fell back to deterministic parsing.
+              {% if chat_turn.planner_error %}{{ chat_turn.planner_error }}{% endif %}
+            </div>
+          {% elif chat_turn.model_status == "ollama_plan_validated" %}
+            <p class="form-text mt-3 mb-0">
+              {{ ollama_model }} proposed the query plan; Python validated it and DuckDB executed it.
+            </p>
+          {% endif %}
+          {% if chat_turn.narration_status == "fallback" %}
+            <p class="form-text mt-3 mb-0">
+              The verified Python answer is shown because Ollama narration was unavailable.
+            </p>
+          {% endif %}
         </section>
 
         <section class="app-card mt-4">

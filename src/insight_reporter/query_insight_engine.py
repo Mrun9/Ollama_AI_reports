@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import math
+import statistics
 from dataclasses import dataclass
+
+import pandas as pd
+from scipy import stats
 
 from insight_reporter.dataset_profile import ColumnType, DatasetProfile
 from insight_reporter.query_data_store import QueryDataStore, quote_identifier
@@ -295,95 +299,209 @@ def _relationship(
     profile: DatasetProfile,
     store: QueryDataStore,
 ) -> list[QueryInsight]:
-    insights: list[QueryInsight] = []
-    if request.target_columns:
-        for dimension in request.dimension_columns[:3]:
-            insights.extend(
-                _boolean_rate(
-                    QueryAnalysisRequest(
-                        question=request.question,
-                        intent="boolean_rate",
-                        metric_columns=(),
-                        dimension_columns=(dimension,),
-                        time_columns=(),
-                        target_columns=request.target_columns,
-                        direction=None,
-                    ),
-                    store=store,
-                )
-            )
-        target = request.target_columns[0]
-        for metric in request.metric_columns[:3]:
-            result = store.query(
-                f"""
-                SELECT {quote_identifier(target)} AS target_value,
-                       AVG({quote_identifier(metric)}) AS average_value,
-                       COUNT(*) AS records
-                FROM {quote_identifier(store.table_name)}
-                WHERE {quote_identifier(target)} IS NOT NULL
-                  AND {quote_identifier(metric)} IS NOT NULL
-                GROUP BY {quote_identifier(target)}
-                ORDER BY target_value DESC
-                """,
-                limit=5,
-            )
-            if len(result.rows) >= 2:
-                insights.append(
-                    QueryInsight(
-                        insight_type="target_numeric_difference",
-                        title=f"{metric} by {target}",
-                        finding=(
-                            f"Average {metric} differs across {target} groups: "
-                            + "; ".join(
-                                f"{row['target_value']} is {_fmt(row['average_value'])}"
-                                for row in result.rows
-                            )
-                            + "."
-                        ),
-                        columns_used=(target, metric),
-                        calculation="numeric_average_by_boolean_target",
-                        supporting_data=result.rows,
-                        relevance_score=0.86,
-                        limitations=("Differences are descriptive and do not prove cause.",),
+    target = request.analysis_target
+    factor = request.analysis_factor
+    if not target or not factor:
+        return []
+    target_profile = profile.column(target)
+    factor_profile = profile.column(factor)
+    if target_profile is None or factor_profile is None:
+        return []
+    pairs = store.paired_values(factor, target)
+    if len(pairs) < 2:
+        return [_insufficient_analysis(target, factor, len(pairs))]
+
+    target_is_numeric = target_profile.inferred_type is ColumnType.NUMERIC
+    factor_is_numeric = factor_profile.inferred_type is ColumnType.NUMERIC
+    target_is_categorical = _is_categorical(target_profile.inferred_type)
+    factor_is_categorical = _is_categorical(factor_profile.inferred_type)
+
+    if factor_is_categorical and target_is_numeric:
+        grouped: dict[str, list[float]] = {}
+        for factor_value, target_value in pairs:
+            grouped.setdefault(str(factor_value), []).append(float(target_value))
+        group_stats = [
+            {
+                "group": group,
+                "count": len(values),
+                "mean": round(statistics.fmean(values), 6),
+                "median": round(statistics.median(values), 6),
+                "std": round(statistics.stdev(values), 6) if len(values) > 1 else None,
+            }
+            for group, values in sorted(grouped.items())
+        ]
+        groups = list(grouped.values())
+        if len(groups) < 2 or any(len(group) < 2 for group in groups):
+            return [_insufficient_analysis(target, factor, len(pairs), group_stats=group_stats)]
+        f_statistic, p_value = stats.f_oneway(*groups)
+        return [
+            _statistical_insight(
+                target=target,
+                factor=factor,
+                test="one-way ANOVA",
+                calculation="one_way_anova",
+                statistic_name="f_statistic",
+                statistic=float(f_statistic),
+                p_value=float(p_value),
+                detail=(
+                    "Group means: "
+                    + "; ".join(
+                        f"{item['group']}={_fmt(item['mean'])} (n={item['count']})"
+                        for item in group_stats
                     )
-                )
-    if not insights:
-        numeric = tuple(
-            column.name
-            for column in profile.columns
-            if column.inferred_type is ColumnType.NUMERIC
-        )
-        if len(numeric) >= 2:
-            metric_a, metric_b = numeric[:2]
-            result = store.query(
-                f"""
-                SELECT CORR({quote_identifier(metric_a)}, {quote_identifier(metric_b)})
-                  AS correlation,
-                  COUNT(*) AS records
-                FROM {quote_identifier(store.table_name)}
-                WHERE {quote_identifier(metric_a)} IS NOT NULL
-                  AND {quote_identifier(metric_b)} IS NOT NULL
-                """,
-                limit=1,
+                ),
+                supporting_extra={"group_statistics": group_stats},
+                sample_size=len(pairs),
             )
-            if result.rows and result.rows[0]["correlation"] is not None:
-                insights.append(
-                    QueryInsight(
-                        insight_type="numeric_relationship",
-                        title=f"{metric_a} and {metric_b}",
-                        finding=(
-                            f"{metric_a} and {metric_b} have a Pearson association of "
-                            f"{_fmt(result.rows[0]['correlation'])} across "
-                            f"{result.rows[0]['records']} records."
-                        ),
-                        columns_used=(metric_a, metric_b),
-                        calculation="pearson_correlation",
-                        supporting_data=result.rows,
-                        relevance_score=0.72,
-                        limitations=("Association does not prove causation.",),
-                    )
-                )
-    return insights
+        ]
+
+    if factor_is_numeric and target_is_numeric:
+        factor_values = [float(pair[0]) for pair in pairs]
+        target_values = [float(pair[1]) for pair in pairs]
+        if len(pairs) < 3:
+            return [_insufficient_analysis(target, factor, len(pairs))]
+        correlation, p_value = stats.pearsonr(factor_values, target_values)
+        regression = stats.linregress(factor_values, target_values)
+        return [
+            _statistical_insight(
+                target=target,
+                factor=factor,
+                test="Pearson correlation",
+                calculation="pearson_correlation",
+                statistic_name="r",
+                statistic=float(correlation),
+                p_value=float(p_value),
+                detail=(
+                    f"The correlation coefficient is r={_fmt(correlation)}; "
+                    f"slope={_fmt(regression.slope)}."
+                ),
+                supporting_extra={"slope": round(float(regression.slope), 6)},
+                sample_size=len(pairs),
+            )
+        ]
+
+    if factor_is_categorical and target_is_categorical:
+        frame = pd.DataFrame(pairs, columns=[factor, target])
+        contingency = pd.crosstab(frame[factor], frame[target])
+        if contingency.shape[0] < 2 or contingency.shape[1] < 2:
+            return [_insufficient_analysis(target, factor, len(pairs))]
+        chi2, p_value, degrees_of_freedom, _expected = stats.chi2_contingency(contingency)
+        return [
+            _statistical_insight(
+                target=target,
+                factor=factor,
+                test="chi-square test of independence",
+                calculation="chi_square_independence",
+                statistic_name="chi2",
+                statistic=float(chi2),
+                p_value=float(p_value),
+                detail=f"Degrees of freedom: {degrees_of_freedom}.",
+                supporting_extra={
+                    "degrees_of_freedom": int(degrees_of_freedom),
+                    "contingency_table": contingency.to_dict(),
+                },
+                sample_size=len(pairs),
+            )
+        ]
+
+    return [_insufficient_analysis(target, factor, len(pairs), unsupported=True)]
+
+
+def _is_categorical(column_type: ColumnType) -> bool:
+    return column_type in {
+        ColumnType.BOOLEAN,
+        ColumnType.CATEGORICAL,
+        ColumnType.FREE_TEXT,
+        ColumnType.IDENTIFIER,
+    }
+
+
+def _statistical_insight(
+    *,
+    target: str,
+    factor: str,
+    test: str,
+    calculation: str,
+    statistic_name: str,
+    statistic: float,
+    p_value: float,
+    detail: str,
+    supporting_extra: dict[str, object],
+    sample_size: int,
+) -> QueryInsight:
+    significant = math.isfinite(p_value) and p_value < 0.05
+    if significant:
+        lead = f"{target} is associated with {factor}"
+        decision = "statistically significant at 0.05"
+    else:
+        lead = f"No meaningful relationship was found between {factor} and {target}"
+        decision = "not statistically significant at 0.05"
+    finding = (
+        f"{lead} ({test}: {statistic_name}={_fmt(statistic)}, p={_p_value(p_value)}; "
+        f"{decision}). {detail} This indicates association only and does not establish causation."
+    )
+    summary = {
+        "test": test,
+        statistic_name: round(statistic, 6),
+        "p_value": round(p_value, 6),
+        "significant_at_0.05": significant,
+        "sample_size": sample_size,
+        **supporting_extra,
+    }
+    return QueryInsight(
+        insight_type="statistical_relationship",
+        title=f"{target} by {factor}",
+        finding=finding,
+        columns_used=(factor, target),
+        calculation=calculation,
+        supporting_data=(summary,),
+        relevance_score=0.99,
+        limitations=(
+            "Statistical association does not prove causation.",
+            "Statistical significance does not establish practical importance.",
+        ),
+    )
+
+
+def _insufficient_analysis(
+    target: str,
+    factor: str,
+    sample_size: int,
+    *,
+    group_stats: list[dict[str, object]] | None = None,
+    unsupported: bool = False,
+) -> QueryInsight:
+    reason = (
+        "This column-type combination is unsupported."
+        if unsupported
+        else "There is not enough data per group for a statistical test."
+    )
+    return QueryInsight(
+        insight_type="statistical_relationship",
+        title=f"{target} by {factor}",
+        finding=f"{reason} No significance decision was made.",
+        columns_used=(factor, target),
+        calculation="statistical_test_not_run",
+        supporting_data=(
+            {
+                "test": None,
+                "p_value": None,
+                "significant_at_0.05": None,
+                "sample_size": sample_size,
+                "group_statistics": group_stats or [],
+            },
+        ),
+        relevance_score=0.99,
+        limitations=(reason,),
+    )
+
+
+def _p_value(value: float) -> str:
+    if not math.isfinite(value):
+        return "not available"
+    if value < 0.0001:
+        return "<0.0001"
+    return f"{value:.4f}"
 
 
 def _trend(request: QueryAnalysisRequest, *, store: QueryDataStore) -> list[QueryInsight]:

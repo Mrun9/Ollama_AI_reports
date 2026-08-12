@@ -433,6 +433,14 @@ def test_upload_creates_reopenable_workspace(
     assert b"4. Next actions" in detail.data
     assert b"5. Report revisions" in detail.data
     assert b"Open dashboard" in detail.data
+    assert b"Chat with my data" in detail.data
+    assert b"Workspace tool" in detail.data
+    assert detail.data.index(b"3. Dashboard and visualizations") < detail.data.index(
+        b"4. Next actions"
+    ) < detail.data.index(b"5. Report revisions")
+    assert detail.data.index(b"5. Report revisions") < detail.data.index(
+        b"Chat with my data"
+    )
     assert b"Delete workspace and all recoverably" in detail.data
     assert renamed.status_code == 303
     assert b"Regional performance" in client.get(f"/workspaces/{dataset_id}").data

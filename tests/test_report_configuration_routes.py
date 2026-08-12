@@ -890,6 +890,8 @@ def test_generated_report_is_versioned_escaped_and_failure_safe(
     assert history.status_code == 200
     assert b"3 immutable version(s)" in history.data
     assert b"Matches current report package" in history.data
+    assert b"Create new report" in history.data
+    assert f'href="/reports/{dataset_id}/configure"'.encode() in history.data
     assert historical_page.status_code == 200
     assert b"read-only historical snapshot" in historical_page.data
     assert historical_json.status_code == 200

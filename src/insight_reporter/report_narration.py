@@ -2030,6 +2030,39 @@ def _deterministic_executive_summary(
     )
 
 
+def _repair_duplicate_summary_points(
+    points: tuple[ExecutiveSummaryPoint, ...],
+    *,
+    stories: tuple[NarrativeStory, ...],
+) -> tuple[ExecutiveSummaryPoint, ...]:
+    seen_text: set[str] = set()
+    repaired: list[ExecutiveSummaryPoint] = []
+    for point in points:
+        normalized = point.text.casefold()
+        if normalized in seen_text:
+            continue
+        seen_text.add(normalized)
+        repaired.append(point)
+    if len(repaired) == _EXECUTIVE_SUMMARY_POINTS:
+        return points
+    for point in _deterministic_executive_summary(stories):
+        normalized = point.text.casefold()
+        if normalized in seen_text:
+            continue
+        seen_text.add(normalized)
+        repaired.append(point)
+        if len(repaired) == _EXECUTIVE_SUMMARY_POINTS:
+            break
+    if len(repaired) != _EXECUTIVE_SUMMARY_POINTS:
+        raise ReportNarrationError(
+            "Generated report summary points are duplicated."
+        )
+    return tuple(
+        replace(point, point_id=f"SUM-{index:02d}")
+        for index, point in enumerate(repaired, start=1)
+    )
+
+
 def _validate_headline(value: object) -> str:
     if not isinstance(value, str):
         raise ReportNarrationError("Report story headline must be text.")
@@ -3186,11 +3219,10 @@ def _parse_saved_executive_summary(
         else:
             business_implication = ""
             recommended_action = ""
-        if text.casefold() in seen_text:
-            raise ReportNarrationError(
-                "Generated report summary points are duplicated."
-            )
-        seen_text.add(text.casefold())
+        normalized_text = text.casefold()
+        if normalized_text in seen_text:
+            continue
+        seen_text.add(normalized_text)
         if not _summary_mentions_metric(
             text,
             story_ids=story_ids,
@@ -3210,7 +3242,7 @@ def _parse_saved_executive_summary(
                 narration_source=narration_source,
             )
         )
-    return tuple(points)
+    return _repair_duplicate_summary_points(tuple(points), stories=stories)
 
 
 def _parse_generation_diagnostics(

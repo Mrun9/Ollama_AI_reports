@@ -52,6 +52,28 @@
       </fieldset>
 
       <fieldset class="form-section">
+        <legend>Saved chat Q&amp;A</legend>
+        <p class="form-text">Optional. Include a saved answer together with the Python/DuckDB evidence that supports it.</p>
+        {% if chat_evidence_records %}
+          {% for record in chat_evidence_records %}
+            <article class="report-selection-card">
+              <label>
+                <input type="checkbox" name="selected_evidence_ids" class="form-check-input"
+                  value="{{ record.id }}" data-report-evidence-metric="DATASET"
+                  data-report-evidence-recommended="false"
+                  {% if record.id in form_data.getlist('selected_evidence_ids') %}checked{% endif %}>
+                <span>{{ record.observation.question }} · {{ record.id }}</span>
+              </label>
+              <p>{{ record.observation.verified_answer }}</p>
+              <p class="form-text mb-0">{{ record.source_columns|join(", ") if record.source_columns else "Dataset metadata" }} · retained with {{ record.observation.findings|length }} verified finding(s)</p>
+            </article>
+          {% endfor %}
+        {% else %}
+          <p class="alert alert-secondary mb-0">No answered data-chat questions have been saved yet. Ask a question from the chat popup or data-chat page first.</p>
+        {% endif %}
+      </fieldset>
+
+      <fieldset class="form-section">
         <legend>Decision-relevant deterministic findings</legend>
         <p class="form-text">The initial selection contains the strongest management findings. You can add any other record.</p>
         {% if finding_evidence_records %}{% for record in finding_evidence_records %}{{ evidence_option(record) }}{% endfor %}

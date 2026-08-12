@@ -29,8 +29,15 @@
     <button class="app-scroll-top" type="button" data-scroll-top hidden
       aria-label="Return to the top of this page" title="Back to top">↑</button>
 
+    {% if dataset_id is defined and dataset_id %}
+      {% include "_dataset_chat_widget.html" %}
+    {% endif %}
+
     <script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% if dataset_id is defined and dataset_id %}
+      <script src="{{ url_for('static', filename='dataset_chat_widget.js') }}"></script>
+    {% endif %}
     {% block scripts %}{% endblock %}
   </body>
 </html>

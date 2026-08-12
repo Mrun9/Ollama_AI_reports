@@ -21,6 +21,7 @@ from flask import (
     request,
     send_file,
     send_from_directory,
+    session,
     url_for,
 )
 from werkzeug.datastructures import MultiDict
@@ -52,13 +53,14 @@ from insight_reporter.configuration_suggestions import (
     ConfigurationSuggestionError,
     generate_configuration_suggestions,
 )
+from insight_reporter.dataset_chat import (
+    DatasetChatError,
+    DatasetChatTurn,
+    answer_dataset_question,
+)
 from insight_reporter.dataset_context import (
     DatasetContext,
     build_dataset_context,
-)
-from insight_reporter.dataset_chat import (
-    DatasetChatError,
-    answer_dataset_question,
 )
 from insight_reporter.dataset_ingestion import (
     DatasetUploadResult,
@@ -125,6 +127,7 @@ from insight_reporter.navigation_state import (
     load_navigation_state,
     save_navigation_state,
 )
+from insight_reporter.query_understanding import generate_suggested_questions
 from insight_reporter.report_configuration import (
     AUDIENCES,
     DETAIL_LEVELS,
@@ -164,6 +167,12 @@ from insight_reporter.report_pdf import (
     ReportPdfError,
     build_report_pdf,
     report_pdf_filename,
+)
+from insight_reporter.saved_chat_evidence import (
+    SavedChatEvidenceError,
+    list_saved_chat_evidence,
+    merge_chat_evidence,
+    save_chat_evidence,
 )
 from insight_reporter.visualization_builder import (
     AGGREGATIONS,
@@ -387,6 +396,7 @@ def dataset_chat(dataset_id: str):  # type: ignore[no-untyped-def]
         question="",
         chat_turn=None,
         chat_error=None,
+        suggested_questions=generate_suggested_questions(profile),
     )
 
 
@@ -407,16 +417,43 @@ def ask_dataset_chat(dataset_id: str):  # type: ignore[no-untyped-def]
         abort(422, description="Add or restore a data source before using data chat.")
     profile = _load_profile(dataset_id)
     question = request.form.get("question", "")
+    conversation_state = _dataset_chat_conversation_state(dataset_id)
     chat_turn = None
     chat_error = None
+    chat_save_error = None
+    saved_evidence_id = None
     try:
+        view = _load_dataset_view_for_id(dataset_id)
         chat_turn = answer_dataset_question(
             question,
-            view=_load_dataset_view_for_id(dataset_id),
+            view=view,
             profile=profile,
+            use_model_planner=True,
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=min(
+                int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+                45,
+            ),
+            conversation_state=conversation_state,
+            use_model_narration=True,
+        )
+        saved_evidence_id = _retain_chat_turn_evidence(
+            dataset_id,
+            view=view,
+            chat_turn=chat_turn,
         )
     except DatasetChatError as error:
         chat_error = str(error)
+    except SavedChatEvidenceError as error:
+        chat_save_error = str(error)
+    if chat_turn is not None and chat_turn.planner_error:
+        current_app.logger.info(
+            "Data-chat Ollama planner fallback: id=%s reason=%s",
+            dataset_id,
+            chat_turn.planner_error,
+        )
+    _save_dataset_chat_conversation_state(dataset_id, conversation_state)
     return (
         render_template(
             "dataset_chat.html",
@@ -425,9 +462,171 @@ def ask_dataset_chat(dataset_id: str):  # type: ignore[no-untyped-def]
             question=question,
             chat_turn=chat_turn,
             chat_error=chat_error,
+            chat_save_error=chat_save_error,
+            saved_evidence_id=saved_evidence_id,
+            suggested_questions=generate_suggested_questions(profile),
         ),
         400 if chat_error else 200,
     )
+
+
+@core.post("/api/workspaces/<dataset_id>/chat")
+def api_dataset_chat(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Return one data-chat answer as JSON for the floating widget."""
+
+    try:
+        workspace = get_workspace_summary(
+            dataset_id,
+            directories=_workspace_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    if workspace is None:
+        abort(404)
+    if not workspace.record.has_source:
+        return jsonify({"error": "Add or restore a data source before using data chat."}), 422
+    payload = request.get_json(silent=True)
+    question = payload.get("question") if isinstance(payload, dict) else ""
+    conversation_state = _dataset_chat_conversation_state(dataset_id)
+    profile = _load_profile(dataset_id)
+    saved_evidence_id = None
+    save_error = None
+    try:
+        view = _load_dataset_view_for_id(dataset_id)
+        chat_turn = answer_dataset_question(
+            str(question or ""),
+            view=view,
+            profile=profile,
+            use_model_planner=True,
+            model=str(current_app.config["OLLAMA_MODEL"]),
+            host=str(current_app.config["OLLAMA_HOST"]),
+            timeout_seconds=min(
+                int(current_app.config["OLLAMA_TIMEOUT_SECONDS"]),
+                45,
+            ),
+            conversation_state=conversation_state,
+            use_model_narration=True,
+        )
+        saved_evidence_id = _retain_chat_turn_evidence(
+            dataset_id,
+            view=view,
+            chat_turn=chat_turn,
+        )
+    except DatasetChatError as error:
+        return jsonify({"error": str(error)}), 400
+    except SavedChatEvidenceError as error:
+        save_error = str(error)
+    if chat_turn.planner_error:
+        current_app.logger.info(
+            "Data-chat Ollama planner fallback: id=%s reason=%s",
+            dataset_id,
+            chat_turn.planner_error,
+        )
+    _save_dataset_chat_conversation_state(dataset_id, conversation_state)
+    return jsonify(
+        {
+            "question": chat_turn.question,
+            "answer": chat_turn.answer,
+            "model_status": chat_turn.model_status,
+            "planner_error": chat_turn.planner_error,
+            "narration_status": chat_turn.narration_status,
+            "narration_error": chat_turn.narration_error,
+            "insights": [insight.to_dict() for insight in chat_turn.insights],
+            "suggested_questions": list(chat_turn.suggested_questions),
+            "saved_evidence_id": saved_evidence_id,
+            "save_error": save_error,
+        }
+    )
+
+
+@core.get("/api/workspaces/<dataset_id>/chat/history")
+def api_dataset_chat_history(dataset_id: str):  # type: ignore[no-untyped-def]
+    """Return source-current saved chatbot turns for restoring the popup."""
+
+    try:
+        workspace = get_workspace_summary(
+            dataset_id,
+            directories=_workspace_directories(),
+        )
+    except WorkspaceHistoryError as error:
+        abort(422, description=str(error))
+    if workspace is None:
+        abort(404)
+    if not workspace.record.has_source:
+        return jsonify({"history": []})
+    view = _load_dataset_view_for_id(dataset_id)
+    try:
+        history = list_saved_chat_evidence(
+            dataset_id=dataset_id,
+            source_sha256s=frozenset(source.sha256 for source in view.sources),
+            chat_dir=Path(current_app.config["DATASET_CHAT_DIR"]),
+        )
+    except SavedChatEvidenceError as error:
+        return jsonify({"error": str(error)}), 422
+    return jsonify(
+        {
+            "history": [
+                {
+                    "question": artifact.question,
+                    "answer": artifact.displayed_answer,
+                    "insights": list(artifact.insights),
+                    "saved_evidence_id": artifact.evidence_id,
+                    "saved_at": artifact.saved_at,
+                }
+                for artifact in reversed(history[:20])
+            ]
+        }
+    )
+
+
+def _retain_chat_turn_evidence(
+    dataset_id: str,
+    *,
+    view: DatasetView,
+    chat_turn: DatasetChatTurn,
+) -> str | None:
+    """Persist answerable chat turns with their verified calculation evidence."""
+
+    if not chat_turn.insights:
+        return None
+    if len(view.sources) != 1:
+        raise SavedChatEvidenceError(
+            "Chat evidence requires one source-bound dataset."
+        )
+    artifact = save_chat_evidence(
+        dataset_id=dataset_id,
+        source=view.sources[0].to_dict(),
+        question=chat_turn.question,
+        verified_answer=chat_turn.verified_answer or chat_turn.answer,
+        displayed_answer=chat_turn.answer,
+        insights=chat_turn.insights,
+        chat_dir=Path(current_app.config["DATASET_CHAT_DIR"]),
+    )
+    return artifact.evidence_id
+
+
+def _dataset_chat_conversation_state(dataset_id: str) -> dict[str, object]:
+    raw = session.get("dataset_chat_conversation")
+    if not isinstance(raw, dict) or raw.get("dataset_id") != dataset_id:
+        return {}
+    state = raw.get("state")
+    return dict(state) if isinstance(state, dict) else {}
+
+
+def _save_dataset_chat_conversation_state(
+    dataset_id: str,
+    state: dict[str, object],
+) -> None:
+    result = state.get("last_result")
+    bounded_result = result[:20] if isinstance(result, list) else []
+    session["dataset_chat_conversation"] = {
+        "dataset_id": dataset_id,
+        "state": {
+            "last_question": str(state.get("last_question") or "")[:1_000],
+            "last_sql": str(state.get("last_sql") or "")[:5_000],
+            "last_result": bounded_result,
+        },
+    }
 
 
 @core.post("/workspaces/<dataset_id>/name")
@@ -1524,8 +1723,16 @@ def report_configuration_form(dataset_id: str):  # type: ignore[no-untyped-def]
             dataset_id=dataset_id,
             configuration=configuration,
             evidence_records=evidence_records,
+            chat_evidence_records=tuple(
+                record
+                for record in evidence_records
+                if record.get("insight_type") == "chat_qna"
+            ),
             finding_evidence_records=tuple(
-                record for record in evidence_records if _evidence_kind(record) == "finding"
+                record
+                for record in evidence_records
+                if _evidence_kind(record) == "finding"
+                and record.get("insight_type") != "chat_qna"
             ),
             association_evidence_records=tuple(
                 record for record in evidence_records if _evidence_kind(record) == "association"
@@ -3822,6 +4029,29 @@ def _report_assets(
         if evidence_path.is_file()
         else None
     )
+    sources = tuple(source.to_dict() for source in configuration.sources)
+    try:
+        saved_chat = list_saved_chat_evidence(
+            dataset_id=dataset_id,
+            source_sha256s=frozenset(
+                str(source.get("sha256"))
+                for source in sources
+                if source.get("sha256")
+            ),
+            chat_dir=Path(current_app.config["DATASET_CHAT_DIR"]),
+        )
+        evidence = merge_chat_evidence(
+            evidence,
+            dataset_id=dataset_id,
+            sources=sources,
+            artifacts=saved_chat,
+        )
+    except SavedChatEvidenceError as error:
+        current_app.logger.warning(
+            "Saved chat evidence excluded from report selection: id=%s reason=%s",
+            dataset_id,
+            error,
+        )
     visualizations = list_visualizations(
         dataset_id=dataset_id,
         visualization_dir=Path(current_app.config["VISUALIZATION_DIR"]),
@@ -4163,7 +4393,9 @@ def _recommended_evidence_ids(
     eligible = [
         record
         for record in _sorted_evidence_records(evidence_payload)
-        if _evidence_kind(record) != "diagnostic" and isinstance(record.get("id"), str)
+        if _evidence_kind(record) != "diagnostic"
+        and record.get("insight_type") != "chat_qna"
+        and isinstance(record.get("id"), str)
     ]
     selected: list[dict[str, object]] = []
     selected_ids: set[str] = set()

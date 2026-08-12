@@ -1,0 +1,39 @@
+<aside class="data-chat-widget" data-chat-widget data-dataset-id="{{ dataset_id }}">
+  <button class="data-chat-toggle" type="button" data-chat-toggle
+    aria-expanded="false" aria-controls="data-chat-panel" title="Chat with this data">
+    <span aria-hidden="true">?</span>
+    <span class="visually-hidden">Chat with this data</span>
+  </button>
+
+  <section class="data-chat-panel" id="data-chat-panel" data-chat-panel hidden
+    aria-label="Chat with this data">
+    <header class="data-chat-header">
+      <div>
+        <p class="app-eyebrow mb-1">Data chat</p>
+        <h2 class="h6 mb-0">Ask this workspace</h2>
+        <small class="app-muted">Verified answers are saved automatically</small>
+      </div>
+      <button class="data-chat-close" type="button" data-chat-close
+        aria-label="Close data chat" title="Close data chat">
+        <span aria-hidden="true">×</span>
+      </button>
+    </header>
+
+    <div class="data-chat-messages" data-chat-messages>
+      <div class="data-chat-message data-chat-message-system">
+        Ask a question about the uploaded dataset. DuckDB calculates the answer;
+        {{ ollama_model }} may only propose a validated query plan.
+      </div>
+    </div>
+
+    <form class="data-chat-form" data-chat-form>
+      <label class="visually-hidden" for="floating-data-chat-question">
+        Question about this data
+      </label>
+      <textarea id="floating-data-chat-question" class="form-control"
+        name="question" rows="2" maxlength="1000" required
+        placeholder="Mean sales in Singapore for Q2?"></textarea>
+      <button class="btn btn-primary" type="submit">Ask {{ ollama_model }}</button>
+    </form>
+  </section>
+</aside>

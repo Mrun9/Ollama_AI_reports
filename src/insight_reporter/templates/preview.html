@@ -160,7 +160,7 @@
       {% elif (configuration and unconfigured_source_columns) or (not configuration and profile.kpi_candidates) %}
         <form method="post" action="{{ url_for('core.suggest_configurations', dataset_id=dataset_id) }}" data-loading-form>
           <button class="btn btn-outline-primary text-nowrap" type="submit" data-loading-text="Generating…">
-            {{ "Suggest additional source KPIs" if configuration else "Generate AI suggestions" }}
+            {{ ("Suggest additional source KPIs with " if configuration else "Generate AI suggestions with ") ~ suggestion_model }}
           </button>
         </form>
       {% elif configuration %}
@@ -233,7 +233,7 @@
       <div class="d-flex flex-wrap gap-2">
         {% if derived_numeric_columns|length >= 2 %}
           <form method="post" action="{{ url_for('core.suggest_derived_kpis', dataset_id=dataset_id) }}" data-loading-form>
-            <button class="btn btn-outline-primary" type="submit" data-loading-text="Generating…">Suggest two derived KPIs</button>
+            <button class="btn btn-outline-primary" type="submit" data-loading-text="Generating…">Suggest two derived KPIs with {{ suggestion_model }}</button>
           </form>
         {% endif %}
         {% if derived_numeric_columns %}

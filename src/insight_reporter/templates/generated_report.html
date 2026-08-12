@@ -204,7 +204,7 @@
                     report_id=report.report_id,
                     story_id=story.story_id
                   ) }}">
-                    <button type="submit">Regenerate only this story</button>
+                    <button type="submit">Regenerate this story with {{ ollama_model }}</button>
                   </form>
                 {% endif %}
                 <p class="finding">
