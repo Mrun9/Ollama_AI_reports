@@ -1,5 +1,8 @@
 # AI Insight Reporter
 
+<img width="1800" height="1125" alt="AI Insight Reporter workflow" src="https://github.com/user-attachments/assets/bc785c01-641e-44e0-94ee-ccc9871a9c22" />
+
+
 AI Insight Reporter is a local-first proof of concept for turning raw business data into
 evidence-grounded reports. Python performs deterministic calculations, and a local Ollama model
 provides optional configuration suggestions and evidence-grounded narrative wording from verified
